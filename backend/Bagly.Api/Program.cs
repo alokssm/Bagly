@@ -235,15 +235,59 @@ try
 
     app.MapControllers();
 
-    app.MapGet("/api/health", () => Results.Ok(new
+    app.MapGet("/api/health", async (IConfiguration config, BaglyDbContext db) =>
     {
-        status = "healthy",
-        service = "Bagly.Api",
-        database = "SQL Server",
-        logging = "Serilog -> SQL Server (Logs + AuditLogs + PaymentLogs)",
-        payments = "Razorpay (India)",
-        timestamp = DateTime.UtcNow,
-    }));
+        var cs = config.GetConnectionString("DefaultConnection") ?? "";
+        string? dataSource = null;
+        try
+        {
+            var builderCs = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(cs);
+            dataSource = builderCs.DataSource;
+        }
+        catch
+        {
+            dataSource = "(invalid connection string format)";
+        }
+
+        var looksLocal =
+            !string.IsNullOrWhiteSpace(dataSource) &&
+            (dataSource.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+             dataSource.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+             dataSource.Contains("SQLEXPRESS", StringComparison.OrdinalIgnoreCase) ||
+             dataSource.Contains(".\\", StringComparison.OrdinalIgnoreCase));
+
+        string dbStatus;
+        string? dbError = null;
+        try
+        {
+            var canConnect = await db.Database.CanConnectAsync();
+            dbStatus = canConnect ? "connected" : "unreachable";
+        }
+        catch (Exception ex)
+        {
+            dbStatus = "error";
+            dbError = ex.GetBaseException().Message;
+        }
+
+        return Results.Ok(new
+        {
+            status = dbStatus == "connected" ? "healthy" : "degraded",
+            service = "Bagly.Api",
+            database = new
+            {
+                status = dbStatus,
+                dataSource,
+                usingLocalSqlExpress = looksLocal,
+                hint = looksLocal
+                    ? "Render is still using local SQL Express. Set ConnectionStrings__DefaultConnection to your Azure SQL ADO.NET string and redeploy."
+                    : null,
+                error = dbError,
+            },
+            logging = "Serilog",
+            payments = "Razorpay (India)",
+            timestamp = DateTime.UtcNow,
+        });
+    });
 
     Log.Information("Bagly API starting with Serilog SQL Server logging");
     app.Run();
