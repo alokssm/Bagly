@@ -20,11 +20,21 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    var baglyCsSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BAGLY_CONNECTION_STRING"));
+    var aspNetCsSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"));
+    Log.Information(
+        "Render DB env check: BAGLY_CONNECTION_STRING={BaglySet}, ConnectionStrings__DefaultConnection={AspNetSet}",
+        baglyCsSet,
+        aspNetCsSet);
+
     var connectionString = ResolveConnectionString(builder.Configuration);
     if (string.IsNullOrWhiteSpace(connectionString))
     {
-        throw new InvalidOperationException(
-            "Database connection string is missing. On Render set env var ConnectionStrings__DefaultConnection (or BAGLY_CONNECTION_STRING) to your Azure SQL ADO.NET string.");
+        Log.Error(
+            "Database connection string is missing. In Render → Environment add KEY exactly 'BAGLY_CONNECTION_STRING' (or 'ConnectionStrings__DefaultConnection') with your Azure SQL ADO.NET value, then Manual Deploy.");
+        // Keep process alive so /api/health can report what's missing.
+        connectionString =
+            "Server=127.0.0.1,1433;Database=missing;User ID=missing;Password=missing;Encrypt=False;TrustServerCertificate=True;Connection Timeout=1;";
     }
 
     try
@@ -32,9 +42,10 @@ try
         var ds = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource;
         Log.Information("Using SQL data source: {DataSource}", ds);
         if (ds.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+            ds.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
             ds.Contains("SQLEXPRESS", StringComparison.OrdinalIgnoreCase))
         {
-            Log.Warning("SQL data source looks local ({DataSource}). Render cannot reach your PC SQL Express. Set Azure SQL connection string in Render env vars.", ds);
+            Log.Warning("SQL data source looks local/placeholder ({DataSource}). Set Azure SQL on Render env vars and redeploy.", ds);
         }
     }
     catch (Exception ex)
@@ -302,8 +313,13 @@ try
                 status = dbStatus,
                 dataSource,
                 usingLocalSqlExpress = looksLocal,
-                hint = looksLocal
-                    ? "Render is still using local SQL Express. Set ConnectionStrings__DefaultConnection to your Azure SQL ADO.NET string and redeploy."
+                envVarsDetected = new
+                {
+                    BAGLY_CONNECTION_STRING = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BAGLY_CONNECTION_STRING")),
+                    ConnectionStrings__DefaultConnection = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")),
+                },
+                hint = looksLocal || dbStatus != "connected"
+                    ? "In Render → your Web Service → Environment: add KEY=BAGLY_CONNECTION_STRING and VALUE=full Azure ADO.NET string (no quotes). Save, then Manual Deploy. Also enable Azure SQL firewall 'Allow Azure services'."
                     : null,
                 error = dbError,
             },
