@@ -270,6 +270,18 @@ try
 
     app.MapControllers();
 
+    app.MapPost("/api/setup/seed", async (IServiceProvider sp) =>
+    {
+        var counts = await DatabaseBootstrapper.SeedOnlyAsync(sp);
+        return Results.Ok(new
+        {
+            message = "Seed completed.",
+            categories = counts.Categories,
+            products = counts.Products,
+            admins = counts.Admins,
+        });
+    });
+
     app.MapGet("/api/health", async (IConfiguration config, BaglyDbContext db) =>
     {
         var cs = config.GetConnectionString("DefaultConnection") ?? "";

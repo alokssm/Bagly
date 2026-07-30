@@ -57,10 +57,33 @@ public static class DatabaseBootstrapper
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
         if (pending.Count > 0)
         {
-            await db.Database.MigrateAsync(cancellationToken);
+            try
+            {
+                await db.Database.MigrateAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Azure may already have schema from Ensure* helpers; continue to seed.
+                Console.Error.WriteLine($"EF MigrateAsync warning: {ex.Message}");
+            }
         }
 
         await DbSeeder.SeedAsync(db, adminOptions);
+    }
+
+    /// <summary>Idempotent seed for empty Azure databases (safe to call multiple times).</summary>
+    public static async Task<(int Categories, int Products, int Admins)> SeedOnlyAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
+        var adminOptions = scope.ServiceProvider.GetRequiredService<IOptions<AdminOptions>>().Value;
+        await DbSeeder.SeedAsync(db, adminOptions);
+        return (
+            await db.Categories.CountAsync(cancellationToken),
+            await db.Products.CountAsync(cancellationToken),
+            await db.AdminUsers.CountAsync(cancellationToken));
     }
 
     private static async Task EnsureMigrationsHistoryTableAsync(
