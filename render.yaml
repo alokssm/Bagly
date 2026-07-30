@@ -1,11 +1,12 @@
 # Bagly API on Render (free web service)
+# Use repo-root Dockerfile (no Root Directory needed).
 services:
   - type: web
     name: bagly-api
     runtime: docker
     plan: free
-    rootDir: backend/Bagly.Api
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
@@ -14,7 +15,6 @@ services:
         value: "true"
       - key: EnableHttpsRedirection
         value: "false"
-      # Set these in the Render dashboard (Do not commit real secrets):
       - key: ConnectionStrings__DefaultConnection
         sync: false
       - key: Jwt__Key

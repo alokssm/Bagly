@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/logs/
+**/.vs/
+**/node_modules/
+**/dist/
+**/publish/
+frontend/
+iis/
+scripts/
+deploy/
+**/*.user
+**/appsettings.Development.json
+**/appsettings.*.local.json
