@@ -1,0 +1,22 @@
+namespace Bagly.Api.Models;
+
+public class Product
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public decimal? CompareAt { get; set; }
+    public string Material { get; set; } = string.Empty;
+    public double Rating { get; set; }
+    public int Reviews { get; set; }
+    public string? Badge { get; set; }
+    public string ShortDescription { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Image { get; set; } = string.Empty;
+    public string ColorsJson { get; set; } = "[]";
+    public string FeaturesJson { get; set; } = "[]";
+    public string GalleryJson { get; set; } = "[]";
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

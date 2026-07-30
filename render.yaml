@@ -1,0 +1,37 @@
+# Bagly API on Render (free web service)
+services:
+  - type: web
+    name: bagly-api
+    runtime: docker
+    plan: free
+    rootDir: backend/Bagly.Api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: EnableSwagger
+        value: "true"
+      - key: EnableHttpsRedirection
+        value: "false"
+      # Set these in the Render dashboard (Do not commit real secrets):
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Admin__Email
+        value: admin@bagly.store
+      - key: Admin__Password
+        sync: false
+      - key: Admin__Name
+        value: Bagly Admin
+      - key: Razorpay__KeyId
+        sync: false
+      - key: Razorpay__KeySecret
+        sync: false
+      - key: Razorpay__Currency
+        value: INR
+      - key: Razorpay__UsdToInrRate
+        value: "83"
+      - key: Cors__AllowedOrigins__0
+        sync: false

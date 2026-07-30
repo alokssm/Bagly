@@ -1,0 +1,192 @@
+using Bagly.Api.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace Bagly.Api.Data;
+
+public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContext(options)
+{
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Cart> Carts => Set<Cart>();
+    public DbSet<CartItem> CartItems => Set<CartItem>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
+    public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Product>(entity =>
+        {
+            entity.ToTable("Products");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(100);
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Price).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.CompareAt).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.Material).HasMaxLength(100);
+            entity.Property(x => x.Badge).HasMaxLength(50);
+            entity.Property(x => x.ShortDescription).HasMaxLength(500);
+            entity.Property(x => x.Description).HasMaxLength(4000);
+            entity.Property(x => x.Image).HasMaxLength(1000);
+            entity.Property(x => x.ColorsJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.FeaturesJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.GalleryJson).HasColumnType("nvarchar(max)");
+            entity.HasIndex(x => x.Category);
+            entity.HasIndex(x => x.IsActive);
+        });
+
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.ToTable("Categories");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(50);
+            entity.Property(x => x.Label).HasMaxLength(100).IsRequired();
+        });
+
+        modelBuilder.Entity<Cart>(entity =>
+        {
+            entity.ToTable("Carts");
+            entity.HasKey(x => x.Id);
+            entity.HasMany(x => x.Items)
+                .WithOne(x => x.Cart!)
+                .HasForeignKey(x => x.CartId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CartItem>(entity =>
+        {
+            entity.ToTable("CartItems");
+            entity.Property(x => x.ProductId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Image).HasMaxLength(1000);
+            entity.Property(x => x.Color).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.UnitPrice).HasColumnType("decimal(18,2)");
+            entity.HasIndex(x => new { x.CartId, x.ProductId, x.Color }).IsUnique();
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.ToTable("Orders");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrderNumber).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Address).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.City).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.State).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Zip).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Country).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.PaymentStatus).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.PaymentProvider).HasMaxLength(50);
+            entity.Property(x => x.Currency).HasMaxLength(10);
+            entity.Property(x => x.AmountInr).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.RazorpayOrderId).HasMaxLength(100);
+            entity.Property(x => x.RazorpayPaymentId).HasMaxLength(100);
+            entity.Property(x => x.Subtotal).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.Shipping).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.Total).HasColumnType("decimal(18,2)");
+            entity.HasIndex(x => x.OrderNumber).IsUnique();
+            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => x.RazorpayOrderId);
+            entity.HasIndex(x => x.PaymentStatus);
+            entity.HasMany(x => x.Items)
+                .WithOne(x => x.Order!)
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderItem>(entity =>
+        {
+            entity.ToTable("OrderItems");
+            entity.Property(x => x.ProductId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Color).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.UnitPrice).HasColumnType("decimal(18,2)");
+        });
+
+        modelBuilder.Entity<AdminUser>(entity =>
+        {
+            entity.ToTable("AdminUsers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Role).HasMaxLength(50).IsRequired();
+            entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => x.IsActive);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.ToTable("AuditLogs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.Level).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Action).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ActorEmail).HasMaxLength(256);
+            entity.Property(x => x.EntityType).HasMaxLength(100);
+            entity.Property(x => x.EntityId).HasMaxLength(100);
+            entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.DetailsJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.IpAddress).HasMaxLength(64);
+            entity.Property(x => x.RequestPath).HasMaxLength(500);
+            entity.HasIndex(x => x.TimestampUtc);
+            entity.HasIndex(x => x.Category);
+            entity.HasIndex(x => x.Action);
+            entity.HasIndex(x => x.ActorEmail);
+        });
+
+        modelBuilder.Entity<SystemLog>(entity =>
+        {
+            // Owned by Serilog sink — do not let EF migrations alter this table.
+            entity.ToTable("Logs", t => t.ExcludeFromMigrations());
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.Message).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.MessageTemplate).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.Level).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.TimeStamp).HasColumnType("datetime");
+            entity.Property(x => x.Exception).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.LogEvent).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.RequestPath).HasMaxLength(500);
+            entity.Property(x => x.ActorEmail).HasMaxLength(256);
+            entity.Property(x => x.AuditCategory).HasMaxLength(50);
+            entity.Property(x => x.AuditAction).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<PaymentLog>(entity =>
+        {
+            entity.ToTable("PaymentLogs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.OrderNumber).HasMaxLength(50);
+            entity.Property(x => x.Provider).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.EventType).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.RazorpayOrderId).HasMaxLength(100);
+            entity.Property(x => x.RazorpayPaymentId).HasMaxLength(100);
+            entity.Property(x => x.RazorpaySignature).HasMaxLength(256);
+            entity.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.Currency).HasMaxLength(10);
+            entity.Property(x => x.CustomerEmail).HasMaxLength(256);
+            entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.RequestJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ResponseJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ErrorCode).HasMaxLength(100);
+            entity.Property(x => x.IpAddress).HasMaxLength(64);
+            entity.HasIndex(x => x.TimestampUtc);
+            entity.HasIndex(x => x.OrderId);
+            entity.HasIndex(x => x.RazorpayOrderId);
+            entity.HasIndex(x => x.EventType);
+            entity.HasIndex(x => x.Status);
+        });
+    }
+}

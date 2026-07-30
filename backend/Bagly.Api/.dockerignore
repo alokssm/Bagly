@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/logs/
+**/.vs/
+**/*.user
+**/*.DotSettings.user
+appsettings.Development.json
+appsettings.*.local.json

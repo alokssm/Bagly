@@ -1,0 +1,30 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+*.user
+*.suo
+
+# Build outputs
+**/bin/
+**/obj/
+**/publish/
+frontend/dist/
+frontend/node_modules/
+
+# Local / secrets (never commit)
+**/appsettings.Development.json
+**/appsettings.*.local.json
+frontend/.env
+frontend/.env.*
+!frontend/.env.iis.example
+backend/Bagly.Api/logs/
+publish/
+
+# Scripts temp
+scripts/_*.ps1
+
+# Logs
+*.log
+npm-debug.log*
