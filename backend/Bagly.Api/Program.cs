@@ -304,6 +304,18 @@ try
             dbError = ex.GetBaseException().Message;
         }
 
+        var connectionRelatedEnvKeys = Environment.GetEnvironmentVariables()
+            .Keys
+            .Cast<object>()
+            .Select(k => k?.ToString() ?? "")
+            .Where(k =>
+                k.Contains("CONNECTION", StringComparison.OrdinalIgnoreCase) ||
+                k.Contains("BAGLY", StringComparison.OrdinalIgnoreCase) ||
+                k.Contains("SQL", StringComparison.OrdinalIgnoreCase) ||
+                k.Contains("DATABASE", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         return Results.Ok(new
         {
             status = dbStatus == "connected" ? "healthy" : "degraded",
@@ -318,8 +330,9 @@ try
                     BAGLY_CONNECTION_STRING = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BAGLY_CONNECTION_STRING")),
                     ConnectionStrings__DefaultConnection = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")),
                 },
+                connectionRelatedEnvKeys,
                 hint = looksLocal || dbStatus != "connected"
-                    ? "In Render → your Web Service → Environment: add KEY=BAGLY_CONNECTION_STRING and VALUE=full Azure ADO.NET string (no quotes). Save, then Manual Deploy. Also enable Azure SQL firewall 'Allow Azure services'."
+                    ? "Azure firewall alone is not enough. Render must inject BAGLY_CONNECTION_STRING into THIS web service. Check Environment keys listed in connectionRelatedEnvKeys, then Save + Manual Deploy."
                     : null,
                 error = dbError,
             },
