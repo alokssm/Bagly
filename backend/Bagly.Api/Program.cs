@@ -20,12 +20,36 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+    var connectionString = ResolveConnectionString(builder.Configuration);
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "Database connection string is missing. On Render set env var ConnectionStrings__DefaultConnection (or BAGLY_CONNECTION_STRING) to your Azure SQL ADO.NET string.");
+    }
+
+    try
+    {
+        var ds = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource;
+        Log.Information("Using SQL data source: {DataSource}", ds);
+        if (ds.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+            ds.Contains("SQLEXPRESS", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("SQL data source looks local ({DataSource}). Render cannot reach your PC SQL Express. Set Azure SQL connection string in Render env vars.", ds);
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Connection string could not be parsed. Check Render env var value.");
+    }
+
+    // Ensure EF + the rest of config see the resolved value (overrides appsettings.json).
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["ConnectionStrings:DefaultConnection"] = connectionString,
+    });
 
     var sqlLoggingEnabled = !string.IsNullOrWhiteSpace(connectionString)
-        && !connectionString.StartsWith("SET_VIA_ENV_", StringComparison.OrdinalIgnoreCase)
-        && !connectionString.Contains("REPLACE", StringComparison.OrdinalIgnoreCase);
+        && connectionString.Contains("database.windows.net", StringComparison.OrdinalIgnoreCase);
 
     builder.Host.UseSerilog((context, services, configuration) =>
     {
@@ -299,4 +323,58 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+static string? ResolveConnectionString(IConfiguration config)
+{
+    // Prefer explicit Render-friendly names first, then standard ASP.NET Core mapping.
+    var candidates = new[]
+    {
+        Environment.GetEnvironmentVariable("BAGLY_CONNECTION_STRING"),
+        Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"),
+        Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__DEFAULTCONNECTION"),
+        config["ConnectionStrings:DefaultConnection"],
+        config.GetConnectionString("DefaultConnection"),
+    };
+
+    foreach (var raw in candidates)
+    {
+        var value = NormalizeConnectionString(raw);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            continue;
+        }
+
+        // Ignore placeholders still sitting in appsettings.json
+        if (value.Contains("YOUR_SERVER", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("YOUR_ADMIN", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("YOUR_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("SET_VIA_ENV_", StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        return value;
+    }
+
+    return null;
+}
+
+static string? NormalizeConnectionString(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return null;
+    }
+
+    var trimmed = value.Trim();
+
+    // Render UI sometimes stores values with accidental surrounding quotes.
+    if ((trimmed.StartsWith('"') && trimmed.EndsWith('"')) ||
+        (trimmed.StartsWith('\'') && trimmed.EndsWith('\'')))
+    {
+        trimmed = trimmed[1..^1].Trim();
+    }
+
+    return trimmed;
 }
