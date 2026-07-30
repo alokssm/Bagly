@@ -1,8 +1,8 @@
 const TOKEN_KEY = 'bagly-admin-token'
 
 /**
- * Prefer same hostname as the page (LAN IP or public IP), keep API port from VITE_API_URL.
- * Example: page http://192.168.1.6:8080 + env http://x:8081/api -> http://192.168.1.6:8081/api
+ * - Cloud (Vercel → Render): use VITE_API_URL as-is (e.g. https://bagly.onrender.com/api)
+ * - Local LAN/IIS: if both page and API are localhost/IP, keep API port but use page hostname
  */
 function resolveApiBase() {
   const configured = import.meta.env.VITE_API_URL || '/api'
@@ -10,10 +10,18 @@ function resolveApiBase() {
     return configured
   }
 
+  const isLocalHost = (host) =>
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+
   try {
     if (configured.startsWith('http://') || configured.startsWith('https://')) {
       const url = new URL(configured)
-      url.hostname = window.location.hostname
+      const pageHost = window.location.hostname
+      if (isLocalHost(pageHost) && isLocalHost(url.hostname)) {
+        url.hostname = pageHost
+      }
       return url.toString().replace(/\/$/, '')
     }
   } catch {
