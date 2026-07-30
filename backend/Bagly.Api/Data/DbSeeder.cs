@@ -207,14 +207,12 @@ public static class DbSeeder
             return;
         }
 
-        // Keep seeded admin usable if hash was never set.
-        if (string.IsNullOrWhiteSpace(existing.PasswordHash))
-        {
-            existing.PasswordHash = PasswordHasher.Hash(password);
-            existing.Name = name;
-            existing.IsActive = true;
-            await db.SaveChangesAsync();
-        }
+        // Always sync password/name from configured Admin options (Render env vars).
+        existing.PasswordHash = PasswordHasher.Hash(password);
+        existing.Name = name;
+        existing.IsActive = true;
+        existing.Role = "Admin";
+        await db.SaveChangesAsync();
     }
 
     private static IEnumerable<Product> CreateProducts() =>

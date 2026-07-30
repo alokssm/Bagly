@@ -273,12 +273,15 @@ try
     app.MapPost("/api/setup/seed", async (IServiceProvider sp) =>
     {
         var counts = await DatabaseBootstrapper.SeedOnlyAsync(sp);
+        var admin = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Bagly.Api.Options.AdminOptions>>().Value;
         return Results.Ok(new
         {
-            message = "Seed completed.",
+            message = "Seed completed. Admin password synced from Admin__Password env (or default Admin@123).",
             categories = counts.Categories,
             products = counts.Products,
             admins = counts.Admins,
+            adminEmail = string.IsNullOrWhiteSpace(admin.Email) ? "admin@bagly.store" : admin.Email,
+            adminPasswordConfigured = !string.IsNullOrWhiteSpace(admin.Password),
         });
     });
 
