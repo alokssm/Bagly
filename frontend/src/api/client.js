@@ -122,6 +122,11 @@ async function request(path, options = {}) {
   return text ? JSON.parse(text) : null
 }
 
+/** Public Google Identity Services config (client ID is safe to expose). */
+export function getGoogleAuthConfig() {
+  return request('/auth/customer/google-config')
+}
+
 export const api = {
   health: () => request('/health'),
 
@@ -152,6 +157,8 @@ export const api = {
       method: 'POST',
       body: { idToken },
     }),
+
+  getGoogleAuthConfig: () => request('/auth/customer/google-config'),
 
   customerMe: () => request('/auth/customer/me', { auth: 'customer' }),
 

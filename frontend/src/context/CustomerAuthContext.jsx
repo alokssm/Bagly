@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, getCustomerToken, setCustomerToken } from '../api/client'
+import { api, getCustomerToken, getGoogleAuthConfig, setCustomerToken } from '../api/client'
+
+export { getGoogleAuthConfig }
 
 const CustomerAuthContext = createContext(null)
 

@@ -131,6 +131,15 @@ public class CustomerAuthController(
         return Ok(BuildResponse(customer));
     }
 
+    [HttpGet("google-config")]
+    public ActionResult<GoogleAuthConfigDto> GetGoogleConfig()
+    {
+        var opts = googleOptions.Value;
+        return Ok(new GoogleAuthConfigDto(
+            opts.IsConfigured,
+            opts.IsConfigured ? opts.ClientId : null));
+    }
+
     [HttpPost("google")]
     public async Task<ActionResult<CustomerAuthResponse>> GoogleLogin(
         [FromBody] CustomerGoogleLoginRequest request,

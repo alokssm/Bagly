@@ -144,6 +144,8 @@ public record OrderDto(
     IReadOnlyList<OrderItemDto> Items
 );
 
+public record GoogleAuthConfigDto(bool Enabled, string? ClientId);
+
 public record RazorpayConfigDto(bool Enabled, string? KeyId, string Currency, decimal UsdToInrRate);
 
 public record RazorpayInitiateResponse(

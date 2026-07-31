@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
+import { getGoogleAuthConfig } from '../api/client'
 import { loadGoogleIdentityScript } from '../utils/googleAuth'
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const LOCAL_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export default function Register() {
   const { register, loginWithGoogle, isAuthenticated, loading } = useCustomerAuth()
@@ -15,10 +16,34 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState(null)
+  const [googleConfigLoading, setGoogleConfigLoading] = useState(true)
   const googleBtnRef = useRef(null)
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return
+    let cancelled = false
+
+    getGoogleAuthConfig()
+      .then((cfg) => {
+        if (cancelled) return
+        const clientId =
+          cfg?.enabled && cfg?.clientId ? cfg.clientId : LOCAL_GOOGLE_CLIENT_ID || null
+        setGoogleClientId(clientId)
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleClientId(LOCAL_GOOGLE_CLIENT_ID || null)
+      })
+      .finally(() => {
+        if (!cancelled) setGoogleConfigLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!googleClientId) return
     let cancelled = false
 
     loadGoogleIdentityScript()
@@ -26,7 +51,7 @@ export default function Register() {
         if (cancelled || !window.google?.accounts?.id) return
 
         window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
+          client_id: googleClientId,
           callback: async (response) => {
             setError('')
             try {
@@ -55,7 +80,7 @@ export default function Register() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [googleClientId])
 
   if (!loading && isAuthenticated) {
     return <Navigate to={location.state?.from || '/'} replace />
@@ -144,7 +169,7 @@ export default function Register() {
           {submitting ? 'Creating account…' : 'Create account'}
         </button>
 
-        {GOOGLE_CLIENT_ID ? (
+        {googleConfigLoading ? null : googleClientId ? (
           <>
             <div className="auth-divider">
               <span>or</span>

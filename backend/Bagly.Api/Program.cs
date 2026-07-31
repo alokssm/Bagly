@@ -469,7 +469,7 @@ try
                 googleConfigured = googleAuth.IsConfigured,
                 hint = googleAuth.IsConfigured
                     ? null
-                    : "Set GoogleAuth__ClientId (backend) and VITE_GOOGLE_CLIENT_ID (frontend) to enable 'Continue with Google'.",
+                    : "Set GoogleAuth__ClientId on the backend to enable 'Continue with Google'.",
             },
             timestamp = DateTime.UtcNow,
         });
