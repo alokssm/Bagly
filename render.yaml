@@ -35,3 +35,19 @@ services:
         value: "83"
       - key: Cors__AllowedOrigins__0
         sync: false
+      - key: Email__Enabled
+        value: "true"
+      - key: Email__Host
+        sync: false
+      - key: Email__Port
+        value: "587"
+      - key: Email__Username
+        sync: false
+      - key: Email__Password
+        sync: false
+      - key: Email__FromAddress
+        sync: false
+      - key: Email__FromName
+        value: Bagly
+      - key: Email__UseSsl
+        value: "true"

@@ -113,17 +113,19 @@ export default function Checkout() {
           paymentResponse = await openRazorpayCheckout({
             key: session.keyId,
             amount: session.amountPaise,
-            currency: session.currency,
+            currency: session.currency || 'INR',
             name: 'Bagly',
             description: session.description || `Order ${session.orderNumber}`,
             order_id: session.razorpayOrderId,
             prefill: {
               name: session.customerName,
               email: session.customerEmail,
+              contact: '9999999999',
             },
             notes: {
               bagly_order_id: session.orderId,
               bagly_order_number: session.orderNumber,
+              customer_country: 'India',
             },
             theme: { color: '#1b3d2f' },
           })
@@ -206,8 +208,11 @@ export default function Checkout() {
             {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
             {isIndia ? (
               <p className="checkout-pay-note">
-                India selected — final payment will open Razorpay (UPI / cards / netbanking). Catalog
-                prices convert to INR at ≈₹{razorpayConfig?.usdToInrRate || 83} per $1.
+                India selected — final payment opens Razorpay in INR (UPI / cards / netbanking). Catalog
+                prices convert at ≈₹{razorpayConfig?.usdToInrRate || 83} per $1. Test mode: type card
+                manually (no autofill) — Visa <code>4111 1111 1111 1111</code> or Mastercard{' '}
+                <code>5267 3181 8797 5449</code>, expiry any future date, CVV any 3 digits, OTP{' '}
+                <code>1234</code>. UPI: <code>success@razorpay</code> (only if UPI appears in popup).
               </p>
             ) : null}
             <div className="form-grid">

@@ -15,4 +15,17 @@ public class AdminOptions
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string Name { get; set; } = "Admin";
+
+    public bool IsPasswordConfigured =>
+        !string.IsNullOrWhiteSpace(Password) &&
+        !Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase);
+
+    public string ResolveEmail() =>
+        string.IsNullOrWhiteSpace(Email) ? "admin@bagly.store" : Email.Trim();
+
+    public string ResolveName() =>
+        string.IsNullOrWhiteSpace(Name) ? "Bagly Admin" : Name.Trim();
+
+    public string ResolvePassword() =>
+        IsPasswordConfigured ? Password : "Admin@123";
 }

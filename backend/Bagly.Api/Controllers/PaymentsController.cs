@@ -12,7 +12,9 @@ namespace Bagly.Api.Controllers;
 public class PaymentsController(
     BaglyDbContext db,
     IRazorpayService razorpay,
-    IPaymentLogService paymentLogs) : ControllerBase
+    IPaymentLogService paymentLogs,
+    IOrderConfirmationEmailService orderEmails,
+    ILogger<PaymentsController> logger) : ControllerBase
 {
     [HttpGet("razorpay/config")]
     public ActionResult<RazorpayConfigDto> GetConfig() =>
@@ -133,7 +135,11 @@ public class PaymentsController(
                     ipAddress: ip,
                     cancellationToken: cancellationToken);
 
-                return StatusCode(502, new { message = "Unable to create Razorpay order. Please try again." });
+                return StatusCode(502, new
+                {
+                    message = "Unable to create Razorpay order. Please try again.",
+                    detail = ex.Message,
+                });
             }
 
             order.RazorpayOrderId = rzOrder.Id;
@@ -221,6 +227,9 @@ public class PaymentsController(
 
         if (order.PaymentStatus == "Paid")
         {
+            logger.LogDebug(
+                "Razorpay verify idempotent for {OrderNumber}: already paid; confirmation email is not resent.",
+                order.OrderNumber);
             return Ok(OrdersController.MapOrder(order));
         }
 
@@ -286,6 +295,8 @@ public class PaymentsController(
             response: new { order.Status, order.PaymentStatus, order.PaidAtUtc },
             ipAddress: ip,
             cancellationToken: cancellationToken);
+
+        await orderEmails.SendAsync(order, cancellationToken);
 
         return Ok(OrdersController.MapOrder(order));
     }

@@ -178,15 +178,10 @@ public static class DbSeeder
 
     private static async Task SeedAdminUserAsync(BaglyDbContext db, AdminOptions? adminOptions)
     {
-        var email = string.IsNullOrWhiteSpace(adminOptions?.Email)
-            ? "admin@bagly.store"
-            : adminOptions.Email.Trim();
-        var name = string.IsNullOrWhiteSpace(adminOptions?.Name)
-            ? "Bagly Admin"
-            : adminOptions.Name.Trim();
-        var password = string.IsNullOrWhiteSpace(adminOptions?.Password)
-            ? "Admin@123"
-            : adminOptions.Password;
+        var options = adminOptions ?? new AdminOptions();
+        var email = options.ResolveEmail();
+        var name = options.ResolveName();
+        var password = options.ResolvePassword();
 
         var existing = await db.AdminUsers
             .FirstOrDefaultAsync(u => u.Email == email);

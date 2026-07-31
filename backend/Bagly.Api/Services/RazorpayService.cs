@@ -62,7 +62,7 @@ public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> op
             currency = Currency,
             receipt,
             payment_capture = 1,
-            notes = new { source = "Bagly" },
+            notes = new { source = "Bagly", customer_country = "India" },
         };
 
         request.Content = new StringContent(

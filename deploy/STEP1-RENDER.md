@@ -80,6 +80,16 @@ Set these **before** or right after first deploy:
 | `Razorpay__Currency` | `INR` |
 | `Razorpay__UsdToInrRate` | `83` |
 | `Cors__AllowedOrigins__0` | your future Vercel URL (Step 2), e.g. `https://bagly.vercel.app` |
+| `Email__Enabled` | `true` |
+| `Email__Host` | SMTP host, e.g. `smtp.gmail.com`, `smtp.sendgrid.net`, or your provider |
+| `Email__Port` | `587` (typical STARTTLS) |
+| `Email__Username` | SMTP login / API user (SendGrid: `apikey`) |
+| `Email__Password` | SMTP password or API key (**mark Secret** on Render) |
+| `Email__FromAddress` | verified sender, e.g. `noreply@bagly.store` |
+| `Email__FromName` | `Bagly` |
+| `Email__UseSsl` | `true` |
+
+Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders. If `Email__Host` is not set, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped`.
 
 ---
 

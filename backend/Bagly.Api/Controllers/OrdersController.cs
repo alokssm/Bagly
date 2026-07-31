@@ -9,7 +9,9 @@ namespace Bagly.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class OrdersController(BaglyDbContext db) : ControllerBase
+public class OrdersController(
+    BaglyDbContext db,
+    IOrderConfirmationEmailService orderEmails) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<OrderDto>> CreateOrder(
@@ -109,6 +111,8 @@ public class OrdersController(BaglyDbContext db) : ControllerBase
 
         db.Orders.Add(order);
         await db.SaveChangesAsync(cancellationToken);
+
+        await orderEmails.SendAsync(order, cancellationToken);
 
         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, MapOrder(order));
     }
