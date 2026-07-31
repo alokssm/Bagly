@@ -57,7 +57,38 @@ export default function Checkout() {
     )
   }
 
-  if (items.length === 0 && !placed) {
+  if (placed) {
+    return (
+      <section className="section">
+        <div className="container" style={{ maxWidth: 640 }}>
+          <div className="success-banner">
+            <h2>Order confirmed</h2>
+            <p>
+              Thanks{placed.firstName ? `, ${placed.firstName}` : ''}. Order{' '}
+              <strong>{placed.orderNumber}</strong> is confirmed
+              {placed.email ? ` and a confirmation email will go to ${placed.email}` : ''}.
+            </p>
+            <p style={{ marginTop: '0.5rem' }}>
+              Total charged:{' '}
+              {placed.paymentProvider === 'Razorpay' && placed.amountInr != null
+                ? formatPrice(placed.amountInr, 'INR')
+                : formatPrice(placed.total, 'USD')}
+            </p>
+            {placed.razorpayPaymentId ? (
+              <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
+                Razorpay payment ID: {placed.razorpayPaymentId}
+              </p>
+            ) : null}
+          </div>
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/shop')}>
+            Continue shopping
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  if (items.length === 0) {
     return (
       <div className="container empty-state">
         <h2>Nothing to checkout</h2>
@@ -75,12 +106,12 @@ export default function Checkout() {
   }
 
   const finishSuccess = async (order) => {
+    setPlaced(order)
     try {
       await clearCart()
     } catch {
       await refreshCart().catch(() => {})
     }
-    setPlaced(order)
   }
 
   const onSubmit = async (e) => {
@@ -161,37 +192,6 @@ export default function Checkout() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  if (placed) {
-    return (
-      <section className="section">
-        <div className="container" style={{ maxWidth: 640 }}>
-          <div className="success-banner">
-            <h2>Order confirmed</h2>
-            <p>
-              Thanks{placed.firstName ? `, ${placed.firstName}` : ''}. Order{' '}
-              <strong>{placed.orderNumber}</strong> is confirmed
-              {placed.email ? ` and details will go to ${placed.email}` : ''}.
-            </p>
-            <p style={{ marginTop: '0.5rem' }}>
-              Total charged:{' '}
-              {placed.paymentProvider === 'Razorpay' && placed.amountInr != null
-                ? formatPrice(placed.amountInr, 'INR')
-                : formatPrice(placed.total, 'USD')}
-            </p>
-            {placed.razorpayPaymentId ? (
-              <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
-                Razorpay payment ID: {placed.razorpayPaymentId}
-              </p>
-            ) : null}
-          </div>
-          <button type="button" className="btn btn-primary" onClick={() => navigate('/shop')}>
-            Continue shopping
-          </button>
-        </div>
-      </section>
-    )
   }
 
   return (

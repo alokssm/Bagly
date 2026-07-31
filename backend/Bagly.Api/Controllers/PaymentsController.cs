@@ -13,7 +13,7 @@ public class PaymentsController(
     BaglyDbContext db,
     IRazorpayService razorpay,
     IPaymentLogService paymentLogs,
-    IOrderConfirmationEmailService orderEmails,
+    IServiceScopeFactory scopeFactory,
     ILogger<PaymentsController> logger) : ControllerBase
 {
     [HttpGet("razorpay/config")]
@@ -296,9 +296,9 @@ public class PaymentsController(
             ipAddress: ip,
             cancellationToken: cancellationToken);
 
-        await orderEmails.SendAsync(order, cancellationToken);
-
-        return Ok(OrdersController.MapOrder(order));
+        var confirmedOrder = OrdersController.MapOrder(order);
+        SendConfirmationEmailInBackground(order.Id);
+        return Ok(confirmedOrder);
     }
 
     [HttpPost("razorpay/failure")]
@@ -388,4 +388,38 @@ public class PaymentsController(
 
     private static bool IsIndia(string? country) =>
         string.Equals(country?.Trim(), "India", StringComparison.OrdinalIgnoreCase);
+
+    private void SendConfirmationEmailInBackground(Guid orderId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var scopedDb = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
+                var scopedEmails = scope.ServiceProvider.GetRequiredService<IOrderConfirmationEmailService>();
+
+                var orderForEmail = await scopedDb.Orders.AsNoTracking()
+                    .Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (orderForEmail is null)
+                {
+                    logger.LogWarning(
+                        "Order confirmation email skipped: order {OrderId} was not found after payment verify.",
+                        orderId);
+                    return;
+                }
+
+                await scopedEmails.SendAsync(orderForEmail);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Background order confirmation email failed for order {OrderId}. Payment remains confirmed.",
+                    orderId);
+            }
+        });
+    }
 }

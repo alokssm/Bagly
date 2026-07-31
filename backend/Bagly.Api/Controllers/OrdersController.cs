@@ -11,7 +11,8 @@ namespace Bagly.Api.Controllers;
 [Route("api/[controller]")]
 public class OrdersController(
     BaglyDbContext db,
-    IOrderConfirmationEmailService orderEmails) : ControllerBase
+    IServiceScopeFactory scopeFactory,
+    ILogger<OrdersController> logger) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<OrderDto>> CreateOrder(
@@ -112,9 +113,9 @@ public class OrdersController(
         db.Orders.Add(order);
         await db.SaveChangesAsync(cancellationToken);
 
-        await orderEmails.SendAsync(order, cancellationToken);
-
-        return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, MapOrder(order));
+        var createdOrder = MapOrder(order);
+        SendConfirmationEmailInBackground(order.Id);
+        return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, createdOrder);
     }
 
     [HttpGet("{id:guid}")]
@@ -168,4 +169,38 @@ public class OrdersController(
                 i.Quantity
             )).ToList()
         );
+
+    private void SendConfirmationEmailInBackground(Guid orderId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var scopedDb = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
+                var scopedEmails = scope.ServiceProvider.GetRequiredService<IOrderConfirmationEmailService>();
+
+                var orderForEmail = await scopedDb.Orders.AsNoTracking()
+                    .Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (orderForEmail is null)
+                {
+                    logger.LogWarning(
+                        "Order confirmation email skipped: order {OrderId} was not found after checkout.",
+                        orderId);
+                    return;
+                }
+
+                await scopedEmails.SendAsync(orderForEmail);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Background order confirmation email failed for order {OrderId}. Order remains confirmed.",
+                    orderId);
+            }
+        });
+    }
 }
