@@ -1,8 +1,10 @@
 using System.Text;
 using Bagly.Api.Data;
+using Bagly.Api.Hubs;
 using Bagly.Api.Middleware;
 using Bagly.Api.Options;
 using Bagly.Api.Services;
+using Bagly.Api.Services.Chat;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -110,8 +112,11 @@ try
 
     builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
     builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
+    builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
     builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection(RazorpayOptions.SectionName));
     builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+    builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
+    builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));
     builder.Services.AddSingleton<TokenService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
@@ -124,6 +129,15 @@ try
         client.Timeout = TimeSpan.FromSeconds(30);
     });
     builder.Services.AddHttpClient<IRazorpayService, RazorpayService>();
+    builder.Services.AddHttpClient<IOpenAiChatClient, OpenAiChatClient>();
+
+    builder.Services.AddSignalR();
+    builder.Services.AddSingleton<IChatSessionStore, InMemoryChatSessionStore>();
+    builder.Services.AddSingleton<IChatConversationRegistry, ChatConversationRegistry>();
+    builder.Services.AddSingleton<IChatRateLimiter, ChatRateLimiter>();
+    builder.Services.AddScoped<IChatToolExecutor, ChatToolExecutor>();
+    builder.Services.AddScoped<IRuleBasedChatResponder, RuleBasedChatResponder>();
+    builder.Services.AddScoped<IChatAgentService, ChatAgentService>();
 
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
@@ -181,6 +195,23 @@ try
                 ClockSkew = TimeSpan.FromMinutes(1),
                 RoleClaimType = System.Security.Claims.ClaimTypes.Role,
             };
+
+            // SignalR browser clients cannot set custom headers on WebSocket upgrades,
+            // so the JWT is sent via the "access_token" query string param for /hubs/* instead.
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                },
+            };
         });
 
     builder.Services.AddAuthorization();
@@ -236,7 +267,9 @@ try
                     return System.Net.IPAddress.TryParse(uri.Host, out _);
                 })
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                // SignalR needs credentialed requests; SetIsOriginAllowed (not AllowAnyOrigin) makes this safe.
+                .AllowCredentials();
         });
     });
 
@@ -305,6 +338,7 @@ try
     app.UseMiddleware<ExceptionLoggingMiddleware>();
 
     app.MapControllers();
+    app.MapHub<ChatHub>("/hubs/chat");
 
     app.MapPost("/api/setup/seed", async (IServiceProvider sp) =>
     {
@@ -325,6 +359,9 @@ try
     {
         var cs = config.GetConnectionString("DefaultConnection") ?? "";
         var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
+        var openAi = config.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>() ?? new OpenAiOptions();
+        var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
+        var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
         string? dataSource = null;
         try
         {
@@ -414,6 +451,25 @@ try
                                 ? "Set Email__Provider=SendGrid, Email__SendGridApiKey, and Email__FromAddress (verified sender in SendGrid)."
                                 : "Set Email__Host and Email__FromAddress on Render, then redeploy. Gmail: smtp.gmail.com, app password. SendGrid API (Render free): Email__Provider=SendGrid."
                             : "Email__Enabled is false — set Email__Enabled=true to send order confirmation emails.",
+            },
+            chat = new
+            {
+                hub = "/hubs/chat",
+                mode = openAi.IsConfigured ? "openai" : "rule-based",
+                aiConfigured = openAi.IsConfigured,
+                model = openAi.IsConfigured ? openAi.Model : null,
+                maxMessagesPerMinute = chat.MaxMessagesPerMinute,
+                requiresAuth = true,
+                hint = openAi.IsConfigured
+                    ? null
+                    : "Set OpenAi__ApiKey to enable the AI tool-calling agent. Chat still works via the rule-based fallback.",
+            },
+            customerAuth = new
+            {
+                googleConfigured = googleAuth.IsConfigured,
+                hint = googleAuth.IsConfigured
+                    ? null
+                    : "Set GoogleAuth__ClientId (backend) and VITE_GOOGLE_CLIENT_ID (frontend) to enable 'Continue with Google'.",
             },
             timestamp = DateTime.UtcNow,
         });

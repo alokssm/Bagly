@@ -1,0 +1,229 @@
+.admin-chat-widget {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  font-family: var(--font-body);
+}
+
+.admin-chat-toggle {
+  position: relative;
+}
+
+.admin-chat-toggle-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-chat-panel {
+  width: min(640px, calc(100vw - 48px));
+  height: min(560px, calc(100vh - 140px));
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-chat-head {
+  background: var(--forest);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.admin-chat-head strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.admin-chat-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.admin-chat-conversations {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  background: var(--mist);
+}
+
+.admin-chat-conversation {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.admin-chat-conversation:hover {
+  background: #fff;
+}
+
+.admin-chat-conversation.is-active {
+  background: #fff;
+  box-shadow: inset 3px 0 0 var(--forest);
+}
+
+.admin-chat-conversation-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-chat-conversation-top strong {
+  font-size: 0.85rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-chat-conversation-top time {
+  font-size: 0.66rem;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.admin-chat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+.admin-chat-dot.is-online {
+  background: #2fbf6f;
+  opacity: 1;
+}
+
+.admin-chat-conversation-snippet {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-chat-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--brass);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.admin-chat-thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-chat-thread-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.admin-chat-thread-head strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.admin-chat-thread-head small {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.admin-chat-messages {
+  flex: 1;
+}
+
+/* In the admin thread, "user" is the customer (left) and "admin" is this agent's own reply (right). */
+.admin-chat-thread .chat-bubble-user {
+  align-self: flex-start;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 2px;
+}
+
+.admin-chat-thread .chat-bubble-admin {
+  align-self: flex-end;
+  background: var(--forest);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.admin-chat-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.admin-chat-placeholder {
+  margin: auto;
+}
+
+@media (max-width: 640px) {
+  .admin-chat-widget {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .admin-chat-body {
+    flex-direction: column;
+  }
+
+  .admin-chat-conversations {
+    width: 100%;
+    max-height: 140px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+}

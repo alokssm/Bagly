@@ -153,6 +153,7 @@ public class AdminProductsController(BaglyDbContext db, IAuditLogService auditLo
         if (string.IsNullOrWhiteSpace(request.Name)) return "Name is required.";
         if (string.IsNullOrWhiteSpace(request.Category)) return "Category is required.";
         if (request.Price < 0) return "Price must be zero or greater.";
+        if (request.StockQuantity < 0) return "Stock quantity must be zero or greater.";
         if (string.IsNullOrWhiteSpace(request.Image)) return "Image URL is required.";
         return null;
     }

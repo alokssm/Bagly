@@ -1,5 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getAuthToken } from '../api/client'
+import AdminChatPanel from './AdminChatPanel'
 
 export default function AdminLayout() {
   const { admin, logout } = useAuth()
@@ -38,6 +40,7 @@ export default function AdminLayout() {
       <div className="admin-main">
         <Outlet />
       </div>
+      {admin ? <AdminChatPanel token={getAuthToken()} /> : null}
     </div>
   )
 }

@@ -25,6 +25,7 @@ https://bagly.onrender.com/api
 | Key | Value |
 |-----|--------|
 | `VITE_API_URL` | `https://bagly.onrender.com/api` |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth Web Client ID (optional — see `iis/README.md` → "Google sign-in setup"). Must match Render's `GoogleAuth__ClientId` and include this Vercel URL as an authorized JS origin in Google Cloud. Leave unset to hide the "Continue with Google" button. |
 
 6. Click **Deploy**
 

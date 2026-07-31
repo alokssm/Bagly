@@ -90,6 +90,7 @@ Set these **before** or right after first deploy:
 | `Email__FromAddress` | verified sender in SendGrid (or Gmail account / alias for SMTP) |
 | `Email__FromName` | `Bagly` |
 | `Email__UseSsl` | `true` |
+| `GoogleAuth__ClientId` | Google OAuth Web Client ID for "Continue with Google" (optional — leave unset to hide the button). See `iis/README.md` → "Google sign-in setup" for how to create one. Must match frontend `VITE_GOOGLE_CLIENT_ID`. |
 
 Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders.
 

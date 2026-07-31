@@ -12,9 +12,11 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
+    public DbSet<StockAlert> StockAlerts => Set<StockAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,6 +37,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.ColorsJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.FeaturesJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.GalleryJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.StockQuantity).HasDefaultValue(999);
             entity.HasIndex(x => x.Category);
             entity.HasIndex(x => x.IsActive);
         });
@@ -123,6 +126,19 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.IsActive);
         });
 
+        modelBuilder.Entity<CustomerUser>(entity =>
+        {
+            entity.ToTable("CustomerUsers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.PasswordHash).HasMaxLength(500);
+            entity.Property(x => x.GoogleSubject).HasMaxLength(100);
+            entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => x.GoogleSubject).IsUnique().HasFilter("[GoogleSubject] IS NOT NULL");
+            entity.HasIndex(x => x.IsActive);
+        });
+
         modelBuilder.Entity<AuditLog>(entity =>
         {
             entity.ToTable("AuditLogs");
@@ -187,6 +203,18 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.RazorpayOrderId);
             entity.HasIndex(x => x.EventType);
             entity.HasIndex(x => x.Status);
+        });
+
+        modelBuilder.Entity<StockAlert>(entity =>
+        {
+            entity.ToTable("StockAlerts");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.ProductId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.HasIndex(x => new { x.Email, x.ProductId }).IsUnique();
+            entity.HasIndex(x => x.ProductId);
+            entity.HasIndex(x => x.Notified);
         });
     }
 }

@@ -20,6 +20,7 @@ const emptyForm = {
   image: '',
   gallery: '',
   isActive: true,
+  stockQuantity: '999',
 }
 
 function toForm(product) {
@@ -40,6 +41,7 @@ function toForm(product) {
     image: product.image || '',
     gallery: (product.gallery || []).join('\n'),
     isActive: product.isActive !== false,
+    stockQuantity: String(product.stockQuantity ?? 999),
   }
 }
 
@@ -219,6 +221,20 @@ export default function AdminProductForm() {
               value={form.reviews}
               onChange={onChange}
             />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="stockQuantity">Stock quantity</label>
+            <input
+              id="stockQuantity"
+              name="stockQuantity"
+              type="number"
+              min="0"
+              step="1"
+              value={form.stockQuantity}
+              onChange={onChange}
+            />
+            <small>0 means out of stock — the storefront chat will offer restock alerts.</small>
           </div>
 
           <div className="form-field full">

@@ -250,7 +250,8 @@ public static class DbSeeder
             [
                 "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=900&q=80",
                 "https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=900&q=80",
-            ]
+            ],
+            stockQuantity: 0
         ),
         Create(
             "city-sling",
@@ -383,7 +384,8 @@ public static class DbSeeder
         string description,
         string[] features,
         string image,
-        string[] gallery
+        string[] gallery,
+        int stockQuantity = 999
     ) =>
         new()
         {
@@ -402,5 +404,6 @@ public static class DbSeeder
             ColorsJson = JsonSerializer.Serialize(colors, JsonOptions),
             FeaturesJson = JsonSerializer.Serialize(features, JsonOptions),
             GalleryJson = JsonSerializer.Serialize(gallery, JsonOptions),
+            StockQuantity = stockQuantity,
         };
 }

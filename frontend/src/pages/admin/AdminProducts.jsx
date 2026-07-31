@@ -64,6 +64,7 @@ export default function AdminProducts() {
                 <th>Product</th>
                 <th>Category</th>
                 <th>Price</th>
+                <th>Stock</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -82,6 +83,11 @@ export default function AdminProducts() {
                   </td>
                   <td>{product.category}</td>
                   <td>{formatPrice(product.price)}</td>
+                  <td>
+                    <span className={`admin-pill ${product.stockQuantity > 0 ? 'on' : 'off'}`}>
+                      {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : 'Out of stock'}
+                    </span>
+                  </td>
                   <td>
                     <span className={`admin-pill ${product.isActive ? 'on' : 'off'}`}>
                       {product.isActive ? 'Active' : 'Hidden'}

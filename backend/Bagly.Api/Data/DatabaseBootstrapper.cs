@@ -30,9 +30,11 @@ public static class DatabaseBootstrapper
 
         // Ensure AdminUsers exists even if migration has not run yet.
         await EnsureAdminUsersTableAsync(db, cancellationToken);
+        await EnsureCustomerUsersTableAsync(db, cancellationToken);
         await EnsureAuditLogsTableAsync(db, cancellationToken);
         await EnsurePaymentLogsTableAsync(db, cancellationToken);
         await EnsureOrderPaymentColumnsAsync(db, cancellationToken);
+        await EnsureStockQuantityAndAlertsAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -143,6 +145,37 @@ public static class DatabaseBootstrapper
 
             CREATE UNIQUE INDEX [IX_AdminUsers_Email] ON [dbo].[AdminUsers] ([Email]);
             CREATE INDEX [IX_AdminUsers_IsActive] ON [dbo].[AdminUsers] ([IsActive]);
+            """,
+            cancellationToken);
+    }
+
+    private static async Task EnsureCustomerUsersTableAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "CustomerUsers", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE [dbo].[CustomerUsers]
+            (
+                [Id]            UNIQUEIDENTIFIER NOT NULL,
+                [Email]         NVARCHAR(256)    NOT NULL,
+                [Name]          NVARCHAR(150)    NOT NULL,
+                [PasswordHash]  NVARCHAR(500)    NULL,
+                [GoogleSubject] NVARCHAR(100)    NULL,
+                [IsActive]      BIT              NOT NULL CONSTRAINT [DF_CustomerUsers_IsActive] DEFAULT (1),
+                [CreatedAt]     DATETIME2        NOT NULL,
+                [LastLoginAt]   DATETIME2        NULL,
+                CONSTRAINT [PK_CustomerUsers] PRIMARY KEY ([Id])
+            );
+
+            CREATE UNIQUE INDEX [IX_CustomerUsers_Email] ON [dbo].[CustomerUsers] ([Email]);
+            CREATE UNIQUE INDEX [IX_CustomerUsers_GoogleSubject] ON [dbo].[CustomerUsers] ([GoogleSubject]) WHERE [GoogleSubject] IS NOT NULL;
+            CREATE INDEX [IX_CustomerUsers_IsActive] ON [dbo].[CustomerUsers] ([IsActive]);
             """,
             cancellationToken);
     }
@@ -263,6 +296,45 @@ public static class DatabaseBootstrapper
 
             IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Orders_PaymentStatus' AND object_id = OBJECT_ID(N'dbo.Orders'))
                 CREATE INDEX [IX_Orders_PaymentStatus] ON [dbo].[Orders] ([PaymentStatus]);
+            """,
+            cancellationToken);
+    }
+
+    private static async Task EnsureStockQuantityAndAlertsAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "Products", cancellationToken))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                IF COL_LENGTH('dbo.Products', 'StockQuantity') IS NULL
+                    ALTER TABLE [dbo].[Products] ADD [StockQuantity] INT NOT NULL CONSTRAINT [DF_Products_StockQuantity] DEFAULT (999);
+                """,
+                cancellationToken);
+        }
+
+        if (await TableExistsAsync(db, "StockAlerts", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE [dbo].[StockAlerts]
+            (
+                [Id]         INT IDENTITY(1,1) NOT NULL,
+                [ProductId]  NVARCHAR(100)     NOT NULL,
+                [Email]      NVARCHAR(256)     NOT NULL,
+                [Notified]   BIT               NOT NULL CONSTRAINT [DF_StockAlerts_Notified] DEFAULT (0),
+                [CreatedAt]  DATETIME2         NOT NULL,
+                [NotifiedAt] DATETIME2         NULL,
+                CONSTRAINT [PK_StockAlerts] PRIMARY KEY ([Id])
+            );
+
+            CREATE UNIQUE INDEX [IX_StockAlerts_Email_ProductId] ON [dbo].[StockAlerts] ([Email], [ProductId]);
+            CREATE INDEX [IX_StockAlerts_ProductId] ON [dbo].[StockAlerts] ([ProductId]);
+            CREATE INDEX [IX_StockAlerts_Notified] ON [dbo].[StockAlerts] ([Notified]);
             """,
             cancellationToken);
     }

@@ -94,6 +94,7 @@ export function buildUpsertProductPayload(form, { includeId = false } = {}) {
     image,
     gallery,
     isActive: Boolean(form.isActive),
+    stockQuantity: Math.max(0, Number(form.stockQuantity) || 0),
   }
 
   if (includeId && form.id) {

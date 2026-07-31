@@ -80,8 +80,12 @@ try {
   $envFile = Join-Path $frontendDir ".env.iis"
   if (Test-Path $envFile) {
     Get-Content $envFile | ForEach-Object {
-      if ($_ -match '^\s*VITE_API_URL\s*=\s*(.+)\s*$') {
-        $env:VITE_API_URL = $Matches[1].Trim().Trim('"')
+      if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
+        $key = $Matches[1]
+        $val = $Matches[2].Trim().Trim('"')
+        if ($val) {
+          Set-Item -Path "Env:$key" -Value $val
+        }
       }
     }
   }
@@ -89,6 +93,11 @@ try {
     $env:VITE_API_URL = "http://localhost:8081/api"
   }
   Write-Host "  VITE_API_URL=$($env:VITE_API_URL)"
+  if ($env:VITE_GOOGLE_CLIENT_ID) {
+    Write-Host "  VITE_GOOGLE_CLIENT_ID=$($env:VITE_GOOGLE_CLIENT_ID)"
+  } else {
+    Write-Host "  VITE_GOOGLE_CLIENT_ID not set - 'Continue with Google' button will be hidden until configured (see iis/README.md)."
+  }
   npm run build
   if ($LASTEXITCODE -ne 0) { throw "npm run build failed." }
 

@@ -270,6 +270,44 @@ p {
   gap: 0.75rem;
 }
 
+.customer-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.customer-name {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.nav-chat-hint {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  white-space: nowrap;
+}
+
+.nav-chat-hint:hover {
+  color: var(--forest);
+}
+
+.mobile-nav-btn {
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.mobile-nav-btn:hover {
+  color: var(--forest);
+}
+
 .cart-btn {
   position: relative;
   display: inline-flex;
@@ -1128,6 +1166,10 @@ p {
     display: none;
   }
 
+  .nav-chat-hint {
+    display: none;
+  }
+
   .menu-toggle {
     display: inline-flex;
   }
@@ -1172,6 +1214,10 @@ p {
 
   .hero-content {
     padding: 3rem 0 4rem;
+  }
+
+  .nav-actions .customer-nav {
+    display: none;
   }
 }
 
@@ -1221,6 +1267,81 @@ p {
   background: rgba(155, 44, 44, 0.08);
   padding: 0.75rem 1rem;
   border-left: 3px solid var(--danger);
+}
+
+/* Customer auth (Login / Register) */
+.auth-page {
+  min-height: calc(100vh - var(--nav-h));
+  display: grid;
+  place-items: center;
+  padding: 3rem 1.5rem;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  padding: 2.25rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-card h1 {
+  font-size: 2.1rem;
+  color: var(--forest);
+}
+
+.auth-copy {
+  color: var(--ink-soft);
+  line-height: 1.6;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.google-btn-slot {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-hint {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  background: var(--mist);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+}
+
+.auth-switch {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.auth-switch a {
+  color: var(--forest);
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 .admin-shell {

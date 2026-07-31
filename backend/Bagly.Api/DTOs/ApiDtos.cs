@@ -15,7 +15,9 @@ public record ProductDto(
     string Description,
     IReadOnlyList<string> Features,
     string Image,
-    IReadOnlyList<string> Gallery
+    IReadOnlyList<string> Gallery,
+    int StockQuantity,
+    bool IsAvailable
 );
 
 public record CategoryDto(string Id, string Label, int SortOrder = 0);
@@ -23,6 +25,14 @@ public record CategoryDto(string Id, string Label, int SortOrder = 0);
 public record LoginRequest(string Email, string Password);
 
 public record LoginResponse(string Token, string Email, string Name, string Role, DateTime ExpiresAt);
+
+public record CustomerRegisterRequest(string Name, string Email, string Password, string ConfirmPassword);
+
+public record CustomerLoginRequest(string Email, string Password);
+
+public record CustomerGoogleLoginRequest(string IdToken);
+
+public record CustomerAuthResponse(string Token, Guid Id, string Email, string Name, DateTime ExpiresAt);
 
 public record UpsertCategoryRequest(string Id, string Label, int SortOrder);
 
@@ -42,7 +52,8 @@ public record UpsertProductRequest(
     IReadOnlyList<string> Features,
     string Image,
     IReadOnlyList<string> Gallery,
-    bool IsActive = true
+    bool IsActive = true,
+    int StockQuantity = 999
 );
 
 public record AdminProductDto(
@@ -62,6 +73,8 @@ public record AdminProductDto(
     string Image,
     IReadOnlyList<string> Gallery,
     bool IsActive,
+    int StockQuantity,
+    bool IsAvailable,
     DateTime CreatedAt
 );
 
@@ -158,3 +171,5 @@ public record RazorpayFailureRequest(
     string? RazorpayOrderId,
     string? Code,
     string? Description);
+
+public record ChatMessageDto(string Role, string Content, DateTime Timestamp);

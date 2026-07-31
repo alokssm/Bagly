@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Bagly.Api.Models;
 
 public class Product
@@ -18,5 +20,10 @@ public class Product
     public string FeaturesJson { get; set; } = "[]";
     public string GalleryJson { get; set; } = "[]";
     public bool IsActive { get; set; } = true;
+    public int StockQuantity { get; set; } = 999;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>A product can be bought when it is active and in stock.</summary>
+    [NotMapped]
+    public bool IsAvailable => IsActive && StockQuantity > 0;
 }

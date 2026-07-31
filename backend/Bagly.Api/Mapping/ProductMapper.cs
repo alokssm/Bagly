@@ -28,7 +28,9 @@ public static class ProductMapper
             product.Description,
             DeserializeList(product.FeaturesJson),
             product.Image,
-            DeserializeList(product.GalleryJson)
+            DeserializeList(product.GalleryJson),
+            product.StockQuantity,
+            product.IsAvailable
         );
 
     public static AdminProductDto ToAdminDto(Product product) =>
@@ -49,6 +51,8 @@ public static class ProductMapper
             product.Image,
             DeserializeList(product.GalleryJson),
             product.IsActive,
+            product.StockQuantity,
+            product.IsAvailable,
             product.CreatedAt
         );
 
@@ -73,6 +77,7 @@ public static class ProductMapper
                 .ToList(),
             JsonOptions);
         product.IsActive = request.IsActive;
+        product.StockQuantity = Math.Max(0, request.StockQuantity);
     }
 
     public static string Slugify(string value)

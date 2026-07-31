@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'bagly-admin-token'
+const CUSTOMER_TOKEN_KEY = 'bagly-customer-token'
 
 /**
  * - Cloud (Vercel → Render): use VITE_API_URL as-is (e.g. https://bagly.onrender.com/api)
@@ -35,6 +36,19 @@ function getApiBase() {
   return resolveApiBase()
 }
 
+/**
+ * Derives the SignalR hub base URL from the API base.
+ * - Absolute (e.g. https://x.com/api) → https://x.com/hubs
+ * - Relative (dev proxy, default /api) → /hubs (Vite proxies this to the API host)
+ */
+export function getHubBase() {
+  const apiBase = getApiBase()
+  if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
+    return apiBase.replace(/\/api\/?$/, '') + '/hubs'
+  }
+  return '/hubs'
+}
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -42,6 +56,15 @@ export function getAuthToken() {
 export function setAuthToken(token) {
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
+}
+
+export function getCustomerToken() {
+  return localStorage.getItem(CUSTOMER_TOKEN_KEY)
+}
+
+export function setCustomerToken(token) {
+  if (token) localStorage.setItem(CUSTOMER_TOKEN_KEY, token)
+  else localStorage.removeItem(CUSTOMER_TOKEN_KEY)
 }
 
 function extractErrorMessage(data, status) {
@@ -62,7 +85,7 @@ function extractErrorMessage(data, status) {
 
 async function request(path, options = {}) {
   const { body, headers, auth = false, ...rest } = options
-  const token = getAuthToken()
+  const token = auth === 'customer' ? getCustomerToken() : getAuthToken()
   const apiBase = getApiBase()
 
   let response
@@ -111,6 +134,26 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST', auth: true }),
 
   me: () => request('/auth/me', { auth: true }),
+
+  customerRegister: (name, email, password, confirmPassword) =>
+    request('/auth/customer/register', {
+      method: 'POST',
+      body: { name, email, password, confirmPassword },
+    }),
+
+  customerLogin: (email, password) =>
+    request('/auth/customer/login', {
+      method: 'POST',
+      body: { email, password },
+    }),
+
+  customerGoogleLogin: (idToken) =>
+    request('/auth/customer/google', {
+      method: 'POST',
+      body: { idToken },
+    }),
+
+  customerMe: () => request('/auth/customer/me', { auth: 'customer' }),
 
   getProducts: ({ category, sort } = {}) => {
     const query = new URLSearchParams()
