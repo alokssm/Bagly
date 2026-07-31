@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Bagly.Api.Models;
 using Bagly.Api.Options;
 using MailKit.Net.Smtp;
@@ -16,6 +18,7 @@ public interface IOrderConfirmationEmailService
 
 public class OrderConfirmationEmailService(
     IOptions<EmailOptions> options,
+    IHttpClientFactory httpClientFactory,
     ILogger<OrderConfirmationEmailService> logger) : IOrderConfirmationEmailService
 {
     private readonly EmailOptions _options = options.Value;
@@ -33,11 +36,13 @@ public class OrderConfirmationEmailService(
         if (!_options.IsConfigured)
         {
             logger.LogWarning(
-                "Order confirmation email skipped for {OrderNumber} to {Email}: SMTP not configured. Set Email__Host and Email__FromAddress (Render env vars or Email section in appsettings). HostSet={HostSet}, FromSet={FromSet}.",
+                "Order confirmation email skipped for {OrderNumber} to {Email}: email not configured. Provider={Provider}, HostSet={HostSet}, FromSet={FromSet}, SendGridKeySet={SendGridKeySet}.",
                 order.OrderNumber,
                 order.Email,
+                _options.ResolvedProvider,
                 _options.HasSmtpHost,
-                _options.HasFromAddress);
+                _options.HasFromAddress,
+                _options.HasSendGridApiKey);
             return;
         }
 
@@ -51,10 +56,103 @@ public class OrderConfirmationEmailService(
         }
 
         var (subject, textBody, htmlBody) = BuildMessage(order);
+
+        if (_options.ResolvedProvider == EmailProvider.SendGrid)
+        {
+            await SendViaSendGridAsync(order, subject, textBody, htmlBody, cancellationToken);
+            return;
+        }
+
+        await SendViaSmtpAsync(order, subject, textBody, htmlBody, cancellationToken);
+    }
+
+    private async Task SendViaSendGridAsync(
+        Order order,
+        string subject,
+        string textBody,
+        string htmlBody,
+        CancellationToken cancellationToken)
+    {
+        var apiKey = _options.ResolveSendGridApiKey()
+            ?? throw new InvalidOperationException("SendGrid API key is missing.");
+
+        logger.LogInformation(
+            "Sending order confirmation email for {OrderNumber} to {Email} via SendGrid HTTPS API (from {FromAddress})",
+            order.OrderNumber,
+            order.Email,
+            _options.FromAddress.Trim());
+
+        var payload = new
+        {
+            personalizations = new[]
+            {
+                new
+                {
+                    to = new[] { new { email = order.Email.Trim() } },
+                },
+            },
+            from = new
+            {
+                email = _options.FromAddress.Trim(),
+                name = _options.FromName,
+            },
+            subject,
+            content = new object[]
+            {
+                new { type = "text/plain", value = textBody },
+                new { type = "text/html", value = htmlBody },
+            },
+        };
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("SendGrid");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "v3/mail/send");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(payload),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                logger.LogInformation(
+                    "Order confirmation email sent for {OrderNumber} to {Email} via SendGrid",
+                    order.OrderNumber,
+                    order.Email);
+                return;
+            }
+
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            logger.LogError(
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via SendGrid: HTTP {StatusCode}. {ResponseBody}. Verify Email__FromAddress is a verified sender in SendGrid.",
+                order.OrderNumber,
+                order.Email,
+                (int)response.StatusCode,
+                Truncate(responseBody, 500));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via SendGrid HTTPS API.",
+                order.OrderNumber,
+                order.Email);
+        }
+    }
+
+    private async Task SendViaSmtpAsync(
+        Order order,
+        string subject,
+        string textBody,
+        string htmlBody,
+        CancellationToken cancellationToken)
+    {
         var secureSocketOptions = ResolveSecureSocketOptions();
 
         logger.LogInformation(
-            "Sending order confirmation email for {OrderNumber} to {Email} via {Host}:{Port} (SSL={UseSsl}, Auth={HasAuth})",
+            "Sending order confirmation email for {OrderNumber} to {Email} via SMTP {Host}:{Port} (SSL={UseSsl}, Auth={HasAuth})",
             order.OrderNumber,
             order.Email,
             _options.Host.Trim(),
@@ -90,16 +188,44 @@ public class OrderConfirmationEmailService(
                 order.OrderNumber,
                 order.Email);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsLikelyRenderSmtpBlock(ex))
         {
             logger.LogError(
                 ex,
-                "Failed to send order confirmation email for {OrderNumber} to {Email} via {Host}:{Port}. Check SMTP credentials, port, and provider settings (Gmail: app password + smtp.gmail.com:587; SendGrid: apikey user + smtp.sendgrid.net:587).",
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via SMTP {Host}:{Port}. " +
+                "Render free tier blocks outbound SMTP ports 25/465/587 — set Email__Provider=SendGrid and Email__SendGridApiKey, or upgrade Render to a paid instance.",
                 order.OrderNumber,
                 order.Email,
                 _options.Host.Trim(),
                 _options.Port);
         }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via SMTP {Host}:{Port}. " +
+                "Gmail: app password + smtp.gmail.com:587, From must match account or alias. SendGrid SMTP: user apikey + smtp.sendgrid.net:587.",
+                order.OrderNumber,
+                order.Email,
+                _options.Host.Trim(),
+                _options.Port);
+        }
+    }
+
+    private static bool IsLikelyRenderSmtpBlock(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("connect", StringComparison.OrdinalIgnoreCase) && message.Contains("587", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return ex is TimeoutException or OperationCanceledException;
     }
 
     private SecureSocketOptions ResolveSecureSocketOptions()
@@ -115,6 +241,7 @@ public class OrderConfirmationEmailService(
 
     private static (string Subject, string TextBody, string HtmlBody) BuildMessage(Order order)
     {
+        var items = order.Items ?? [];
         var customerName = $"{order.FirstName} {order.LastName}".Trim();
         var subject = $"Bagly order confirmed — {order.OrderNumber}";
         var amountLabel = FormatOrderTotal(order);
@@ -129,7 +256,7 @@ public class OrderConfirmationEmailService(
         sb.AppendLine($"Total: {amountLabel}");
         sb.AppendLine();
         sb.AppendLine("Items:");
-        foreach (var item in order.Items)
+        foreach (var item in items)
         {
             var lineTotal = item.UnitPrice * item.Quantity;
             sb.AppendLine($"  • {item.ProductName} ({item.Color}) × {item.Quantity} — {FormatMoney(lineTotal, order.Currency)}");
@@ -150,7 +277,7 @@ public class OrderConfirmationEmailService(
 
         var itemRows = string.Join(
             "",
-            order.Items.Select(i =>
+            items.Select(i =>
             {
                 var lineTotal = i.UnitPrice * i.Quantity;
                 return $"""
@@ -228,5 +355,8 @@ public class OrderConfirmationEmailService(
             .Replace("<", "&lt;", StringComparison.Ordinal)
             .Replace(">", "&gt;", StringComparison.Ordinal)
             .Replace("\"", "&quot;", StringComparison.Ordinal);
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength] + "…";
 }
-
+

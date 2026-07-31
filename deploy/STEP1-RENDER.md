@@ -81,15 +81,21 @@ Set these **before** or right after first deploy:
 | `Razorpay__UsdToInrRate` | `83` |
 | `Cors__AllowedOrigins__0` | your future Vercel URL (Step 2), e.g. `https://bagly.vercel.app` |
 | `Email__Enabled` | `true` |
-| `Email__Host` | SMTP host, e.g. `smtp.gmail.com`, `smtp.sendgrid.net`, or your provider |
+| `Email__Provider` | `SendGrid` on Render **free** tier (SMTP ports blocked); `Smtp` on paid Render or local dev |
+| `Email__SendGridApiKey` | SendGrid API key (`SG.xxx`) — **mark Secret**; uses HTTPS so it works on Render free |
+| `Email__Host` | SMTP host (only if `Email__Provider=Smtp`), e.g. `smtp.gmail.com` |
 | `Email__Port` | `587` (typical STARTTLS) |
-| `Email__Username` | SMTP login / API user (SendGrid: `apikey`) |
-| `Email__Password` | SMTP password or API key (**mark Secret** on Render) |
-| `Email__FromAddress` | verified sender, e.g. `noreply@bagly.store` |
+| `Email__Username` | SMTP login (SendGrid SMTP: `apikey`) |
+| `Email__Password` | SMTP password or app password (**mark Secret**) |
+| `Email__FromAddress` | verified sender in SendGrid (or Gmail account / alias for SMTP) |
 | `Email__FromName` | `Bagly` |
 | `Email__UseSsl` | `true` |
 
-Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders. If `Email__Host` is not set, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped`.
+Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders.
+
+> **Render free tier blocks outbound SMTP** on ports 25, 465, and 587. If `/api/health` shows `willSend: true` with `provider: Smtp` but emails never arrive, check Render logs for SMTP timeout — switch to `Email__Provider=SendGrid` + `Email__SendGridApiKey`, or upgrade to a paid Render instance.
+
+If email is not configured, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped`.
 
 ---
 

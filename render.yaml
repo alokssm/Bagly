@@ -37,6 +37,8 @@ services:
         sync: false
       - key: Email__Enabled
         value: "true"
+      - key: Email__Provider
+        value: SendGrid
       - key: Email__Host
         sync: false
       - key: Email__Port
@@ -44,6 +46,8 @@ services:
       - key: Email__Username
         sync: false
       - key: Email__Password
+        sync: false
+      - key: Email__SendGridApiKey
         sync: false
       - key: Email__FromAddress
         sync: false

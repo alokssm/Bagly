@@ -116,6 +116,13 @@ try
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
+    builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();
+    builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
+    builder.Services.AddHttpClient("SendGrid", client =>
+    {
+        client.BaseAddress = new Uri("https://api.sendgrid.com/");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
     builder.Services.AddHttpClient<IRazorpayService, RazorpayService>();
 
     builder.Services.AddControllers();
@@ -237,22 +244,29 @@ try
 
     var emailOptions = app.Configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
     Log.Information(
-        "Email startup: Enabled={Enabled}, Configured={Configured}, HostSet={HostSet}, FromSet={FromSet}, Port={Port}, UseSsl={UseSsl}, WillSend={WillSend}",
+        "Email startup: Enabled={Enabled}, Provider={Provider}, Configured={Configured}, HostSet={HostSet}, FromSet={FromSet}, SendGridKeySet={SendGridKeySet}, Port={Port}, UseSsl={UseSsl}, WillSend={WillSend}",
         emailOptions.Enabled,
+        emailOptions.ResolvedProvider,
         emailOptions.IsConfigured,
         emailOptions.HasSmtpHost,
         emailOptions.HasFromAddress,
+        emailOptions.HasSendGridApiKey,
         emailOptions.Port,
         emailOptions.UseSsl,
         emailOptions.WillSend);
     if (emailOptions.IsConfigured && !emailOptions.Enabled)
     {
-        Log.Warning("Email SMTP is configured but Email__Enabled=false — order confirmation emails will not be sent.");
+        Log.Warning("Email is configured but Email__Enabled=false — order confirmation emails will not be sent.");
     }
     else if (!emailOptions.IsConfigured)
     {
         Log.Warning(
-            "Email SMTP is not configured — set Email__Host and Email__FromAddress on Render (or Email section locally). Checkout succeeds but no confirmation email is sent.");
+            "Email is not configured — set Email__Host + Email__FromAddress (SMTP) or Email__Provider=SendGrid + Email__SendGridApiKey. Checkout succeeds but no confirmation email is sent.");
+    }
+    else if (emailOptions.UsesSmtpOnRenderFreeTier)
+    {
+        Log.Warning(
+            "Email uses SMTP on Render. Free tier blocks outbound ports 25/465/587 — emails will time out. Set Email__Provider=SendGrid and Email__SendGridApiKey (HTTPS), or upgrade Render to a paid instance.");
     }
 
     try
@@ -379,21 +393,27 @@ try
             email = new
             {
                 enabled = email.Enabled,
+                provider = email.ResolvedProvider.ToString(),
                 configured = email.IsConfigured,
                 willSend = email.WillSend,
                 hostSet = email.HasSmtpHost,
                 fromAddressSet = email.HasFromAddress,
+                sendGridApiKeySet = email.HasSendGridApiKey,
                 port = email.Port,
                 useSsl = email.UseSsl,
                 usernameSet = !string.IsNullOrWhiteSpace(email.Username) &&
                               !EmailOptions.IsPlaceholder(email.Username),
                 passwordSet = !string.IsNullOrWhiteSpace(email.Password) &&
                               !EmailOptions.IsPlaceholder(email.Password),
-                hint = email.WillSend
-                    ? null
-                    : !email.IsConfigured
-                        ? "Set Email__Host and Email__FromAddress on Render, then redeploy. Gmail: smtp.gmail.com, app password. SendGrid: smtp.sendgrid.net, user apikey."
-                        : "Email__Enabled is false — set Email__Enabled=true to send order confirmation emails.",
+                hint = email.WillSend && email.UsesSmtpOnRenderFreeTier
+                    ? "Render free tier blocks SMTP ports 25/465/587. Set Email__Provider=SendGrid and Email__SendGridApiKey (HTTPS), or upgrade to a paid Render instance."
+                    : email.WillSend
+                        ? null
+                        : !email.IsConfigured
+                            ? email.ResolvedProvider == EmailProvider.SendGrid
+                                ? "Set Email__Provider=SendGrid, Email__SendGridApiKey, and Email__FromAddress (verified sender in SendGrid)."
+                                : "Set Email__Host and Email__FromAddress on Render, then redeploy. Gmail: smtp.gmail.com, app password. SendGrid API (Render free): Email__Provider=SendGrid."
+                            : "Email__Enabled is false — set Email__Enabled=true to send order confirmation emails.",
             },
             timestamp = DateTime.UtcNow,
         });
