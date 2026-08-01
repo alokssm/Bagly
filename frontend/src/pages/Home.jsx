@@ -85,7 +85,6 @@ export default function Home() {
               <span className="eyebrow">Featured</span>
               <h2>Carry well. Travel light.</h2>
             </div>
-            <p>A focused edit of bags for commute, weekend, and everything between.</p>
           </div>
 
           {loading ? <p>Loading bags from API…</p> : null}
