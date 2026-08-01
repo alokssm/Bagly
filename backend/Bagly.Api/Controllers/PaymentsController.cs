@@ -308,6 +308,8 @@ public class PaymentsController(
                 ipAddress: ip,
                 cancellationToken: cancellationToken);
 
+            emailDispatcher.Enqueue(order.Id, "razorpay-verify-outofstock");
+
             return Conflict(new
             {
                 message = refunded

@@ -7,6 +7,15 @@ namespace Bagly.Api.Services;
 public interface IOrderConfirmationEmailService
 {
     Task SendAsync(Order order, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends the "item sold out during checkout" email for an order that reached
+    /// <c>Order.Status == "OutOfStock"</c> in <c>PaymentsController.Verify</c> (the last-unit race).
+    /// The wording adapts to <c>Order.PaymentStatus</c>: "Refunded" tells the customer the refund is
+    /// done; anything else (refund attempt failed or was skipped) tells them it's pending/to contact
+    /// support, so we never claim a refund happened when it didn't.
+    /// </summary>
+    Task SendOutOfStockRefundAsync(Order order, CancellationToken cancellationToken = default);
 }
 
 public class OrderConfirmationEmailService(
@@ -24,7 +33,43 @@ public class OrderConfirmationEmailService(
         }
 
         var (subject, textBody, htmlBody) = BuildMessage(order);
-        await emailSender.SendAsync(order.Email, subject, textBody, htmlBody, cancellationToken);
+        var sent = await emailSender.SendAsync(order.Email, subject, textBody, htmlBody, cancellationToken);
+        if (sent)
+        {
+            logger.LogInformation("Order confirmation email sent for {OrderNumber}.", order.OrderNumber);
+        }
+        else
+        {
+            logger.LogWarning("Order confirmation email failed to send for {OrderNumber}.", order.OrderNumber);
+        }
+    }
+
+    public async Task SendOutOfStockRefundAsync(Order order, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(order.Email))
+        {
+            logger.LogWarning(
+                "Out-of-stock/refund email skipped for {OrderNumber}: customer email is missing on the order record.",
+                order.OrderNumber);
+            return;
+        }
+
+        var (subject, textBody, htmlBody) = BuildOutOfStockRefundMessage(order);
+        var sent = await emailSender.SendAsync(order.Email, subject, textBody, htmlBody, cancellationToken);
+        if (sent)
+        {
+            logger.LogInformation(
+                "Out-of-stock/refund email sent for {OrderNumber} (PaymentStatus={PaymentStatus}).",
+                order.OrderNumber,
+                order.PaymentStatus);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Out-of-stock/refund email failed to send for {OrderNumber} (PaymentStatus={PaymentStatus}).",
+                order.OrderNumber,
+                order.PaymentStatus);
+        }
     }
 
     private static (string Subject, string TextBody, string HtmlBody) BuildMessage(Order order)
@@ -101,6 +146,55 @@ public class OrderConfirmationEmailService(
               {Escape($"{order.City}, {order.State} {order.Zip}")}<br>
               {Escape(order.Country)}</p>
               <p style="color:#666;">We'll email you when your order ships.</p>
+              <p>— Bagly</p>
+            </div>
+            """;
+
+        return (subject, textBody, htmlBody);
+    }
+
+    private static (string Subject, string TextBody, string HtmlBody) BuildOutOfStockRefundMessage(Order order)
+    {
+        var items = order.Items ?? [];
+        var customerName = $"{order.FirstName} {order.LastName}".Trim();
+        var amountLabel = FormatOrderTotal(order);
+        var refunded = string.Equals(order.PaymentStatus, "Refunded", StringComparison.OrdinalIgnoreCase);
+
+        var subject = refunded
+            ? $"Bagly order {order.OrderNumber} — item sold out, payment refunded"
+            : $"Bagly order {order.OrderNumber} — item sold out, refund pending";
+
+        var refundLineText = refunded
+            ? $"Your payment of {amountLabel} has been refunded to your original payment method. It typically takes 5–7 business days to appear, depending on your bank."
+            : $"We attempted to refund your payment of {amountLabel} but it did not complete automatically. We're processing your refund — if you don't see it within 2 business days, please contact support with your order number so we can help right away.";
+
+        var itemNames = items.Count > 0
+            ? string.Join(", ", items.Select(i => i.ProductName))
+            : "an item in your order";
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Hi{(string.IsNullOrWhiteSpace(customerName) ? "" : $" {customerName}")},");
+        sb.AppendLine();
+        sb.AppendLine($"We're sorry — {itemNames} sold out just as another customer completed checkout moments before you, so we were unable to fulfil order {order.OrderNumber}.");
+        sb.AppendLine();
+        sb.AppendLine(refundLineText);
+        sb.AppendLine();
+        sb.AppendLine("You're welcome to place a new order for any remaining items once you're ready.");
+        sb.AppendLine();
+        sb.AppendLine("We're sorry for the inconvenience.");
+        sb.AppendLine();
+        sb.AppendLine("— Bagly");
+
+        var textBody = sb.ToString();
+
+        var htmlBody = $"""
+            <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#222;max-width:560px;">
+              <h2 style="margin:0 0 12px;">Item sold out during checkout</h2>
+              <p>Hi{(string.IsNullOrWhiteSpace(customerName) ? "" : $" {Escape(customerName)}")},</p>
+              <p>We're sorry — <strong>{Escape(itemNames)}</strong> sold out just as another customer completed checkout moments before you, so we were unable to fulfil order <strong>{Escape(order.OrderNumber)}</strong>.</p>
+              <p>{Escape(refundLineText)}</p>
+              <p>You're welcome to place a new order for any remaining items once you're ready.</p>
+              <p style="color:#666;">We're sorry for the inconvenience.</p>
               <p>— Bagly</p>
             </div>
             """;

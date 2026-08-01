@@ -63,13 +63,26 @@ public sealed class OrderConfirmationEmailDispatcher(
                     continue;
                 }
 
-                logger.LogInformation(
-                    "Processing queued order confirmation email for {OrderNumber} (orderId={OrderId}, trigger={Trigger}).",
-                    orderForEmail.OrderNumber,
-                    orderId,
-                    trigger);
+                if (string.Equals(orderForEmail.Status, "OutOfStock", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation(
+                        "Processing queued out-of-stock/refund email for {OrderNumber} (orderId={OrderId}, trigger={Trigger}).",
+                        orderForEmail.OrderNumber,
+                        orderId,
+                        trigger);
 
-                await scopedEmails.SendAsync(orderForEmail, stoppingToken);
+                    await scopedEmails.SendOutOfStockRefundAsync(orderForEmail, stoppingToken);
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "Processing queued order confirmation email for {OrderNumber} (orderId={OrderId}, trigger={Trigger}).",
+                        orderForEmail.OrderNumber,
+                        orderId,
+                        trigger);
+
+                    await scopedEmails.SendAsync(orderForEmail, stoppingToken);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

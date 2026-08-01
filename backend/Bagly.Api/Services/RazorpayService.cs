@@ -26,7 +26,10 @@ public interface IRazorpayService
 
 public record RazorpayOrderResult(string Id, long Amount, string Currency, string Receipt, string Status, string RawJson);
 
-public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> options) : IRazorpayService
+public class RazorpayService(
+    HttpClient httpClient,
+    IOptions<RazorpayOptions> options,
+    ILogger<RazorpayService> logger) : IRazorpayService
 {
     private readonly RazorpayOptions _options = options.Value;
 
@@ -104,6 +107,10 @@ public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> op
     {
         if (!IsConfigured || string.IsNullOrWhiteSpace(razorpayPaymentId))
         {
+            logger.LogWarning(
+                "Razorpay refund skipped for payment {PaymentId}: Razorpay not configured or payment id missing. Reason={Reason}.",
+                razorpayPaymentId,
+                reason);
             return false;
         }
 
@@ -118,11 +125,38 @@ public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> op
             var payload = new { speed = "normal", notes = new { reason } };
             request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
+            logger.LogInformation(
+                "Razorpay refund requested for payment {PaymentId}. Reason={Reason}.",
+                razorpayPaymentId,
+                reason);
+
             using var response = await httpClient.SendAsync(request, cancellationToken);
-            return response.IsSuccessStatusCode;
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                logger.LogInformation(
+                    "Razorpay refund succeeded for payment {PaymentId}. Response={Response}.",
+                    razorpayPaymentId,
+                    raw);
+                return true;
+            }
+
+            logger.LogError(
+                "Razorpay refund failed for payment {PaymentId}: HTTP {StatusCode}. {Response}. Reason={Reason}.",
+                razorpayPaymentId,
+                (int)response.StatusCode,
+                raw,
+                reason);
+            return false;
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogError(
+                ex,
+                "Razorpay refund threw an exception for payment {PaymentId}. Reason={Reason}.",
+                razorpayPaymentId,
+                reason);
             return false;
         }
     }
