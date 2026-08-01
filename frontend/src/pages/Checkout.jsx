@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
@@ -27,6 +27,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false)
   const [confirmingOrder, setConfirmingOrder] = useState(false)
   const [error, setError] = useState('')
+  const errorRef = useRef(null)
   const [razorpayConfig, setRazorpayConfig] = useState(null)
 
   const [addresses, setAddresses] = useState([])
@@ -74,6 +75,12 @@ export default function Checkout() {
       window.removeEventListener('popstate', blockBack)
     }
   }, [confirmingOrder])
+
+  useEffect(() => {
+    if (!error) return
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [error])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -210,6 +217,11 @@ export default function Checkout() {
     }
   }
 
+  const showCheckoutError = (message) => {
+    setConfirmingOrder(false)
+    setError(message)
+  }
+
   const saveAddressIfRequested = async () => {
     if (!isAuthenticated || !saveAddress) return
     try {
@@ -299,8 +311,7 @@ export default function Checkout() {
       const order = await api.createOrder(payload)
       await finishSuccess(order)
     } catch (err) {
-      setConfirmingOrder(false)
-      setError(err.message || 'Unable to place order. Is the API running?')
+      showCheckoutError(err.message || 'Unable to place order. Is the API running?')
     } finally {
       setSubmitting(false)
     }
@@ -320,7 +331,15 @@ export default function Checkout() {
         >
           <div className="form-card">
             <h2>Shipping details</h2>
-            {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
+            {error ? (
+              <p
+                ref={errorRef}
+                style={{ color: 'var(--danger)', marginBottom: '1rem' }}
+                role="alert"
+              >
+                {error}
+              </p>
+            ) : null}
 
             {isAuthenticated ? (
               <div className="saved-addresses">
