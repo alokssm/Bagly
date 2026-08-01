@@ -284,6 +284,27 @@ p {
   gap: 0.6rem;
 }
 
+.nav-mobile-action {
+  display: none;
+}
+
+.nav-mobile-action-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--forest);
+  background: rgba(255, 255, 255, 0.55);
+  transition: background 0.2s ease;
+}
+
+.nav-mobile-action-link:hover {
+  background: #fff;
+}
+
 .customer-name {
   font-size: 0.9rem;
   color: var(--ink-soft);
@@ -1674,6 +1695,11 @@ p {
 
   .nav-actions .customer-nav {
     display: none;
+  }
+
+  .nav-mobile-action {
+    display: flex;
+    align-items: center;
   }
 }
 

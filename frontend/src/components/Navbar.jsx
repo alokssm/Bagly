@@ -68,13 +68,23 @@ export default function Navbar() {
                 </Link>
               </div>
             )}
-            {/* <Link to={isAdmin ? '/admin' : '/admin/login'} className="btn-ghost">
-              {isAdmin ? 'Admin' : 'Admin login'}
-            </Link> */}
-            <Link to="/cart" className="cart-btn" aria-label={`Cart with ${itemCount} items`}>
-              Cart
-              <span className="cart-count">{itemCount}</span>
-            </Link>
+            <div className="nav-mobile-action">
+              {isAuthenticated ? (
+                <Link to="/orders" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
+                  Orders
+                </Link>
+              ) : (
+                <Link to="/login" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
+                  Sign in
+                </Link>
+              )}
+            </div>
+            {itemCount > 0 && (
+              <Link to="/cart" className="cart-btn" aria-label={`Cart with ${itemCount} items`}>
+                Cart
+                <span className="cart-count">{itemCount}</span>
+              </Link>
+            )}
             <button
               type="button"
               className="menu-toggle"
@@ -103,14 +113,9 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <>
-              <NavLink to="/login" onClick={() => setOpen(false)}>
-                Sign in
-              </NavLink>
-              <NavLink to="/register" onClick={() => setOpen(false)}>
-                Create Account
-              </NavLink>
-            </>
+            <NavLink to="/register" onClick={() => setOpen(false)}>
+              Create Account
+            </NavLink>
           )}
           {/* <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={() => setOpen(false)}>
             {isAdmin ? 'Admin' : 'Admin login'}
