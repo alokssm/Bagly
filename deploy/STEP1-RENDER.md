@@ -92,6 +92,9 @@ Set these **before** or right after first deploy:
 | `Email__FromName` | `Bagly` |
 | `Email__UseSsl` | `true` |
 | `GoogleAuth__ClientId` | Google OAuth Web Client ID for "Continue with Google" (optional — leave unset to hide the button). See `iis/README.md` → "Google sign-in setup" for how to create one. Must match frontend `VITE_GOOGLE_CLIENT_ID`. |
+| `Cloudinary__CloudName` | Your Cloudinary cloud name (optional — leave unset to hide admin image uploads; URL-paste still works). See "Cloudinary setup" below. |
+| `Cloudinary__ApiKey` | Cloudinary API Key |
+| `Cloudinary__ApiSecret` | Cloudinary API Secret — **mark Secret** |
 
 Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders.
 
@@ -115,6 +118,27 @@ Order confirmation emails are sent after Razorpay payment verify succeeds (India
 5. Save env vars → **Manual Deploy** → check `/api/health` shows `"provider":"Resend"`, `"resendApiKeySet":true`, `"willSend":true`.
 
 If email is not configured, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped`.
+
+### Cloudinary setup (admin product image uploads)
+
+Cloudinary's free tier (25 GB storage/bandwidth credit) lets admins upload product photos instead of only pasting URLs.
+
+1. Sign up at https://cloudinary.com/users/register/free (no credit card required).
+2. After signup you land on the **Dashboard** — copy the three values shown under **Product Environment Credentials**:
+   - **Cloud name**
+   - **API Key**
+   - **API Secret** (click "Show" to reveal it)
+3. In Render → **Environment**, set:
+   ```
+   Cloudinary__CloudName=your-cloud-name
+   Cloudinary__ApiKey=123456789012345
+   Cloudinary__ApiSecret=your-api-secret
+   ```
+   Mark `Cloudinary__ApiSecret` (and ideally `Cloudinary__ApiKey`) as **Secret**.
+4. Save env vars → **Manual Deploy** → check `/api/health` shows `"uploads": { "cloudinaryConfigured": true }`.
+5. In the admin panel, editing a product now shows an **Upload image** / **Add gallery image** button next to the URL fields. Uploaded files are stored under the `bagly/products` folder in your Cloudinary media library and the returned `secure_url` (`https://res.cloudinary.com/...`) is written into the Image URL / Gallery fields automatically.
+
+If `Cloudinary__*` env vars are not set, the upload buttons will show an error when clicked, but the existing **URL-paste workflow keeps working** — nothing else breaks.
 
 ---
 

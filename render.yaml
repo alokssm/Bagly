@@ -57,3 +57,9 @@ services:
         value: Bagly
       - key: Email__UseSsl
         value: "true"
+      - key: Cloudinary__CloudName
+        sync: false
+      - key: Cloudinary__ApiKey
+        sync: false
+      - key: Cloudinary__ApiSecret
+        sync: false

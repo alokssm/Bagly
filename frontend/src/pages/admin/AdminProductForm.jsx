@@ -54,6 +54,8 @@ export default function AdminProductForm() {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const [uploading, setUploading] = useState({ image: false, gallery: false })
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +91,31 @@ export default function AdminProductForm() {
     setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
   }
 
+  const handleImageUpload = async (e, target) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setUploadError('')
+    setUploading((prev) => ({ ...prev, [target]: true }))
+
+    try {
+      const { url } = await api.adminUploadImage(file)
+      if (target === 'image') {
+        setForm((prev) => ({ ...prev, image: url }))
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          gallery: prev.gallery ? `${prev.gallery}\n${url}` : url,
+        }))
+      }
+    } catch (err) {
+      setUploadError(err.message || 'Image upload failed.')
+    } finally {
+      setUploading((prev) => ({ ...prev, [target]: false }))
+    }
+  }
+
   const onSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
@@ -115,6 +142,11 @@ export default function AdminProductForm() {
     )
   }
 
+  const galleryPreviewUrls = form.gallery
+    .split('\n')
+    .map((url) => url.trim())
+    .filter(Boolean)
+
   return (
     <div className="admin-page">
       <div className="admin-page-head">
@@ -128,6 +160,7 @@ export default function AdminProductForm() {
       </div>
 
       {error ? <p className="admin-error">{error}</p> : null}
+      {uploadError ? <p className="admin-error">{uploadError}</p> : null}
 
       <form className="admin-form" onSubmit={onSubmit}>
         <div className="admin-form-grid">
@@ -251,11 +284,47 @@ export default function AdminProductForm() {
           <div className="form-field full">
             <label htmlFor="image">Image URL</label>
             <input id="image" name="image" required value={form.image} onChange={onChange} />
+            <div className="admin-image-upload">
+              {form.image ? (
+                <img src={form.image} alt="Current product" className="admin-image-preview" />
+              ) : null}
+              <label className="btn btn-secondary">
+                {uploading.image ? 'Uploading…' : 'Upload image'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="file-input-hidden"
+                  disabled={uploading.image}
+                  onChange={(e) => handleImageUpload(e, 'image')}
+                />
+              </label>
+              <small>Advanced: paste a URL above instead. Uploads go to Cloudinary (JPEG/PNG/WEBP/GIF, max 5&nbsp;MB).</small>
+            </div>
           </div>
 
           <div className="form-field full">
             <label htmlFor="gallery">Gallery URLs (one per line)</label>
             <textarea id="gallery" name="gallery" rows={3} value={form.gallery} onChange={onChange} />
+            <div className="admin-image-upload">
+              <label className="btn btn-secondary">
+                {uploading.gallery ? 'Uploading…' : 'Add gallery image'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="file-input-hidden"
+                  disabled={uploading.gallery}
+                  onChange={(e) => handleImageUpload(e, 'gallery')}
+                />
+              </label>
+              <small>Uploaded images are appended as a new line above.</small>
+            </div>
+            {galleryPreviewUrls.length ? (
+              <div className="admin-gallery-preview">
+                {galleryPreviewUrls.map((url, index) => (
+                  <img key={`${url}-${index}`} src={url} alt="" />
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="form-field full">

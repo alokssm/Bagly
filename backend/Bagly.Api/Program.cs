@@ -117,7 +117,9 @@ try
     builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
     builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
     builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));
+    builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
     builder.Services.AddSingleton<TokenService>();
+    builder.Services.AddSingleton<ICloudinaryImageService, CloudinaryImageService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
@@ -368,6 +370,7 @@ try
         var openAi = config.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>() ?? new OpenAiOptions();
         var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
         var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
+        var cloudinary = config.GetSection(CloudinaryOptions.SectionName).Get<CloudinaryOptions>() ?? new CloudinaryOptions();
         string? dataSource = null;
         try
         {
@@ -483,6 +486,14 @@ try
                 hint = googleAuth.IsConfigured
                     ? null
                     : "Set GoogleAuth__ClientId on the backend to enable 'Continue with Google'.",
+            },
+            uploads = new
+            {
+                cloudinaryConfigured = cloudinary.IsConfigured,
+                cloudName = cloudinary.HasCloudName ? cloudinary.CloudName : null,
+                hint = cloudinary.IsConfigured
+                    ? null
+                    : "Set Cloudinary__CloudName, Cloudinary__ApiKey, and Cloudinary__ApiSecret to enable admin image uploads (free tier at cloudinary.com).",
             },
             timestamp = DateTime.UtcNow,
         });

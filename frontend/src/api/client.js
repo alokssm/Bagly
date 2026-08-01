@@ -127,6 +127,44 @@ export function getGoogleAuthConfig() {
   return request('/auth/customer/google-config')
 }
 
+/** Multipart upload — cannot reuse request() since it always JSON-encodes the body. */
+async function requestUpload(path, file) {
+  const token = getAuthToken()
+  const apiBase = getApiBase()
+  const formData = new FormData()
+  formData.append('file', file)
+
+  let response
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    })
+  } catch {
+    throw new Error(`Cannot reach Bagly API at ${apiBase}. Is Bagly.Api running?`)
+  }
+
+  if (!response.ok) {
+    let message = `Upload failed (${response.status})`
+    try {
+      const data = await response.json()
+      message = extractErrorMessage(data, response.status)
+    } catch {
+      // ignore
+    }
+    const error = new Error(message)
+    error.status = response.status
+    throw error
+  }
+
+  const text = await response.text()
+  return text ? JSON.parse(text) : null
+}
+
 export const api = {
   health: () => request('/health'),
 
@@ -234,6 +272,9 @@ export const api = {
     }),
   adminDeleteProduct: (id) =>
     request(`/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE', auth: true }),
+
+  /** Uploads an image file to Cloudinary via the backend and returns { url }. */
+  adminUploadImage: (file) => requestUpload('/admin/uploads/image', file),
 
   adminGetCategories: () => request('/admin/categories', { auth: true }),
   adminCreateCategory: (payload) =>

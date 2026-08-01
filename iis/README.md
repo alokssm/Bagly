@@ -82,6 +82,25 @@ Customer login/register support Google sign-in via Google Identity Services (GIS
 
 Until a Client ID is set, the "Continue with Google" button is simply hidden and email/password login still works. `/api/health` reports `customerAuth.googleConfigured` so you can confirm the backend picked up the value.
 
+## Cloudinary image uploads (admin product images)
+
+Admin → Products → Add/Edit product has an **Upload image** / **Add gallery image** button that uploads to Cloudinary's free tier and fills in the URL field automatically. To enable it locally:
+
+1. Sign up free at https://cloudinary.com/users/register/free and copy **Cloud name**, **API Key**, **API Secret** from the Dashboard.
+2. Add to `backend\Bagly.Api\appsettings.Development.json` (gitignored — never commit real secrets):
+   ```json
+   {
+     "Cloudinary": {
+       "CloudName": "your-cloud-name",
+       "ApiKey": "123456789012345",
+       "ApiSecret": "your-api-secret"
+     }
+   }
+   ```
+3. Restart the API (or `Restart-WebAppPool BaglyApiAppPool` for IIS). `/api/health` → `uploads.cloudinaryConfigured` should report `true`.
+
+Without Cloudinary configured, the upload buttons show an error but the **URL-paste workflow still works** for both the main image and gallery fields.
+
 ## Troubleshooting
 
 | Symptom | Fix |
