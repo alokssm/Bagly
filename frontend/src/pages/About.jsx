@@ -5,7 +5,7 @@ export default function About() {
         <div className="page-hero">
           <span className="eyebrow">About</span>
           <h1>Made for the long haul</h1>
-          <p>Bagly is a bags-first commerce experience — crafted storefront today, SaaS-ready API tomorrow.</p>
+          <p>Bagly is a bags-first commerce experience.</p>
         </div>
 
         <div className="story-grid">
