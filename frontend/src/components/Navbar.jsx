@@ -64,13 +64,13 @@ export default function Navbar() {
                   Sign in
                 </Link>
                 <Link to="/register" className="btn btn-brass btn-sm">
-                  Sign up
+                  Create Account
                 </Link>
               </div>
             )}
-            <Link to={isAdmin ? '/admin' : '/admin/login'} className="btn-ghost">
+            {/* <Link to={isAdmin ? '/admin' : '/admin/login'} className="btn-ghost">
               {isAdmin ? 'Admin' : 'Admin login'}
-            </Link>
+            </Link> */}
             <Link to="/cart" className="cart-btn" aria-label={`Cart with ${itemCount} items`}>
               Cart
               <span className="cart-count">{itemCount}</span>
@@ -108,13 +108,13 @@ export default function Navbar() {
                 Sign in
               </NavLink>
               <NavLink to="/register" onClick={() => setOpen(false)}>
-                Sign up
+                Create Account
               </NavLink>
             </>
           )}
-          <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={() => setOpen(false)}>
+          {/* <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={() => setOpen(false)}>
             {isAdmin ? 'Admin' : 'Admin login'}
-          </NavLink>
+          </NavLink> */}
         </nav>
       </div>
     </header>
