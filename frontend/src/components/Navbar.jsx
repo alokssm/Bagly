@@ -52,7 +52,7 @@ export default function Navbar() {
               <div className="customer-nav">
                 <span className="customer-name">Hi, {user?.name?.split(' ')[0] || 'there'}</span>
                 <Link to="/orders" className="btn-ghost" onClick={() => setOpen(false)}>
-                  Orders
+                  My Orders
                 </Link>
                 <button type="button" className="btn-ghost" onClick={handleLogout}>
                   Logout
@@ -71,7 +71,7 @@ export default function Navbar() {
             <div className="nav-mobile-action">
               {isAuthenticated ? (
                 <Link to="/orders" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
-                  Orders
+                  My Orders
                 </Link>
               ) : (
                 <Link to="/login" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
@@ -106,7 +106,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <NavLink to="/orders" onClick={() => setOpen(false)}>
-                Orders
+                My Orders
               </NavLink>
               <button type="button" className="mobile-nav-btn" onClick={handleLogout}>
                 Logout ({user?.name?.split(' ')[0] || 'Account'})
