@@ -7,7 +7,7 @@ export default function AdminLogin() {
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('admin@bagly.store')
-  const [password, setPassword] = useState('Admin@123')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
