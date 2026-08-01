@@ -36,6 +36,7 @@ public static class DatabaseBootstrapper
         await EnsureOrderPaymentColumnsAsync(db, cancellationToken);
         await EnsureStockQuantityAndAlertsAsync(db, cancellationToken);
         await EnsureShippingAddressesTableAsync(db, cancellationToken);
+        await EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -49,7 +50,9 @@ public static class DatabaseBootstrapper
                  await TableExistsAsync(db, "AuditLogs", cancellationToken)) ||
                 (migrationId.Contains("PaymentLogs", StringComparison.OrdinalIgnoreCase) &&
                  await TableExistsAsync(db, "PaymentLogs", cancellationToken) &&
-                 await ColumnExistsAsync(db, "Orders", "PaymentStatus", cancellationToken));
+                 await ColumnExistsAsync(db, "Orders", "PaymentStatus", cancellationToken)) ||
+                (migrationId.Contains("CustomerUserId", StringComparison.OrdinalIgnoreCase) &&
+                 await ColumnExistsAsync(db, "Orders", "CustomerUserId", cancellationToken));
 
             if (shouldMark)
             {
@@ -387,6 +390,31 @@ public static class DatabaseBootstrapper
             """);
 
         await db.Database.ExecuteSqlRawAsync(createTableSql, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds Orders.CustomerUserId so checkout orders can be linked to the placing customer's
+    /// account directly, instead of relying solely on a case-insensitive email match (which
+    /// breaks when the shipping email at checkout differs from the account email).
+    /// </summary>
+    private static async Task EnsureOrderCustomerUserIdColumnAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(db, "Orders", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('dbo.Orders', 'CustomerUserId') IS NULL
+                ALTER TABLE [dbo].[Orders] ADD [CustomerUserId] UNIQUEIDENTIFIER NULL;
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Orders_CustomerUserId' AND object_id = OBJECT_ID(N'dbo.Orders'))
+                CREATE INDEX [IX_Orders_CustomerUserId] ON [dbo].[Orders] ([CustomerUserId]);
+            """,
+            cancellationToken);
     }
 
     private static async Task<bool> ColumnExistsAsync(

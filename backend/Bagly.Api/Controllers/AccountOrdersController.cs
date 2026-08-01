@@ -9,9 +9,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Bagly.Api.Controllers;
 
 /// <summary>
-/// Order history for logged-in storefront customers. Orders have no CustomerUserId column,
-/// so we resolve the caller's verified email from CustomerUsers (via the JWT subject) and
-/// match it against Order.Email case-insensitively — never trusting a raw email claim alone.
+/// Order history for logged-in storefront customers. Orders placed while logged in are linked
+/// via Order.CustomerUserId (set at checkout from the caller's JWT). Older orders — placed before
+/// that link existed, or where the identity wasn't attached for some reason — still fall back to
+/// a case-insensitive match against the account's verified email, so nothing "disappears".
 /// </summary>
 [ApiController]
 [Route("api/account/orders")]
@@ -21,15 +22,15 @@ public class AccountOrdersController(BaglyDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CustomerOrderDto>>> GetOrders(CancellationToken cancellationToken)
     {
-        var email = await ResolveCustomerEmailAsync(cancellationToken);
-        if (email is null)
+        var (customerId, email) = await ResolveCustomerAsync(cancellationToken);
+        if (customerId is null)
         {
             return Unauthorized(new { message = "Customer account not found." });
         }
 
         var orders = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
-            .Where(o => o.Email.ToLower() == email)
+            .Where(o => o.CustomerUserId == customerId || o.Email.ToLower() == email)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -42,8 +43,8 @@ public class AccountOrdersController(BaglyDbContext db) : ControllerBase
         string orderNumber,
         CancellationToken cancellationToken)
     {
-        var email = await ResolveCustomerEmailAsync(cancellationToken);
-        if (email is null)
+        var (customerId, email) = await ResolveCustomerAsync(cancellationToken);
+        if (customerId is null)
         {
             return Unauthorized(new { message = "Customer account not found." });
         }
@@ -51,7 +52,8 @@ public class AccountOrdersController(BaglyDbContext db) : ControllerBase
         var order = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
             .FirstOrDefaultAsync(
-                o => o.OrderNumber == orderNumber && o.Email.ToLower() == email,
+                o => o.OrderNumber == orderNumber &&
+                     (o.CustomerUserId == customerId || o.Email.ToLower() == email),
                 cancellationToken);
 
         if (order is null)
@@ -63,19 +65,21 @@ public class AccountOrdersController(BaglyDbContext db) : ControllerBase
         return Ok(MapOrder(order, images));
     }
 
-    /// <summary>Looks up the caller's CustomerUsers row so we filter orders by a trusted, current email.</summary>
-    private async Task<string?> ResolveCustomerEmailAsync(CancellationToken cancellationToken)
+    /// <summary>Looks up the caller's CustomerUsers row so we filter orders by a trusted, current id + email.</summary>
+    private async Task<(Guid? CustomerId, string? Email)> ResolveCustomerAsync(CancellationToken cancellationToken)
     {
         var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(raw, out var customerId))
         {
-            return null;
+            return (null, null);
         }
 
         var customer = await db.CustomerUsers.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == customerId && c.IsActive, cancellationToken);
 
-        return customer is null ? null : customer.Email.Trim().ToLowerInvariant();
+        return customer is null
+            ? (null, null)
+            : (customer.Id, customer.Email.Trim().ToLowerInvariant());
     }
 
     private async Task<Dictionary<string, string>> GetProductImagesAsync(

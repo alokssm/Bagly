@@ -98,6 +98,9 @@ export default function Checkout() {
         const preferred = (list || []).find((a) => a.isDefault) || (list || [])[0]
         if (preferred) {
           applyAddress(preferred)
+        } else if (user?.email) {
+          // No saved address yet — at least prefill the account email so it's not left blank.
+          setForm((prev) => ({ ...prev, email: prev.email || user.email }))
         }
       })
       .catch(() => {

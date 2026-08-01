@@ -243,7 +243,11 @@ export const api = {
 
   clearCart: (cartId) => request(`/cart/${encodeURIComponent(cartId)}`, { method: 'DELETE' }),
 
-  createOrder: (payload) => request('/orders', { method: 'POST', body: payload }),
+  // auth: 'customer' attaches the customer's Bearer token when logged in (so the backend can
+  // link the order to their account via CustomerUserId), but is a no-op for guest checkout —
+  // request() only adds the header when a customer token actually exists.
+  createOrder: (payload) =>
+    request('/orders', { method: 'POST', body: payload, auth: 'customer' }),
 
   getOrder: (id) => request(`/orders/${encodeURIComponent(id)}`),
 
@@ -252,13 +256,13 @@ export const api = {
   getRazorpayConfig: () => request('/payments/razorpay/config'),
 
   initiateRazorpayPayment: (payload) =>
-    request('/payments/razorpay/initiate', { method: 'POST', body: payload }),
+    request('/payments/razorpay/initiate', { method: 'POST', body: payload, auth: 'customer' }),
 
   verifyRazorpayPayment: (payload) =>
-    request('/payments/razorpay/verify', { method: 'POST', body: payload }),
+    request('/payments/razorpay/verify', { method: 'POST', body: payload, auth: 'customer' }),
 
   reportRazorpayFailure: (payload) =>
-    request('/payments/razorpay/failure', { method: 'POST', body: payload }),
+    request('/payments/razorpay/failure', { method: 'POST', body: payload, auth: 'customer' }),
 
   getMyOrders: () => request('/account/orders', { auth: 'customer' }),
 

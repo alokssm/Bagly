@@ -3,6 +3,7 @@ namespace Bagly.Api.Models;
 public class Order
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? CustomerUserId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;

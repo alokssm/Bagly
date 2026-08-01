@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Models;
@@ -83,6 +84,7 @@ public class OrdersController(
         var order = new Order
         {
             OrderNumber = $"BG-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            CustomerUserId = GetOptionalCustomerId(),
             Email = request.Email.Trim(),
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
@@ -196,4 +198,19 @@ public class OrdersController(
             )).ToList()
         );
 
+    /// <summary>
+    /// This endpoint has no [Authorize] attribute (guest checkout is allowed), but if the caller
+    /// sent a valid customer Bearer token, JWT auth middleware still populates HttpContext.User —
+    /// so a logged-in customer's order gets linked to their account without requiring login.
+    /// </summary>
+    private Guid? GetOptionalCustomerId()
+    {
+        if (!User.IsInRole("Customer"))
+        {
+            return null;
+        }
+
+        var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return Guid.TryParse(raw, out var id) ? id : null;
+    }
 }
