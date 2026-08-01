@@ -80,6 +80,7 @@ Set these **before** or right after first deploy:
 | `Razorpay__Currency` | `INR` |
 | `Razorpay__UsdToInrRate` | `83` |
 | `Cors__AllowedOrigins__0` | your future Vercel URL (Step 2), e.g. `https://bagly.vercel.app` |
+| `Storefront__BaseUrl` | optional; storefront URL used for product links in restock alert emails, e.g. `https://bagly.vercel.app`. Falls back to `Cors__AllowedOrigins__0` if unset. |
 | `Email__Enabled` | `true` |
 | `Email__Provider` | `Resend` on Render **free** tier (SMTP ports blocked); `SendGrid` or `Smtp` also supported |
 | `Email__ResendApiKey` | Resend API key (`re_xxx`) — **mark Secret**; uses HTTPS so it works on Render free |

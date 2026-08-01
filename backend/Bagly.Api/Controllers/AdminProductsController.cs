@@ -13,7 +13,10 @@ namespace Bagly.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Admin")]
 [Route("api/admin/products")]
-public class AdminProductsController(BaglyDbContext db, IAuditLogService auditLog) : ControllerBase
+public class AdminProductsController(
+    BaglyDbContext db,
+    IAuditLogService auditLog,
+    IStockAlertNotificationDispatcher stockAlertDispatcher) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AdminProductDto>>> GetAll(CancellationToken cancellationToken)
@@ -80,6 +83,11 @@ public class AdminProductsController(BaglyDbContext db, IAuditLogService auditLo
             requestPath: HttpContext.GetRequestPath(),
             cancellationToken: cancellationToken);
 
+        if (product.IsAvailable)
+        {
+            stockAlertDispatcher.Enqueue(product.Id, "AdminProductCreate");
+        }
+
         return CreatedAtAction(nameof(GetById), new { id = product.Id }, ProductMapper.ToAdminDto(product));
     }
 
@@ -101,6 +109,7 @@ public class AdminProductsController(BaglyDbContext db, IAuditLogService auditLo
         }
 
         var before = new { product.Name, product.Category, product.Price, product.IsActive };
+        var wasAvailable = product.IsAvailable;
         ProductMapper.ApplyUpsert(product, request);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -119,6 +128,12 @@ public class AdminProductsController(BaglyDbContext db, IAuditLogService auditLo
             ipAddress: HttpContext.GetClientIp(),
             requestPath: HttpContext.GetRequestPath(),
             cancellationToken: cancellationToken);
+
+        // Restocked: product went from unavailable (inactive or out of stock) to available.
+        if (!wasAvailable && product.IsAvailable)
+        {
+            stockAlertDispatcher.Enqueue(product.Id, "AdminProductUpdate");
+        }
 
         return Ok(ProductMapper.ToAdminDto(product));
     }

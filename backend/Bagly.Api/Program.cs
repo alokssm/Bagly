@@ -118,13 +118,19 @@ try
     builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
     builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));
     builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+    builder.Services.Configure<StorefrontOptions>(builder.Configuration.GetSection(StorefrontOptions.SectionName));
     builder.Services.AddSingleton<TokenService>();
     builder.Services.AddSingleton<ICloudinaryImageService, CloudinaryImageService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
+    builder.Services.AddScoped<IEmailSender, EmailSender>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
     builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();
     builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
+    builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();
+    builder.Services.AddSingleton<IStockAlertNotificationDispatcher, StockAlertNotificationDispatcher>();
+    builder.Services.AddHostedService(sp => (StockAlertNotificationDispatcher)sp.GetRequiredService<IStockAlertNotificationDispatcher>());
+    builder.Services.AddHostedService<StockAlertPollingService>();
     builder.Services.AddHttpClient("SendGrid", client =>
     {
         client.BaseAddress = new Uri("https://api.sendgrid.com/");
@@ -371,6 +377,11 @@ try
         var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
         var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
         var cloudinary = config.GetSection(CloudinaryOptions.SectionName).Get<CloudinaryOptions>() ?? new CloudinaryOptions();
+        var storefront = config.GetSection(StorefrontOptions.SectionName).Get<StorefrontOptions>() ?? new StorefrontOptions();
+        var corsOrigins = config.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        var resolvedStorefrontBaseUrl = !string.IsNullOrWhiteSpace(storefront.BaseUrl)
+            ? storefront.BaseUrl.Trim().TrimEnd('/')
+            : corsOrigins.FirstOrDefault(o => !string.IsNullOrWhiteSpace(o))?.Trim().TrimEnd('/');
         string? dataSource = null;
         try
         {
@@ -494,6 +505,13 @@ try
                 hint = cloudinary.IsConfigured
                     ? null
                     : "Set Cloudinary__CloudName, Cloudinary__ApiKey, and Cloudinary__ApiSecret to enable admin image uploads (free tier at cloudinary.com).",
+            },
+            stockAlerts = new
+            {
+                storefrontBaseUrl = resolvedStorefrontBaseUrl,
+                hint = resolvedStorefrontBaseUrl is null
+                    ? "Set Storefront__BaseUrl (or Cors__AllowedOrigins__0) so restock alert emails can link to the product page."
+                    : null,
             },
             timestamp = DateTime.UtcNow,
         });

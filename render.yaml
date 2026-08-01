@@ -35,6 +35,8 @@ services:
         value: "83"
       - key: Cors__AllowedOrigins__0
         sync: false
+      - key: Storefront__BaseUrl
+        sync: false
       - key: Email__Enabled
         value: "true"
       - key: Email__Provider
