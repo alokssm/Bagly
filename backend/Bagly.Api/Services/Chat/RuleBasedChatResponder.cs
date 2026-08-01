@@ -8,7 +8,10 @@ namespace Bagly.Api.Services.Chat;
 /// A small keyword/pattern engine that still uses the real tools (never invents stock or order data).
 /// Active only when OpenAi__ApiKey is not configured.
 /// </summary>
-public sealed class RuleBasedChatResponder(BaglyDbContext db, IChatToolExecutor toolExecutor) : IRuleBasedChatResponder
+public sealed class RuleBasedChatResponder(
+    BaglyDbContext db,
+    IChatToolExecutor toolExecutor,
+    IChatSessionStore sessionStore) : IRuleBasedChatResponder
 {
     private static readonly Regex OrderNumberPattern = new(
         @"BG-[A-Za-z0-9-]+",
@@ -19,7 +22,7 @@ public sealed class RuleBasedChatResponder(BaglyDbContext db, IChatToolExecutor 
         @"[\w.+-]+@[\w-]+\.[A-Za-z]{2,}",
         RegexOptions.Compiled);
 
-    public async Task<string> RespondAsync(string message, CancellationToken cancellationToken)
+    public async Task<string> RespondAsync(string sessionId, string message, CancellationToken cancellationToken)
     {
         var text = message.Trim();
         var lower = text.ToLowerInvariant();
@@ -43,8 +46,24 @@ public sealed class RuleBasedChatResponder(BaglyDbContext db, IChatToolExecutor 
             return "Sure — could you share the order number (like BG-20260731-1234) and the email used on the order?";
         }
 
-        var wantsAlert = ContainsAny(lower, "alert", "notify", "let me know", "email me", "restock", "back in stock");
-        var productName = await FindProductNameInTextAsync(lower, cancellationToken);
+        var history = sessionStore.GetHistory(sessionId);
+        var userContextLower = string.Join(
+            ' ',
+            history
+                .Where(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
+                .Select(m => m.Content ?? string.Empty))
+            .ToLowerInvariant();
+
+        var lastAssistant = history
+            .LastOrDefault(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase));
+        var pendingAlertEmailRequest = lastAssistant?.Content?.Contains(
+            "email address should I use to notify you",
+            StringComparison.OrdinalIgnoreCase) == true;
+
+        var wantsAlert = ContainsAny(lower, "alert", "notify", "let me know", "email me", "restock", "back in stock")
+            || ContainsAny(userContextLower, "alert", "notify", "let me know", "email me", "restock", "back in stock")
+            || pendingAlertEmailRequest;
+        var productName = await FindProductNameInTextAsync(userContextLower, cancellationToken);
 
         if (wantsAlert)
         {

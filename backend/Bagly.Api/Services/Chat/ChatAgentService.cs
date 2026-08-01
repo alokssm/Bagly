@@ -32,7 +32,7 @@ public sealed class ChatAgentService(
 
         if (!_openAiOptions.IsConfigured)
         {
-            var reply = await ruleBasedResponder.RespondAsync(userMessage, cancellationToken);
+            var reply = await ruleBasedResponder.RespondAsync(sessionId, userMessage, cancellationToken);
             sessionStore.AppendAssistant(sessionId, reply);
             return new ChatAgentResult(reply, UsedAi: false);
         }
@@ -45,7 +45,7 @@ public sealed class ChatAgentService(
         catch (Exception ex)
         {
             logger.LogError(ex, "OpenAI chat agent failed for session {SessionId}; using rule-based fallback.", sessionId);
-            var reply = await ruleBasedResponder.RespondAsync(userMessage, cancellationToken);
+            var reply = await ruleBasedResponder.RespondAsync(sessionId, userMessage, cancellationToken);
             sessionStore.AppendAssistant(sessionId, reply);
             return new ChatAgentResult(reply, UsedAi: false);
         }
