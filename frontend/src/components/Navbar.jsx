@@ -61,10 +61,10 @@ export default function Navbar() {
             ) : (
               <div className="customer-nav">
                 <Link to="/login" className="btn-ghost">
-                  Login
+                  Sign in
                 </Link>
                 <Link to="/register" className="btn btn-brass btn-sm">
-                  Register
+                  Sign up
                 </Link>
               </div>
             )}
@@ -105,10 +105,10 @@ export default function Navbar() {
           ) : (
             <>
               <NavLink to="/login" onClick={() => setOpen(false)}>
-                Login
+                Sign in
               </NavLink>
               <NavLink to="/register" onClick={() => setOpen(false)}>
-                Register
+                Sign up
               </NavLink>
             </>
           )}
