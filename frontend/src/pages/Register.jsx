@@ -111,7 +111,9 @@ export default function Register() {
       <form className="auth-card" onSubmit={onSubmit}>
         <p className="eyebrow">Join Bagly</p>
         <h1>Create your account</h1>
-        <p className="auth-copy">Register to chat with us and track your orders.</p>
+        <p className="auth-copy">
+          {location.state?.message || 'Register to chat with us and track your orders.'}
+        </p>
 
         {error ? <p className="admin-error">{error}</p> : null}
 
@@ -181,7 +183,10 @@ export default function Register() {
         )}
 
         <p className="auth-switch">
-          Already have an account? <Link to="/login">Sign in</Link>
+          Already have an account?{' '}
+          <Link to="/login" state={location.state}>
+            Sign in
+          </Link>
         </p>
         <p className="admin-login-hint">
           <Link to="/">← Back to store</Link>

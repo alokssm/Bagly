@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
 import { buildCreateOrderPayload, buildShippingAddressPayload } from '../utils/payloads'
@@ -20,7 +20,7 @@ const initialForm = {
 
 export default function Checkout() {
   const { cartId, items, subtotal, shipping, total, clearCart, loading, refreshCart } = useCart()
-  const { user, isAuthenticated } = useCustomerAuth()
+  const { user, isAuthenticated, loading: authLoading } = useCustomerAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [placed, setPlaced] = useState(null)
@@ -117,6 +117,24 @@ export default function Checkout() {
       zip: addr.zip || '',
       country: addr.country || 'India',
     })
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container empty-state">
+        <h2>Loading…</h2>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: '/checkout', message: 'Sign in to continue to checkout.' }}
+      />
+    )
   }
 
   if (loading) {
