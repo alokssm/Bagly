@@ -1,10 +1,9 @@
-export function formatPrice(value, currency = 'USD') {
-  const code = currency === 'INR' ? 'INR' : 'USD'
-  const locale = code === 'INR' ? 'en-IN' : 'en-US'
-  return new Intl.NumberFormat(locale, {
+/** Bagly prices are Indian Rupees only — always formatted as ₹ / en-IN. */
+export function formatPrice(value) {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: code,
-    maximumFractionDigits: code === 'INR' ? 2 : 0,
+    currency: 'INR',
+    maximumFractionDigits: 0,
   }).format(Number(value) || 0)
 }
 

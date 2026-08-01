@@ -98,7 +98,7 @@ public class OrdersController(
             Status = "Confirmed",
             PaymentStatus = "NotRequired",
             PaymentProvider = null,
-            Currency = "USD",
+            Currency = "INR",
             Items = lineItems.Select(i => new OrderItem
             {
                 ProductId = i.ProductId,

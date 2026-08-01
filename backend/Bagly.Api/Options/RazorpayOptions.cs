@@ -9,7 +9,9 @@ public class RazorpayOptions
     public string Currency { get; set; } = "INR";
 
     /// <summary>
-    /// Catalog prices are stored in USD. Convert to INR for Razorpay charges.
+    /// Unused. Catalog prices are stored directly in INR, so no USD→INR conversion happens
+    /// anywhere in the payment path. Kept only so existing config/env vars (e.g. Render)
+    /// don't fail to bind; safe to remove from config whenever convenient.
     /// </summary>
     public decimal UsdToInrRate { get; set; } = 83m;
 

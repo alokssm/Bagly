@@ -5,8 +5,9 @@ namespace Bagly.Api.Services;
 
 public static class Pricing
 {
-    public const decimal FreeShippingThreshold = 150m;
-    public const decimal StandardShipping = 12m;
+    // Amounts are INR. Free shipping above ₹12,999, otherwise a flat ₹199 shipping fee.
+    public const decimal FreeShippingThreshold = 12999m;
+    public const decimal StandardShipping = 199m;
 
     public static decimal CalculateShipping(decimal subtotal) =>
         subtotal <= 0 || subtotal >= FreeShippingThreshold ? 0 : StandardShipping;

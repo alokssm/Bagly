@@ -21,8 +21,7 @@ public class PaymentsController(
         Ok(new RazorpayConfigDto(
             razorpay.IsConfigured,
             razorpay.IsConfigured ? razorpay.KeyId : null,
-            razorpay.Currency,
-            razorpay.UsdToInrRate));
+            razorpay.Currency));
 
     [HttpPost("razorpay/initiate")]
     public async Task<ActionResult<RazorpayInitiateResponse>> Initiate(
@@ -62,8 +61,9 @@ public class PaymentsController(
 
             var subtotal = items.Sum(i => i.Price * i.Quantity);
             var shipping = Pricing.CalculateShipping(subtotal);
-            var totalUsd = subtotal + shipping;
-            var amountInr = razorpay.ToInr(totalUsd);
+            // Product prices are already INR, so the order total is the Razorpay amount directly — no conversion.
+            var totalInr = subtotal + shipping;
+            var amountInr = totalInr;
             var orderNumber = $"BG-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
 
             var order = new Order
@@ -79,7 +79,7 @@ public class PaymentsController(
                 Country = "India",
                 Subtotal = subtotal,
                 Shipping = shipping,
-                Total = totalUsd,
+                Total = totalInr,
                 Status = "AwaitingPayment",
                 PaymentStatus = "Pending",
                 PaymentProvider = "Razorpay",
@@ -107,7 +107,7 @@ public class PaymentsController(
                 amount: amountInr,
                 currency: razorpay.Currency,
                 customerEmail: order.Email,
-                request: new { order.OrderNumber, totalUsd, amountInr, cartId = request.CartId },
+                request: new { order.OrderNumber, totalInr, amountInr, cartId = request.CartId },
                 ipAddress: ip,
                 cancellationToken: cancellationToken);
 

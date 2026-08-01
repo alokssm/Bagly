@@ -194,7 +194,7 @@ export default function AdminProductForm() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="price">Price</label>
+            <label htmlFor="price">Price (₹)</label>
             <input
               id="price"
               name="price"
@@ -208,7 +208,7 @@ export default function AdminProductForm() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="compareAt">Compare-at price</label>
+            <label htmlFor="compareAt">Compare-at price (₹)</label>
             <input
               id="compareAt"
               name="compareAt"

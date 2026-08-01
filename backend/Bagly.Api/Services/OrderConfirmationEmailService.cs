@@ -402,7 +402,7 @@ public class OrderConfirmationEmailService(
             return FormatMoney(order.AmountInr.Value, "INR");
         }
 
-        return FormatMoney(order.Total, order.Currency ?? "USD");
+        return FormatMoney(order.Total, order.Currency ?? "INR");
     }
 
     private static string FormatPaymentLine(Order order) =>
@@ -415,7 +415,7 @@ public class OrderConfirmationEmailService(
 
     private static string FormatMoney(decimal amount, string? currency)
     {
-        var code = string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
+        var code = string.IsNullOrWhiteSpace(currency) ? "INR" : currency.Trim().ToUpperInvariant();
         return code switch
         {
             "INR" => $"₹{amount.ToString("N2", CultureInfo.InvariantCulture)}",

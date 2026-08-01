@@ -77,7 +77,7 @@ public sealed class ChatToolExecutor(BaglyDbContext db, ILogger<ChatToolExecutor
         }
 
         var message = product.IsAvailable
-            ? $"{product.Name} is in stock ({product.StockQuantity} available) at ${product.Price:0.00}."
+            ? $"{product.Name} is in stock ({product.StockQuantity} available) at ₹{product.Price:0.00}."
             : product.IsActive
                 ? $"{product.Name} is currently out of stock. I can set up an email alert for when it's back."
                 : $"{product.Name} isn't currently available in the store.";
@@ -201,7 +201,7 @@ public sealed class ChatToolExecutor(BaglyDbContext db, ILogger<ChatToolExecutor
             : order.Total;
         var currency = string.Equals(order.PaymentProvider, "Razorpay", StringComparison.OrdinalIgnoreCase) && order.AmountInr is > 0
             ? "INR"
-            : (order.Currency ?? "USD");
+            : (order.Currency ?? "INR");
 
         return new OrderStatusResult(
             Found: true,

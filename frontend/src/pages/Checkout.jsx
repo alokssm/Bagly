@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
@@ -27,12 +27,6 @@ export default function Checkout() {
   const [razorpayConfig, setRazorpayConfig] = useState(null)
 
   const isIndia = form.country === 'India'
-  const displayCurrency = isIndia ? 'INR' : 'USD'
-  const displayTotal = useMemo(() => {
-    if (!isIndia) return total
-    const rate = razorpayConfig?.usdToInrRate || 83
-    return Math.round(total * rate * 100) / 100
-  }, [isIndia, total, razorpayConfig])
 
   useEffect(() => {
     let cancelled = false
@@ -42,7 +36,7 @@ export default function Checkout() {
         if (!cancelled) setRazorpayConfig(cfg)
       })
       .catch(() => {
-        if (!cancelled) setRazorpayConfig({ enabled: false, usdToInrRate: 83, currency: 'INR' })
+        if (!cancelled) setRazorpayConfig({ enabled: false, currency: 'INR' })
       })
     return () => {
       cancelled = true
@@ -70,9 +64,11 @@ export default function Checkout() {
             </p>
             <p style={{ marginTop: '0.5rem' }}>
               Total charged:{' '}
-              {placed.paymentProvider === 'Razorpay' && placed.amountInr != null
-                ? formatPrice(placed.amountInr, 'INR')
-                : formatPrice(placed.total, 'USD')}
+              {formatPrice(
+                placed.paymentProvider === 'Razorpay' && placed.amountInr != null
+                  ? placed.amountInr
+                  : placed.total,
+              )}
             </p>
             {placed.razorpayPaymentId ? (
               <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
@@ -206,15 +202,6 @@ export default function Checkout() {
           <div className="form-card">
             <h2>Shipping details</h2>
             {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
-            {/* {isIndia ? (
-              <p className="checkout-pay-note">
-                India selected — final payment opens Razorpay in INR (UPI / cards / netbanking). Catalog
-                prices convert at ≈₹{razorpayConfig?.usdToInrRate || 83} per $1. Test mode: type card
-                manually (no autofill) — Visa <code>4111 1111 1111 1111</code> or Mastercard{' '}
-                <code>5267 3181 8797 5449</code>, expiry any future date, CVV any 3 digits, OTP{' '}
-                <code>1234</code>. UPI: <code>success@razorpay</code> (only if UPI appears in popup).
-              </p>
-            ) : null} */}
             <div className="form-grid">
               <div className="form-field full">
                 <label htmlFor="email">Email</label>
@@ -292,40 +279,21 @@ export default function Checkout() {
                     <br />
                     <small style={{ opacity: 0.75 }}>{item.color}</small>
                   </span>
-                  <span>
-                    {formatPrice(
-                      isIndia
-                        ? item.price * item.quantity * (razorpayConfig?.usdToInrRate || 83)
-                        : item.price * item.quantity,
-                      displayCurrency,
-                    )}
-                  </span>
+                  <span>{formatPrice(item.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
             <div className="summary-row">
               <span>Subtotal</span>
-              <span>
-                {formatPrice(
-                  isIndia ? subtotal * (razorpayConfig?.usdToInrRate || 83) : subtotal,
-                  displayCurrency,
-                )}
-              </span>
+              <span>{formatPrice(subtotal)}</span>
             </div>
             <div className="summary-row">
               <span>Shipping</span>
-              <span>
-                {shipping === 0
-                  ? 'Free'
-                  : formatPrice(
-                      isIndia ? shipping * (razorpayConfig?.usdToInrRate || 83) : shipping,
-                      displayCurrency,
-                    )}
-              </span>
+              <span>{shipping === 0 ? 'Free' : formatPrice(shipping)}</span>
             </div>
             <div className="summary-row total">
               <span>Total</span>
-              <span>{formatPrice(displayTotal, displayCurrency)}</span>
+              <span>{formatPrice(total)}</span>
             </div>
             <button type="submit" className="btn btn-brass btn-block" disabled={submitting}>
               {submitting

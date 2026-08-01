@@ -12,9 +12,7 @@ public interface IRazorpayService
     bool IsConfigured { get; }
     string KeyId { get; }
     string Currency { get; }
-    decimal UsdToInrRate { get; }
     long ToPaise(decimal amountInr);
-    decimal ToInr(decimal amountUsd);
     Task<RazorpayOrderResult> CreateOrderAsync(decimal amountInr, string receipt, CancellationToken cancellationToken = default);
     bool VerifyPaymentSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature);
 }
@@ -28,13 +26,10 @@ public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> op
     public bool IsConfigured => _options.IsConfigured;
     public string KeyId => _options.KeyId;
     public string Currency => string.IsNullOrWhiteSpace(_options.Currency) ? "INR" : _options.Currency;
-    public decimal UsdToInrRate => _options.UsdToInrRate <= 0 ? 83m : _options.UsdToInrRate;
 
+    /// <summary>Product prices are already INR, so paise is simply INR * 100 — no currency conversion.</summary>
     public long ToPaise(decimal amountInr) =>
         (long)Math.Round(amountInr * 100m, MidpointRounding.AwayFromZero);
-
-    public decimal ToInr(decimal amountUsd) =>
-        Math.Round(amountUsd * UsdToInrRate, 2, MidpointRounding.AwayFromZero);
 
     public async Task<RazorpayOrderResult> CreateOrderAsync(
         decimal amountInr,

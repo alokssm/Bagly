@@ -146,7 +146,7 @@ public record OrderDto(
 
 public record GoogleAuthConfigDto(bool Enabled, string? ClientId);
 
-public record RazorpayConfigDto(bool Enabled, string? KeyId, string Currency, decimal UsdToInrRate);
+public record RazorpayConfigDto(bool Enabled, string? KeyId, string Currency);
 
 public record RazorpayInitiateResponse(
     Guid OrderId,
