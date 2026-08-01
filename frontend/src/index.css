@@ -977,6 +977,185 @@ p {
   margin-bottom: 1.5rem;
 }
 
+/* Orders */
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 4rem;
+}
+
+.order-card {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--line);
+}
+
+.order-card__summary {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.4fr auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem;
+  text-align: left;
+  background: none;
+}
+
+.order-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.order-card__number {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--forest);
+}
+
+.order-card__meta {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.order-card__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.order-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--sage);
+  color: var(--forest);
+  white-space: nowrap;
+}
+
+.order-status--cancelled,
+.order-status--pay-failed {
+  background: rgba(155, 44, 44, 0.12);
+  color: var(--danger);
+}
+
+.order-status--pay-paid,
+.order-status--delivered {
+  background: rgba(27, 61, 47, 0.14);
+  color: var(--forest-deep);
+}
+
+.order-status--pay-pending,
+.order-status--pay-notrequired {
+  background: rgba(176, 138, 85, 0.18);
+  color: var(--brass-deep);
+}
+
+.order-card__total {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  justify-self: end;
+  font-weight: 600;
+}
+
+.order-card__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--forest);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.order-card__details {
+  border-top: 1px solid var(--line);
+  padding: 1.1rem 1.25rem 1.35rem;
+}
+
+.order-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.order-item-row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.order-item-row img,
+.order-item-row__placeholder {
+  width: 56px;
+  height: 70px;
+  object-fit: cover;
+  background: var(--sage);
+}
+
+.order-item-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.order-item-row__name {
+  font-weight: 500;
+}
+
+.order-item-row__meta {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.order-item-row__price {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.order-card__totals {
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+}
+
+.order-card__totals .summary-row {
+  color: var(--ink-soft);
+}
+
+.order-card__totals .summary-row.total {
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .order-card__summary {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+
+  .order-card__status {
+    justify-content: flex-start;
+  }
+
+  .order-card__total {
+    justify-content: space-between;
+    justify-self: stretch;
+  }
+}
+
 /* Checkout */
 .checkout-layout {
   display: grid;

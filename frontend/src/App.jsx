@@ -5,6 +5,7 @@ import ChatWidget from './components/ChatWidget'
 import InstallPrompt from './components/InstallPrompt'
 import AdminLayout from './components/AdminLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import CustomerRoute from './components/CustomerRoute'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { CustomerAuthProvider, useCustomerAuth } from './context/CustomerAuthContext'
@@ -13,6 +14,7 @@ import Shop from './pages/Shop'
 import ProductDetail from './pages/ProductDetail'
 import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
+import Orders from './pages/Orders'
 import About from './pages/About'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -51,6 +53,14 @@ export default function App() {
                 <Route path="/product/:id" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
+                <Route
+                  path="/orders"
+                  element={
+                    <CustomerRoute>
+                      <Orders />
+                    </CustomerRoute>
+                  }
+                />
                 <Route path="/about" element={<About />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />

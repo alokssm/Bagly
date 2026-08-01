@@ -2,6 +2,7 @@ using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Models;
 using Bagly.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -153,7 +154,9 @@ public class OrdersController(
             : Ok(MapOrder(order));
     }
 
+    /// <summary>Admin-only dump of recent orders across all customers. Never expose this publicly.</summary>
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<OrderDto>>> GetOrders(CancellationToken cancellationToken)
     {
         var orders = await db.Orders.AsNoTracking()

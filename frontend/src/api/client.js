@@ -260,6 +260,11 @@ export const api = {
   reportRazorpayFailure: (payload) =>
     request('/payments/razorpay/failure', { method: 'POST', body: payload }),
 
+  getMyOrders: () => request('/account/orders', { auth: 'customer' }),
+
+  getMyOrder: (orderNumber) =>
+    request(`/account/orders/${encodeURIComponent(orderNumber)}`, { auth: 'customer' }),
+
   getShippingAddresses: () => request('/account/addresses', { auth: 'customer' }),
 
   createShippingAddress: (payload) =>

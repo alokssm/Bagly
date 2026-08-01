@@ -145,6 +145,28 @@ public record OrderDto(
     IReadOnlyList<OrderItemDto> Items
 );
 
+public record CustomerOrderItemDto(
+    string ProductId,
+    string ProductName,
+    string Color,
+    decimal UnitPrice,
+    int Quantity,
+    string? Image
+);
+
+public record CustomerOrderDto(
+    Guid Id,
+    string OrderNumber,
+    string Status,
+    string PaymentStatus,
+    string? Currency,
+    decimal Subtotal,
+    decimal Shipping,
+    decimal Total,
+    DateTime CreatedAt,
+    IReadOnlyList<CustomerOrderItemDto> Items
+);
+
 public record GoogleAuthConfigDto(bool Enabled, string? ClientId);
 
 public record RazorpayConfigDto(bool Enabled, string? KeyId, string Currency);
