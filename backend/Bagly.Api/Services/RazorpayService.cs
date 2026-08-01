@@ -15,6 +15,13 @@ public interface IRazorpayService
     long ToPaise(decimal amountInr);
     Task<RazorpayOrderResult> CreateOrderAsync(decimal amountInr, string receipt, CancellationToken cancellationToken = default);
     bool VerifyPaymentSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature);
+
+    /// <summary>
+    /// Best-effort full refund for a captured payment (used when stock ran out after payment
+    /// succeeded). Returns false — never throws — if Razorpay is not configured, the payment id
+    /// is missing, or the refund call fails, so callers can fall back to a manual-support path.
+    /// </summary>
+    Task<bool> TryRefundPaymentAsync(string razorpayPaymentId, string reason, CancellationToken cancellationToken = default);
 }
 
 public record RazorpayOrderResult(string Id, long Amount, string Currency, string Receipt, string Status, string RawJson);
@@ -88,6 +95,36 @@ public class RazorpayService(HttpClient httpClient, IOptions<RazorpayOptions> op
             parsed.Receipt ?? receipt,
             parsed.Status ?? "created",
             raw);
+    }
+
+    public async Task<bool> TryRefundPaymentAsync(
+        string razorpayPaymentId,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured || string.IsNullOrWhiteSpace(razorpayPaymentId))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"https://api.razorpay.com/v1/payments/{razorpayPaymentId}/refund");
+            var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.KeyId}:{_options.KeySecret}"));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+
+            var payload = new { speed = "normal", notes = new { reason } };
+            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public bool VerifyPaymentSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature)

@@ -263,11 +263,67 @@ public class PaymentsController(
             return BadRequest(new { message = "Payment verification failed." });
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var stockResult = await StockDecrementer.TryDecrementAsync(db, order.Items, cancellationToken);
+
+        if (!stockResult.Success)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            // Razorpay auto-captures on order creation (payment_capture: 1), so the customer's
+            // money is already taken by the time we get here. Best effort: refund it immediately
+            // rather than leaving Paid+OutOfStock as the only outcome.
+            var refunded = await razorpay.TryRefundPaymentAsync(
+                request.RazorpayPaymentId,
+                reason: $"Out of stock: {stockResult.InsufficientProductName}",
+                cancellationToken);
+
+            order.Status = "OutOfStock";
+            order.PaymentStatus = refunded ? "Refunded" : "Paid";
+            order.RazorpayPaymentId = request.RazorpayPaymentId;
+            order.PaidAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken);
+
+            logger.LogCritical(
+                "Out of stock after payment captured for order {OrderNumber} ({OrderId}): product {ProductId} had insufficient stock. Refund {RefundOutcome}.",
+                order.OrderNumber,
+                order.Id,
+                stockResult.InsufficientProductId,
+                refunded ? "succeeded" : "failed or unavailable — needs manual support follow-up");
+
+            await paymentLogs.LogAsync(
+                eventType: "OutOfStockAfterPayment",
+                status: order.PaymentStatus,
+                message: $"Stock insufficient for product '{stockResult.InsufficientProductName}' after payment captured for {order.OrderNumber}. Refund {(refunded ? "succeeded" : "failed or unavailable")}.",
+                orderId: order.Id,
+                orderNumber: order.OrderNumber,
+                razorpayOrderId: request.RazorpayOrderId,
+                razorpayPaymentId: request.RazorpayPaymentId,
+                razorpaySignature: request.RazorpaySignature,
+                amount: order.AmountInr,
+                currency: order.Currency,
+                customerEmail: order.Email,
+                errorCode: "OUT_OF_STOCK",
+                ipAddress: ip,
+                cancellationToken: cancellationToken);
+
+            return Conflict(new
+            {
+                message = refunded
+                    ? "An item in your order just sold out and your payment has been refunded. Please reorder the remaining items."
+                    : "Your payment was received but an item in your order just sold out. Our team has been notified — please contact support with your order number for a refund.",
+                orderNumber = order.OrderNumber,
+                refunded,
+            });
+        }
+
         order.PaymentStatus = "Paid";
         order.Status = "Confirmed";
         order.RazorpayPaymentId = request.RazorpayPaymentId;
         order.PaidAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         if (request.CartId is Guid cartId)
         {
@@ -356,11 +412,8 @@ public class PaymentsController(
             {
                 lineItems.Add((item.ProductId, item.ProductName, item.Color, item.UnitPrice, item.Quantity));
             }
-
-            return (lineItems, null);
         }
-
-        if (request.Items is { Count: > 0 })
+        else if (request.Items is { Count: > 0 })
         {
             foreach (var item in request.Items)
             {
@@ -379,11 +432,52 @@ public class PaymentsController(
 
                 lineItems.Add((product.Id, product.Name, item.Color, product.Price, item.Quantity));
             }
-
-            return (lineItems, null);
+        }
+        else
+        {
+            return (null, "Provide a cartId or items to place an order.");
         }
 
-        return (null, "Provide a cartId or items to place an order.");
+        var stockError = await ValidateStockAsync(lineItems, cancellationToken);
+        return stockError is null ? (lineItems, null) : (null, stockError);
+    }
+
+    /// <summary>
+    /// Re-validates current stock for every distinct product across all lines before a Razorpay
+    /// order is created, so we don't send the customer to pay for something that just sold out.
+    /// This is a best-effort pre-check only — the authoritative, race-safe check is the atomic
+    /// DB decrement performed on verify.
+    /// </summary>
+    private async Task<string?> ValidateStockAsync(
+        List<(string ProductId, string Name, string Color, decimal Price, int Quantity)> lineItems,
+        CancellationToken cancellationToken)
+    {
+        var requestedByProduct = lineItems
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
+
+        var productIds = requestedByProduct.Keys.ToList();
+        var products = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+
+        foreach (var (productId, requestedQty) in requestedByProduct)
+        {
+            var product = products.FirstOrDefault(p => p.Id == productId);
+            if (product is null || !product.IsActive)
+            {
+                return "One of the items in your order is no longer available. Please update your cart.";
+            }
+
+            if (product.StockQuantity < requestedQty)
+            {
+                return product.StockQuantity <= 0
+                    ? $"'{product.Name}' just sold out. Please remove it from your cart."
+                    : $"Only {product.StockQuantity} left in stock for '{product.Name}'. Please update your cart.";
+            }
+        }
+
+        return null;
     }
 
     private static bool IsIndia(string? country) =>

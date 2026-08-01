@@ -50,8 +50,6 @@ public class OrdersController(
             {
                 lineItems.Add((item.ProductId, item.ProductName, item.Color, item.UnitPrice, item.Quantity));
             }
-
-            db.CartItems.RemoveRange(cart.Items);
         }
         else if (request.Items is { Count: > 0 })
         {
@@ -109,8 +107,34 @@ public class OrdersController(
             }).ToList(),
         };
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
         db.Orders.Add(order);
         await db.SaveChangesAsync(cancellationToken);
+
+        var stockResult = await StockDecrementer.TryDecrementAsync(db, order.Items, cancellationToken);
+        if (!stockResult.Success)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new
+            {
+                message = $"'{stockResult.InsufficientProductName}' no longer has enough stock for the requested quantity. Please update your cart and try again.",
+            });
+        }
+
+        if (request.CartId is Guid cartIdToClear)
+        {
+            var cartItemsToRemove = await db.CartItems
+                .Where(i => i.CartId == cartIdToClear)
+                .ToListAsync(cancellationToken);
+            if (cartItemsToRemove.Count > 0)
+            {
+                db.CartItems.RemoveRange(cartItemsToRemove);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
 
         var createdOrder = MapOrder(order);
         emailDispatcher.Enqueue(order.Id, "order-create");
