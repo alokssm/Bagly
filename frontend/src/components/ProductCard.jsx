@@ -6,23 +6,32 @@ import { useCart } from '../context/CartContext'
 export default function ProductCard({ product }) {
   const { addItem } = useCart()
   const [adding, setAdding] = useState(false)
+  const [error, setError] = useState('')
+
+  const soldOut = product.inStock === false
 
   const handleAdd = async () => {
     setAdding(true)
+    setError('')
     try {
       await addItem(product, { color: product.colors?.[0], quantity: 1 })
-    } catch {
-      // error handled in cart context
+    } catch (err) {
+      setError(err.message || 'Unable to add item.')
     } finally {
       setAdding(false)
     }
   }
 
   return (
-    <article className="product-card">
-      <Link to={`/product/${product.id}`} className="product-media">
+    <article className={`product-card ${soldOut ? 'is-sold' : ''}`}>
+      <Link to={`/product/${product.id}`} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
         <img src={product.image} alt={product.name} loading="lazy" />
-        {product.badge ? <span className="product-badge">{product.badge}</span> : null}
+        {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
+        {soldOut ? (
+          <span className="sold-stamp" aria-label="Sold out">
+            Sold
+          </span>
+        ) : null}
       </Link>
 
       <div className="product-meta">
@@ -42,10 +51,17 @@ export default function ProductCard({ product }) {
         <Link to={`/product/${product.id}`} className="btn btn-secondary">
           View
         </Link>
-        <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={adding}>
-          {adding ? 'Adding…' : 'Add to cart'}
-        </button>
+        {soldOut ? (
+          <button type="button" className="btn btn-primary" disabled>
+            Sold out
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={adding}>
+            {adding ? 'Adding…' : 'Add to cart'}
+          </button>
+        )}
       </div>
+      {error ? <p className="product-card-error">{error}</p> : null}
     </article>
   )
 }

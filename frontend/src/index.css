@@ -120,6 +120,14 @@ p {
   transform: translateY(1px);
 }
 
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+}
+
 .btn-primary {
   background: var(--forest);
   color: #f5f8f6;
@@ -531,6 +539,62 @@ p {
   text-transform: uppercase;
 }
 
+/* Sold out state */
+.product-media.is-sold img,
+.pdp-main-image.is-sold img {
+  filter: grayscale(0.9) brightness(0.94);
+  opacity: 0.72;
+}
+
+.product-card.is-sold .product-meta {
+  opacity: 0.65;
+}
+
+.sold-stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-9deg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 1.3rem;
+  border: 2px solid var(--forest);
+  border-radius: 3px;
+  background: rgba(247, 249, 247, 0.9);
+  color: var(--forest);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 24px rgba(18, 40, 30, 0.2);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pdp-main-image .sold-stamp {
+  font-size: 1.5rem;
+  padding: 0.6rem 1.9rem;
+}
+
+.sold-pill {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--brass-deep);
+  border-radius: 999px;
+  color: var(--brass-deep);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.product-card-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  margin-top: -0.35rem;
+}
+
 .product-meta {
   display: flex;
   flex-direction: column;
@@ -773,6 +837,12 @@ p {
   height: 42px;
   color: var(--forest);
   font-size: 1.1rem;
+}
+
+.qty-control button:disabled {
+  color: var(--ink-soft);
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .qty-control span {

@@ -17,7 +17,8 @@ public record ProductDto(
     string Image,
     IReadOnlyList<string> Gallery,
     int StockQuantity,
-    bool IsAvailable
+    bool IsAvailable,
+    bool InStock
 );
 
 public record CategoryDto(string Id, string Label, int SortOrder = 0);

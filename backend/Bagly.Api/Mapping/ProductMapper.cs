@@ -30,7 +30,8 @@ public static class ProductMapper
             product.Image,
             DeserializeList(product.GalleryJson),
             product.StockQuantity,
-            product.IsAvailable
+            product.IsAvailable,
+            product.StockQuantity > 0
         );
 
     public static AdminProductDto ToAdminDto(Product product) =>

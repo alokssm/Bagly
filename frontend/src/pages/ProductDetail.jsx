@@ -46,6 +46,7 @@ export default function ProductDetail() {
   }, [id])
 
   const gallery = useMemo(() => product?.gallery ?? [], [product])
+  const soldOut = product?.inStock === false
 
   if (loading) {
     return (
@@ -68,6 +69,7 @@ export default function ProductDetail() {
   }
 
   const handleAdd = async () => {
+    if (soldOut) return
     try {
       await addItem(product, { color, quantity: qty })
       setAdded(true)
@@ -86,8 +88,13 @@ export default function ProductDetail() {
 
         <div className="pdp">
           <div className="pdp-gallery">
-            <div className="pdp-main-image">
+            <div className={`pdp-main-image ${soldOut ? 'is-sold' : ''}`}>
               <img src={gallery[activeImage] || product.image} alt={product.name} />
+              {soldOut ? (
+                <span className="sold-stamp" aria-label="Sold out">
+                  Sold
+                </span>
+              ) : null}
             </div>
             {gallery.length > 1 ? (
               <div className="pdp-thumbs">
@@ -121,6 +128,7 @@ export default function ProductDetail() {
               {product.compareAt ? (
                 <span className="price-compare">{formatPrice(product.compareAt)}</span>
               ) : null}
+              {soldOut ? <span className="sold-pill">Sold out</span> : null}
             </div>
 
             <p className="pdp-desc">{product.description}</p>
@@ -143,11 +151,21 @@ export default function ProductDetail() {
               <div>
                 <span className="option-label">Quantity</span>
                 <div className="qty-control">
-                  <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Decrease">
+                  <button
+                    type="button"
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease"
+                    disabled={soldOut}
+                  >
                     −
                   </button>
                   <span>{qty}</span>
-                  <button type="button" onClick={() => setQty((q) => q + 1)} aria-label="Increase">
+                  <button
+                    type="button"
+                    onClick={() => setQty((q) => q + 1)}
+                    aria-label="Increase"
+                    disabled={soldOut}
+                  >
                     +
                   </button>
                 </div>
@@ -155,9 +173,15 @@ export default function ProductDetail() {
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={busy}>
-                {added ? 'Added ✓' : busy ? 'Adding…' : 'Add to cart'}
-              </button>
+              {soldOut ? (
+                <button type="button" className="btn btn-primary" disabled>
+                  Sold out
+                </button>
+              ) : (
+                <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={busy}>
+                  {added ? 'Added ✓' : busy ? 'Adding…' : 'Add to cart'}
+                </button>
+              )}
               <Link to="/cart" className="btn btn-secondary">
                 View cart
               </Link>

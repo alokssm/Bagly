@@ -52,10 +52,24 @@ public class CartController(BaglyDbContext db) : ControllerBase
             return NotFound(new { message = "Product not found." });
         }
 
+        if (product.StockQuantity <= 0)
+        {
+            return BadRequest(new { message = $"'{product.Name}' is sold out and cannot be added to cart." });
+        }
+
         var colors = System.Text.Json.JsonSerializer.Deserialize<List<string>>(product.ColorsJson) ?? [];
         var color = string.IsNullOrWhiteSpace(request.Color) ? colors.FirstOrDefault() ?? "Default" : request.Color;
 
         var existing = cart.Items.FirstOrDefault(i => i.ProductId == product.Id && i.Color == color);
+        var requestedTotal = (existing?.Quantity ?? 0) + request.Quantity;
+        if (requestedTotal > product.StockQuantity)
+        {
+            return BadRequest(new
+            {
+                message = $"Only {product.StockQuantity} left in stock for '{product.Name}'.",
+            });
+        }
+
         if (existing is not null)
         {
             existing.Quantity += request.Quantity;
@@ -104,6 +118,19 @@ public class CartController(BaglyDbContext db) : ControllerBase
         }
         else
         {
+            var product = await db.Products.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == productId, cancellationToken);
+
+            if (product is not null && request.Quantity > product.StockQuantity)
+            {
+                return BadRequest(new
+                {
+                    message = product.StockQuantity <= 0
+                        ? $"'{product.Name}' is sold out."
+                        : $"Only {product.StockQuantity} left in stock for '{product.Name}'.",
+                });
+            }
+
             item.Quantity = request.Quantity;
         }
 
