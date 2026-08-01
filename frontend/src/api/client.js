@@ -260,6 +260,30 @@ export const api = {
   reportRazorpayFailure: (payload) =>
     request('/payments/razorpay/failure', { method: 'POST', body: payload }),
 
+  getShippingAddresses: () => request('/account/addresses', { auth: 'customer' }),
+
+  createShippingAddress: (payload) =>
+    request('/account/addresses', { method: 'POST', body: payload, auth: 'customer' }),
+
+  updateShippingAddress: (id, payload) =>
+    request(`/account/addresses/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: payload,
+      auth: 'customer',
+    }),
+
+  deleteShippingAddress: (id) =>
+    request(`/account/addresses/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      auth: 'customer',
+    }),
+
+  setDefaultShippingAddress: (id) =>
+    request(`/account/addresses/${encodeURIComponent(id)}/default`, {
+      method: 'PATCH',
+      auth: 'customer',
+    }),
+
   adminGetProducts: () => request('/admin/products', { auth: true }),
   adminGetProduct: (id) => request(`/admin/products/${encodeURIComponent(id)}`, { auth: true }),
   adminCreateProduct: (payload) =>

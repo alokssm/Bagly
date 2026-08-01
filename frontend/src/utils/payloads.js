@@ -57,6 +57,34 @@ export function buildCreateOrderPayload({
   return payload
 }
 
+export function buildShippingAddressPayload({
+  label,
+  firstName,
+  lastName,
+  email,
+  phone,
+  address,
+  city,
+  state,
+  zip,
+  country,
+  isDefault = false,
+}) {
+  return {
+    label: label ? String(label).trim() : null,
+    firstName: String(firstName || '').trim(),
+    lastName: String(lastName || '').trim(),
+    email: String(email || '').trim(),
+    phone: phone ? String(phone).trim() : null,
+    address: String(address || '').trim(),
+    city: String(city || '').trim(),
+    state: String(state || '').trim(),
+    zip: String(zip || '').trim(),
+    country: String(country || 'India').trim(),
+    isDefault: Boolean(isDefault),
+  }
+}
+
 function splitList(value, { multiline = false } = {}) {
   if (!value?.trim()) return []
   if (multiline) {

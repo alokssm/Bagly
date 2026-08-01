@@ -17,6 +17,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
     public DbSet<StockAlert> StockAlerts => Set<StockAlert>();
+    public DbSet<CustomerShippingAddress> ShippingAddresses => Set<CustomerShippingAddress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -215,6 +216,28 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => new { x.Email, x.ProductId }).IsUnique();
             entity.HasIndex(x => x.ProductId);
             entity.HasIndex(x => x.Notified);
+        });
+
+        modelBuilder.Entity<CustomerShippingAddress>(entity =>
+        {
+            entity.ToTable("ShippingAddresses");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Label).HasMaxLength(50);
+            entity.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30);
+            entity.Property(x => x.Address).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.City).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.State).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Zip).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Country).HasMaxLength(100).IsRequired();
+            entity.HasOne(x => x.CustomerUser)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => x.CustomerUserId);
+            entity.HasIndex(x => new { x.CustomerUserId, x.IsDefault });
         });
     }
 }

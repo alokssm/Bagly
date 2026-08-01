@@ -175,3 +175,33 @@ public record RazorpayFailureRequest(
     string? Description);
 
 public record ChatMessageDto(string Role, string Content, DateTime Timestamp);
+
+public record ShippingAddressDto(
+    Guid Id,
+    string? Label,
+    string FirstName,
+    string LastName,
+    string Email,
+    string? Phone,
+    string Address,
+    string City,
+    string State,
+    string Zip,
+    string Country,
+    bool IsDefault,
+    DateTime CreatedAt
+);
+
+public record UpsertShippingAddressRequest(
+    string? Label,
+    string FirstName,
+    string LastName,
+    string Email,
+    string? Phone,
+    string Address,
+    string City,
+    string State,
+    string Zip,
+    string Country,
+    bool IsDefault = false
+);

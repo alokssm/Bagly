@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
-import { buildCreateOrderPayload } from '../utils/payloads'
+import { buildCreateOrderPayload, buildShippingAddressPayload } from '../utils/payloads'
 import { openRazorpayCheckout } from '../utils/razorpay'
 import { useCart } from '../context/CartContext'
+import { useCustomerAuth } from '../context/CustomerAuthContext'
 
 const initialForm = {
   email: '',
@@ -19,12 +20,20 @@ const initialForm = {
 
 export default function Checkout() {
   const { cartId, items, subtotal, shipping, total, clearCart, loading, refreshCart } = useCart()
+  const { user, isAuthenticated } = useCustomerAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [placed, setPlaced] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [razorpayConfig, setRazorpayConfig] = useState(null)
+
+  const [addresses, setAddresses] = useState([])
+  const [addressesLoading, setAddressesLoading] = useState(false)
+  const [selectedAddressId, setSelectedAddressId] = useState(null)
+  const [saveAddress, setSaveAddress] = useState(false)
+  const [addressLabel, setAddressLabel] = useState('')
+  const [setAsDefault, setSetAsDefault] = useState(false)
 
   const isIndia = form.country === 'India'
 
@@ -42,6 +51,50 @@ export default function Checkout() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAddresses([])
+      return
+    }
+
+    let cancelled = false
+    setAddressesLoading(true)
+    api
+      .getShippingAddresses()
+      .then((list) => {
+        if (cancelled) return
+        setAddresses(list || [])
+        const preferred = (list || []).find((a) => a.isDefault) || (list || [])[0]
+        if (preferred) {
+          applyAddress(preferred)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAddresses([])
+      })
+      .finally(() => {
+        if (!cancelled) setAddressesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
+
+  const applyAddress = (addr) => {
+    setSelectedAddressId(addr.id)
+    setForm({
+      email: addr.email || user?.email || '',
+      firstName: addr.firstName || '',
+      lastName: addr.lastName || '',
+      address: addr.address || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      zip: addr.zip || '',
+      country: addr.country || 'India',
+    })
+  }
 
   if (loading) {
     return (
@@ -98,7 +151,13 @@ export default function Checkout() {
 
   const onChange = (e) => {
     const { name, value } = e.target
+    setSelectedAddressId(null)
     setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const selectSavedAddress = (addr) => {
+    if (selectedAddressId === addr.id) return
+    applyAddress(addr)
   }
 
   const finishSuccess = async (order) => {
@@ -107,6 +166,17 @@ export default function Checkout() {
       await clearCart()
     } catch {
       await refreshCart().catch(() => {})
+    }
+  }
+
+  const saveAddressIfRequested = async () => {
+    if (!isAuthenticated || !saveAddress) return
+    try {
+      await api.createShippingAddress(
+        buildShippingAddressPayload({ ...form, label: addressLabel, isDefault: setAsDefault }),
+      )
+    } catch {
+      // Non-critical: don't block order placement if saving the address fails.
     }
   }
 
@@ -125,6 +195,8 @@ export default function Checkout() {
           quantity: item.quantity,
         })),
       })
+
+      await saveAddressIfRequested()
 
       if (isIndia) {
         if (!razorpayConfig?.enabled) {
@@ -202,6 +274,42 @@ export default function Checkout() {
           <div className="form-card">
             <h2>Shipping details</h2>
             {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
+
+            {isAuthenticated ? (
+              <div className="saved-addresses">
+                <span className="saved-addresses__label">Saved addresses</span>
+                {addressesLoading ? (
+                  <p className="saved-addresses__hint">Loading your addresses…</p>
+                ) : addresses.length === 0 ? (
+                  <p className="saved-addresses__hint">
+                    You don't have any saved addresses yet. Fill the form below and check "Save
+                    this address" to add one.
+                  </p>
+                ) : (
+                  <div className="saved-addresses__list">
+                    {addresses.map((addr) => (
+                      <button
+                        type="button"
+                        key={addr.id}
+                        className={`saved-address-card${selectedAddressId === addr.id ? ' active' : ''}`}
+                        onClick={() => selectSavedAddress(addr)}
+                      >
+                        <span className="saved-address-card__top">
+                          <strong>{addr.label || `${addr.firstName} ${addr.lastName}`}</strong>
+                          {addr.isDefault ? (
+                            <span className="saved-address-card__badge">Default</span>
+                          ) : null}
+                        </span>
+                        <span className="saved-address-card__body">
+                          {addr.address}, {addr.city}, {addr.state} {addr.zip}, {addr.country}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <div className="form-grid">
               <div className="form-field full">
                 <label htmlFor="email">Email</label>
@@ -267,6 +375,41 @@ export default function Checkout() {
                 </select>
               </div>
             </div>
+
+            {isAuthenticated ? (
+              <div className="save-address-block">
+                <label className="save-address-check">
+                  <input
+                    type="checkbox"
+                    checked={saveAddress}
+                    onChange={(e) => setSaveAddress(e.target.checked)}
+                  />
+                  Save this address for next time
+                </label>
+                {saveAddress ? (
+                  <div className="save-address-options">
+                    <div className="form-field">
+                      <label htmlFor="addressLabel">Label (optional)</label>
+                      <input
+                        id="addressLabel"
+                        name="addressLabel"
+                        placeholder="Home, Work…"
+                        value={addressLabel}
+                        onChange={(e) => setAddressLabel(e.target.value)}
+                      />
+                    </div>
+                    <label className="save-address-check save-address-check--small">
+                      <input
+                        type="checkbox"
+                        checked={setAsDefault}
+                        onChange={(e) => setSetAsDefault(e.target.checked)}
+                      />
+                      Set as default address
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <aside className="cart-summary">

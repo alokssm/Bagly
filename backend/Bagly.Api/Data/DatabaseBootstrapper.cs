@@ -35,6 +35,7 @@ public static class DatabaseBootstrapper
         await EnsurePaymentLogsTableAsync(db, cancellationToken);
         await EnsureOrderPaymentColumnsAsync(db, cancellationToken);
         await EnsureStockQuantityAndAlertsAsync(db, cancellationToken);
+        await EnsureShippingAddressesTableAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -337,6 +338,55 @@ public static class DatabaseBootstrapper
             CREATE INDEX [IX_StockAlerts_Notified] ON [dbo].[StockAlerts] ([Notified]);
             """,
             cancellationToken);
+    }
+
+    private static async Task EnsureShippingAddressesTableAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "ShippingAddresses", cancellationToken))
+        {
+            return;
+        }
+
+        var fkClause = await TableExistsAsync(db, "CustomerUsers", cancellationToken)
+            ? """
+              ,
+                  CONSTRAINT [FK_ShippingAddresses_CustomerUsers] FOREIGN KEY ([CustomerUserId])
+                      REFERENCES [dbo].[CustomerUsers] ([Id]) ON DELETE CASCADE
+              """
+            : string.Empty;
+
+        var createTableSql = string.Concat(
+            """
+            CREATE TABLE [dbo].[ShippingAddresses]
+            (
+                [Id]              UNIQUEIDENTIFIER NOT NULL,
+                [CustomerUserId]  UNIQUEIDENTIFIER NOT NULL,
+                [Label]           NVARCHAR(50)     NULL,
+                [FirstName]       NVARCHAR(100)    NOT NULL,
+                [LastName]        NVARCHAR(100)    NOT NULL,
+                [Email]           NVARCHAR(256)    NOT NULL,
+                [Phone]           NVARCHAR(30)     NULL,
+                [Address]         NVARCHAR(300)    NOT NULL,
+                [City]            NVARCHAR(100)    NOT NULL,
+                [State]           NVARCHAR(100)    NOT NULL,
+                [Zip]             NVARCHAR(20)     NOT NULL,
+                [Country]         NVARCHAR(100)    NOT NULL,
+                [IsDefault]       BIT              NOT NULL CONSTRAINT [DF_ShippingAddresses_IsDefault] DEFAULT (0),
+                [CreatedAt]       DATETIME2        NOT NULL,
+                CONSTRAINT [PK_ShippingAddresses] PRIMARY KEY ([Id])
+            """,
+            fkClause,
+            """
+
+            );
+
+            CREATE INDEX [IX_ShippingAddresses_CustomerUserId] ON [dbo].[ShippingAddresses] ([CustomerUserId]);
+            CREATE INDEX [IX_ShippingAddresses_CustomerUserId_IsDefault] ON [dbo].[ShippingAddresses] ([CustomerUserId], [IsDefault]);
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(createTableSql, cancellationToken);
     }
 
     private static async Task<bool> ColumnExistsAsync(
