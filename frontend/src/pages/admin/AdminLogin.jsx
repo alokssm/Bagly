@@ -67,7 +67,6 @@ export default function AdminLogin() {
         </button>
 
         <p className="admin-login-hint">
-          Default: admin@bagly.store / Admin@123
           <br />
           <Link to="/">← Back to store</Link>
         </p>
