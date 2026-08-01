@@ -4,6 +4,7 @@ public enum EmailProvider
 {
     Smtp,
     SendGrid,
+    Resend,
 }
 
 public class EmailOptions
@@ -13,7 +14,7 @@ public class EmailOptions
     /// <summary>When false, sending is disabled even if Host/FromAddress are set.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Smtp (default) or SendGrid (HTTPS API — works on Render free tier).</summary>
+    /// <summary>Smtp (default), SendGrid, or Resend (HTTPS APIs — work on Render free tier).</summary>
     public string Provider { get; set; } = "Smtp";
 
     public string Host { get; set; } = string.Empty;
@@ -23,6 +24,9 @@ public class EmailOptions
 
     /// <summary>SendGrid REST API key (SG.xxx). Falls back to Password when Provider is SendGrid.</summary>
     public string? SendGridApiKey { get; set; }
+
+    /// <summary>Resend REST API key (re_xxx).</summary>
+    public string? ResendApiKey { get; set; }
 
     public string FromAddress { get; set; } = "noreply@bagly.store";
     public string FromName { get; set; } = "Bagly";
@@ -38,7 +42,9 @@ public class EmailOptions
     public EmailProvider ResolvedProvider =>
         string.Equals(Provider, "SendGrid", StringComparison.OrdinalIgnoreCase)
             ? EmailProvider.SendGrid
-            : EmailProvider.Smtp;
+            : string.Equals(Provider, "Resend", StringComparison.OrdinalIgnoreCase)
+                ? EmailProvider.Resend
+                : EmailProvider.Smtp;
 
     public bool HasSendGridApiKey =>
         !IsPlaceholder(SendGridApiKey) ||
@@ -59,10 +65,16 @@ public class EmailOptions
         return null;
     }
 
+    public bool HasResendApiKey => !IsPlaceholder(ResendApiKey);
+
+    public string? ResolveResendApiKey() =>
+        HasResendApiKey ? ResendApiKey!.Trim() : null;
+
     /// <summary>Host and FromAddress are set to real values (not appsettings placeholders).</summary>
     public bool IsConfigured => ResolvedProvider switch
     {
         EmailProvider.SendGrid => HasFromAddress && HasSendGridApiKey,
+        EmailProvider.Resend => HasFromAddress && HasResendApiKey,
         _ => HasSmtpHost && HasFromAddress,
     };
 

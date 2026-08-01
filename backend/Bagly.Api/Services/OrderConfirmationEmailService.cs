@@ -36,13 +36,14 @@ public class OrderConfirmationEmailService(
         if (!_options.IsConfigured)
         {
             logger.LogWarning(
-                "Order confirmation email skipped for {OrderNumber} to {Email}: email not configured. Provider={Provider}, HostSet={HostSet}, FromSet={FromSet}, SendGridKeySet={SendGridKeySet}.",
+                "Order confirmation email skipped for {OrderNumber} to {Email}: email not configured. Provider={Provider}, HostSet={HostSet}, FromSet={FromSet}, SendGridKeySet={SendGridKeySet}, ResendKeySet={ResendKeySet}.",
                 order.OrderNumber,
                 order.Email,
                 _options.ResolvedProvider,
                 _options.HasSmtpHost,
                 _options.HasFromAddress,
-                _options.HasSendGridApiKey);
+                _options.HasSendGridApiKey,
+                _options.HasResendApiKey);
             return;
         }
 
@@ -60,6 +61,12 @@ public class OrderConfirmationEmailService(
         if (_options.ResolvedProvider == EmailProvider.SendGrid)
         {
             await SendViaSendGridAsync(order, subject, textBody, htmlBody, cancellationToken);
+            return;
+        }
+
+        if (_options.ResolvedProvider == EmailProvider.Resend)
+        {
+            await SendViaResendAsync(order, subject, textBody, htmlBody, cancellationToken);
             return;
         }
 
@@ -142,6 +149,74 @@ public class OrderConfirmationEmailService(
         }
     }
 
+    private async Task SendViaResendAsync(
+        Order order,
+        string subject,
+        string textBody,
+        string htmlBody,
+        CancellationToken cancellationToken)
+    {
+        var apiKey = _options.ResolveResendApiKey()
+            ?? throw new InvalidOperationException("Resend API key is missing.");
+
+        var fromAddress = _options.FromAddress.Trim();
+        var from = string.IsNullOrWhiteSpace(_options.FromName)
+            ? fromAddress
+            : $"{_options.FromName} <{fromAddress}>";
+
+        logger.LogInformation(
+            "Sending order confirmation email for {OrderNumber} to {Email} via Resend HTTPS API (from {FromAddress})",
+            order.OrderNumber,
+            order.Email,
+            fromAddress);
+
+        var payload = new
+        {
+            from,
+            to = new[] { order.Email.Trim() },
+            subject,
+            text = textBody,
+            html = htmlBody,
+        };
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("Resend");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "emails");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(payload),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                logger.LogInformation(
+                    "Order confirmation email sent for {OrderNumber} to {Email} via Resend",
+                    order.OrderNumber,
+                    order.Email);
+                return;
+            }
+
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            logger.LogError(
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via Resend: HTTP {StatusCode}. {ResponseBody}. Verify Email__FromAddress is verified in Resend (or use onboarding@resend.dev for testing).",
+                order.OrderNumber,
+                order.Email,
+                (int)response.StatusCode,
+                Truncate(responseBody, 500));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed to send order confirmation email for {OrderNumber} to {Email} via Resend HTTPS API.",
+                order.OrderNumber,
+                order.Email);
+        }
+    }
+
     private async Task SendViaSmtpAsync(
         Order order,
         string subject,
@@ -193,7 +268,7 @@ public class OrderConfirmationEmailService(
             logger.LogError(
                 ex,
                 "Failed to send order confirmation email for {OrderNumber} to {Email} via SMTP {Host}:{Port}. " +
-                "Render free tier blocks outbound SMTP ports 25/465/587 — set Email__Provider=SendGrid and Email__SendGridApiKey, or upgrade Render to a paid instance.",
+                "Render free tier blocks outbound SMTP ports 25/465/587 — set Email__Provider=Resend and Email__ResendApiKey (or SendGrid), or upgrade Render to a paid instance.",
                 order.OrderNumber,
                 order.Email,
                 _options.Host.Trim(),
