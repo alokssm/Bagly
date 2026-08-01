@@ -25,6 +25,7 @@ export default function Checkout() {
   const [form, setForm] = useState(initialForm)
   const [placed, setPlaced] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [confirmingOrder, setConfirmingOrder] = useState(false)
   const [error, setError] = useState('')
   const [razorpayConfig, setRazorpayConfig] = useState(null)
 
@@ -51,6 +52,28 @@ export default function Checkout() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!confirmingOrder) return undefined
+
+    const onBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    const blockBack = () => {
+      window.history.pushState(null, '', window.location.href)
+    }
+
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    window.addEventListener('popstate', blockBack)
+
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('popstate', blockBack)
+    }
+  }, [confirmingOrder])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -241,6 +264,7 @@ export default function Checkout() {
           throw payErr
         }
 
+        setConfirmingOrder(true)
         const order = await api.verifyRazorpayPayment({
           orderId: session.orderId,
           razorpayOrderId: paymentResponse.razorpay_order_id,
@@ -253,9 +277,11 @@ export default function Checkout() {
         return
       }
 
+      setConfirmingOrder(true)
       const order = await api.createOrder(payload)
       await finishSuccess(order)
     } catch (err) {
+      setConfirmingOrder(false)
       setError(err.message || 'Unable to place order. Is the API running?')
     } finally {
       setSubmitting(false)
@@ -270,7 +296,10 @@ export default function Checkout() {
           <h1>Complete your order</h1>
         </div>
 
-        <form className="checkout-layout" onSubmit={onSubmit}>
+        <form
+          className={`checkout-layout${confirmingOrder ? ' checkout-layout--blocked' : ''}`}
+          onSubmit={onSubmit}
+        >
           <div className="form-card">
             <h2>Shipping details</h2>
             {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
@@ -449,6 +478,22 @@ export default function Checkout() {
             </button>
           </aside>
         </form>
+
+        {confirmingOrder ? (
+          <div
+            className="checkout-confirm-overlay"
+            role="alertdialog"
+            aria-live="assertive"
+            aria-busy="true"
+            aria-label={isIndia ? 'Confirming your payment' : 'Confirming your order'}
+          >
+            <div className="checkout-confirm-overlay__panel">
+              <div className="checkout-confirm-overlay__spinner" aria-hidden="true" />
+              <h2>{isIndia ? 'Confirming your payment…' : 'Confirming your order…'}</h2>
+              <p>Please don&apos;t refresh or go back.</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   )
