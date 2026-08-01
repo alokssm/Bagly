@@ -206,7 +206,7 @@ export default function Checkout() {
           <div className="form-card">
             <h2>Shipping details</h2>
             {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
-            {isIndia ? (
+            {/* {isIndia ? (
               <p className="checkout-pay-note">
                 India selected — final payment opens Razorpay in INR (UPI / cards / netbanking). Catalog
                 prices convert at ≈₹{razorpayConfig?.usdToInrRate || 83} per $1. Test mode: type card
@@ -214,7 +214,7 @@ export default function Checkout() {
                 <code>5267 3181 8797 5449</code>, expiry any future date, CVV any 3 digits, OTP{' '}
                 <code>1234</code>. UPI: <code>success@razorpay</code> (only if UPI appears in popup).
               </p>
-            ) : null}
+            ) : null} */}
             <div className="form-grid">
               <div className="form-field full">
                 <label htmlFor="email">Email</label>
