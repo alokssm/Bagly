@@ -79,12 +79,15 @@ export default function Navbar() {
                 </Link>
               )}
             </div>
-            {itemCount > 0 && (
-              <Link to="/cart" className="cart-btn" aria-label={`Cart with ${itemCount} items`}>
-                Cart
-                <span className="cart-count">{itemCount}</span>
-              </Link>
-            )}
+            <Link
+              to="/cart"
+              className="cart-btn"
+              aria-label={itemCount > 0 ? `Cart with ${itemCount} items` : 'Cart'}
+              onClick={() => setOpen(false)}
+            >
+              Cart
+              {itemCount > 0 && <span className="cart-count">{itemCount}</span>}
+            </Link>
             <button
               type="button"
               className="menu-toggle"
