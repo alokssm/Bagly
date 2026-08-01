@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ChatWidget from './components/ChatWidget'
+import InstallPrompt from './components/InstallPrompt'
 import AdminLayout from './components/AdminLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
@@ -26,6 +27,7 @@ function StoreLayout() {
   const { isAuthenticated, token } = useCustomerAuth()
   return (
     <div className="app-shell">
+      <InstallPrompt />
       <Navbar />
       <main className="main">
         <Outlet />
