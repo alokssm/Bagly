@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { CUSTOMER_LOGOUT_EVENT } from '../constants/events'
 import { mapCartFromApi } from '../utils/format'
 
 const CartContext = createContext(null)
@@ -142,14 +143,29 @@ export function CartProvider({ children }) {
     [applyCart, cart.cartId],
   )
 
-  const clearCart = useCallback(async () => {
+  const clearCart = useCallback(async ({ forget = false } = {}) => {
     setBusy(true)
     setError('')
     try {
       if (cart.cartId) {
-        const updated = await api.clearCart(cart.cartId)
-        applyCart(updated)
+        try {
+          const updated = await api.clearCart(cart.cartId)
+          if (forget) {
+            localStorage.removeItem(CART_ID_KEY)
+            setCart(emptyCart)
+          } else {
+            applyCart(updated)
+          }
+        } catch (err) {
+          if (forget) {
+            localStorage.removeItem(CART_ID_KEY)
+            setCart(emptyCart)
+          } else {
+            throw err
+          }
+        }
       } else {
+        if (forget) localStorage.removeItem(CART_ID_KEY)
         setCart(emptyCart)
       }
     } catch (err) {
@@ -165,6 +181,15 @@ export function CartProvider({ children }) {
     const updated = await api.getCart(cart.cartId)
     applyCart(updated)
   }, [applyCart, cart.cartId])
+
+  useEffect(() => {
+    const onCustomerLogout = () => {
+      clearCart({ forget: true }).catch(() => {})
+    }
+
+    window.addEventListener(CUSTOMER_LOGOUT_EVENT, onCustomerLogout)
+    return () => window.removeEventListener(CUSTOMER_LOGOUT_EVENT, onCustomerLogout)
+  }, [clearCart])
 
   const value = useMemo(
     () => ({

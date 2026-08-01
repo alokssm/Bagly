@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api, getCustomerToken, getGoogleAuthConfig, setCustomerToken } from '../api/client'
+import { CUSTOMER_LOGOUT_EVENT } from '../constants/events'
 
 export { getGoogleAuthConfig }
 
@@ -70,6 +71,7 @@ export function CustomerAuthProvider({ children }) {
     setCustomerToken(null)
     setToken(null)
     setUser(null)
+    window.dispatchEvent(new Event(CUSTOMER_LOGOUT_EVENT))
   }, [])
 
   const value = useMemo(
