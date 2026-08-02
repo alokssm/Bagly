@@ -220,7 +220,7 @@ public static class DbSeeder
     }
 
     /// <summary>
-    /// Ensures the School Bags catalog (category + Boys/Girls/Kids subcategories + 60 products)
+    /// Ensures the School Bags catalog (category + Boys/Girls/Kids subcategories + 360 products)
     /// exists and is active, deactivating legacy categories so the storefront's category filter
     /// focuses on School Bags. Safe to call repeatedly (e.g. via POST /api/setup/seed) even when
     /// the database already has products — categories are upserted and products are added only
@@ -296,7 +296,7 @@ public static class DbSeeder
         byId[id] = category;
     }
 
-    // Verified, product-style Unsplash backpack photos, cycled across the 60 School Bags products
+    // Verified, product-style Unsplash backpack photos, cycled across School Bags products
     // (image + gallery) — reuses the same "pattern" as the original demo seeder above.
     private static readonly string[] SchoolBagImagePool =
     [
@@ -379,7 +379,164 @@ public static class DbSeeder
                 "Kindergarten Buddy Backpack", "Chirpy Bird School Bag", "Sunny Day Mini Backpack", "First Day Hero Bag",
             ]);
 
-        return boys.Concat(girls).Concat(kids);
+        var extraBoys = GenerateExtendedSchoolBagProducts(
+            subCategoryId: "boys",
+            subCategoryLabel: "boys",
+            startIndex: 21,
+            count: 100,
+            imageOffset: 0,
+            colorPool: ["Navy Blue", "Charcoal Grey", "Racing Red", "Forest Green", "Jet Black", "Steel Blue", "Burnt Orange"],
+            featurePool:
+            [
+                "Padded laptop/tablet sleeve", "Reinforced bottom panel", "Adjustable padded shoulder straps",
+                "Side mesh water bottle pockets", "Multiple zip compartments", "Breathable back padding",
+            ],
+            themes:
+            [
+                "Turbo", "Galaxy", "Thunder", "Cricket", "Robo", "Dino", "Football", "Space", "Jungle", "Superhero",
+                "Racing", "Camo", "Shark", "Pirate", "Dragon", "Skate", "Ninja", "Rocket", "Wild", "Champion",
+                "Blaze", "Storm", "Velocity", "Apex", "Titan", "Falcon", "Cobra", "Vortex", "Blitz", "Stealth",
+                "Matrix", "Neon", "Circuit", "Atomic", "Fusion", "Hyper", "Quantum", "Pulse", "Surge", "Strike",
+                "Alpha", "Omega", "Prime", "Elite", "Pro", "Max", "Ultra", "Mega", "Power", "Force",
+            ],
+            styles:
+            [
+                "Blast", "Racer", "Bolt", "Champion", "Warrior", "Explorer", "Star", "Mission", "Safari", "Squad",
+                "Stripe", "Commando", "Attack", "Adventure", "Force", "Park", "Ship", "Tiger", "League", "Strike",
+                "Edge", "Rush", "Drive", "Shift", "Gear", "Mode", "Zone", "Wave", "Spark", "Core",
+            ],
+            suffixes: ["Backpack", "School Bag"]);
+
+        var extraGirls = GenerateExtendedSchoolBagProducts(
+            subCategoryId: "girls",
+            subCategoryLabel: "girls",
+            startIndex: 21,
+            count: 100,
+            imageOffset: 5,
+            colorPool: ["Blush Pink", "Lavender", "Lilac Purple", "Peach", "Rose Gold", "Mint Green", "Soft White"],
+            featurePool:
+            [
+                "Cute front pocket detailing", "Adjustable padded shoulder straps", "Roomy main compartment",
+                "Side mesh water bottle pockets", "Sparkle print finish", "Breathable back padding",
+            ],
+            themes:
+            [
+                "Unicorn", "Princess", "Rainbow", "Butterfly", "Floral", "Mermaid", "Sweet", "Star", "Fairy", "Polka",
+                "Glitter", "Cherry", "Ballerina", "Candy", "Heart", "Sunshine", "Kitty", "Pastel", "Bloom", "Moonlight",
+                "Sparkle", "Dream", "Magic", "Petal", "Blossom", "Dazzle", "Charm", "Glow", "Shimmer", "Twinkle",
+                "Crystal", "Pearl", "Velvet", "Silk", "Ribbon", "Lace", "Bloom", "Grace", "Delight", "Wonder",
+                "Pixie", "Frost", "Aurora", "Coral", "Honey", "Berry", "Rose", "Lily", "Daisy", "Poppy",
+            ],
+            styles:
+            [
+                "Dream", "Sparkle", "Magic", "Garden", "Charm", "Tales", "Blossom", "Dazzle", "Tale", "Dot",
+                "Bow", "Blossom", "Dream", "Pop", "Hues", "Daisy", "Whiskers", "Cloud", "Sparkle", "Fairy",
+                "Glow", "Shine", "Bliss", "Bloom", "Grace", "Wish", "Glow", "Mist", "Light", "Glow",
+            ],
+            suffixes: ["Backpack", "School Bag"]);
+
+        var extraKids = GenerateExtendedSchoolBagProducts(
+            subCategoryId: "kids",
+            subCategoryLabel: "little kids",
+            startIndex: 21,
+            count: 100,
+            imageOffset: 10,
+            colorPool: ["Sunshine Yellow", "Sky Blue", "Mint Green", "Coral", "Lilac", "Cream", "Turquoise"],
+            featurePool:
+            [
+                "Lightweight & easy to carry", "Wipe-clean lining", "Chest strap for extra stability",
+                "Fun front pocket for small items", "Rounded safe-edge design", "Breathable back padding",
+            ],
+            themes:
+            [
+                "Little", "Cartoon", "Puppy", "Panda", "Bunny", "Choo Choo", "Happy", "ABC", "Teddy", "Jungle",
+                "Rocket", "Cloud", "Baby", "Fun", "Playtime", "Little", "Kindergarten", "Chirpy", "Sunny", "First Day",
+                "Tiny", "Mini", "Cute", "Happy", "Bright", "Snuggly", "Cheery", "Giggly", "Bouncy", "Sprout",
+                "Peewee", "Wee", "Itty", "Bitty", "Pint", "Small", "Sweet", "Soft", "Cuddly", "Gentle",
+                "Buddy", "Pal", "Friend", "Mate", "Chum", "Sidekick", "Partner", "Companion", "Helper", "Hero",
+            ],
+            styles:
+            [
+                "Explorer", "Buddy", "Pal", "Cub", "Hop", "Train", "Farm", "Learner", "Bear", "Friends",
+                "Tot", "Nine", "Dino", "Friends", "Pals", "Star", "Buddy", "Bird", "Day", "Hero",
+                "Steps", "Smile", "Giggle", "Hop", "Skip", "Jump", "Play", "Learn", "Grow", "Shine",
+            ],
+            suffixes: ["Mini Backpack", "School Bag"]);
+
+        return boys.Concat(girls).Concat(kids)
+            .Concat(extraBoys).Concat(extraGirls).Concat(extraKids);
+    }
+
+    /// <summary>
+    /// Generates additional School Bags products with stable sequential ids (e.g. sb-boys-021 … sb-boys-120).
+    /// </summary>
+    private static IEnumerable<Product> GenerateExtendedSchoolBagProducts(
+        string subCategoryId,
+        string subCategoryLabel,
+        int startIndex,
+        int count,
+        int imageOffset,
+        string[] colorPool,
+        string[] featurePool,
+        string[] themes,
+        string[] styles,
+        string[] suffixes)
+    {
+        var materials = new[] { "Waterproof Polyester", "Ripstop Nylon", "Durable Canvas", "Polyester Blend", "Oxford Fabric" };
+
+        for (var n = 0; n < count; n++)
+        {
+            var seq = startIndex + n;
+            var theme = themes[n % themes.Length];
+            var style = styles[(n / themes.Length + n) % styles.Length];
+            var suffix = suffixes[(n / (themes.Length * styles.Length) + n) % suffixes.Length];
+            var name = $"{theme} {style} {suffix}";
+            var id = $"sb-{subCategoryId}-{seq:D3}";
+            var material = materials[n % materials.Length];
+            var primaryColor = colorPool[n % colorPool.Length];
+            var secondaryColor = colorPool[(n + 2) % colorPool.Length];
+            var price = Math.Round((799m + n * (4999m - 799m) / Math.Max(count - 1, 1)) / 10m) * 10m;
+            var compareAt = n % 4 == 0 ? Math.Round(price * 1.18m / 10m) * 10m : (decimal?)null;
+            var stock = 25 + (n * 11) % 90;
+            var rating = Math.Round(4.0 + (n % 10) * 0.09, 1);
+            var reviews = 35 + (n * 13) % 260;
+            var badge = n % 6 == 0 ? "Bestseller" : n % 6 == 3 ? "New" : null;
+            var image = SchoolBagImage(seq, imageOffset);
+            var gallery = new[] { image, SchoolBagImage(seq + 1, imageOffset) };
+            var features = new[]
+            {
+                featurePool[n % featurePool.Length],
+                featurePool[(n + 1) % featurePool.Length],
+                featurePool[(n + 2) % featurePool.Length],
+                featurePool[(n + 3) % featurePool.Length],
+            };
+
+            yield return new Product
+            {
+                Id = id,
+                Name = name,
+                Category = SchoolBagsCategoryId,
+                SubCategoryId = subCategoryId,
+                Price = price,
+                CompareAt = compareAt,
+                Material = material,
+                Rating = rating,
+                Reviews = reviews,
+                Badge = badge,
+                ShortDescription = $"{material} school bag in {primaryColor.ToLowerInvariant()}, made for {subCategoryLabel}.",
+                Description =
+                    $"{name} is a durable {material.ToLowerInvariant()} school bag in {primaryColor.ToLowerInvariant()} " +
+                    $"with {secondaryColor.ToLowerInvariant()} accents. Roomy compartments, comfortable padded straps, " +
+                    $"and everyday-tough construction make it a reliable pick for {subCategoryLabel} heading to school.",
+                Image = image,
+                ColorsJson = JsonSerializer.Serialize(new[] { primaryColor, secondaryColor }, JsonOptions),
+                FeaturesJson = JsonSerializer.Serialize(features, JsonOptions),
+                GalleryJson = JsonSerializer.Serialize(gallery, JsonOptions),
+                IsActive = true,
+                StockQuantity = stock,
+                CreatedAt = DateTime.UtcNow,
+            };
+        }
     }
 
     private static IEnumerable<Product> GenerateSchoolBagVariant(
