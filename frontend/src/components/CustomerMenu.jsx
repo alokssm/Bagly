@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-/** Single "Hi, {name}" dropdown consolidating Profile / Orders / Addresses / Sign out. */
+/** Single "Hello, {name}" dropdown consolidating Profile / Orders / Addresses / Sign out. */
 export default function CustomerMenu({ name, onLogout, variant = 'desktop' }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
@@ -32,6 +32,7 @@ export default function CustomerMenu({ name, onLogout, variant = 'desktop' }) {
   }, [open])
 
   const close = () => setOpen(false)
+  const displayName = name ? name.charAt(0).toUpperCase() + name.slice(1) : name
 
   return (
     <div className={`customer-menu customer-menu--${variant}`} ref={containerRef}>
@@ -42,7 +43,7 @@ export default function CustomerMenu({ name, onLogout, variant = 'desktop' }) {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        Hi, {name}
+        Hello, {displayName}
         <span className={`customer-menu__chevron ${open ? 'open' : ''}`} aria-hidden="true">
           ▾
         </span>

@@ -378,7 +378,7 @@ p {
   justify-content: center;
 }
 
-/* Customer "Hi, {name}" dropdown */
+/* Customer "Hello, {name}" dropdown */
 .customer-menu {
   position: relative;
 }
