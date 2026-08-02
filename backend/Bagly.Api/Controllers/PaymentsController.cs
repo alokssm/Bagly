@@ -227,12 +227,17 @@ public class PaymentsController(
             return BadRequest(new { message = "Payment order mismatch." });
         }
 
-        if (order.PaymentStatus == "Paid")
+        if (order.Status == "Confirmed" && order.PaymentStatus == "Paid")
         {
             logger.LogDebug(
-                "Razorpay verify idempotent for {OrderNumber}: already paid; confirmation email is not resent.",
+                "Razorpay verify idempotent for {OrderNumber}: already confirmed and paid; confirmation email is not resent.",
                 order.OrderNumber);
             return Ok(OrdersController.MapOrder(order));
+        }
+
+        if (order.Status == "OutOfStock")
+        {
+            return await HandleOutOfStockRetryAsync(order, request, ip, cancellationToken);
         }
 
         var valid = razorpay.VerifyPaymentSignature(
@@ -359,6 +364,93 @@ public class PaymentsController(
         var confirmedOrder = OrdersController.MapOrder(order);
         emailDispatcher.Enqueue(order.Id, "razorpay-verify");
         return Ok(confirmedOrder);
+    }
+
+    /// <summary>
+    /// Handles a verify retry for an order already marked OutOfStock (e.g. the customer's browser
+    /// re-submitted after a network blip, or a duplicate webhook/click). Never re-runs the atomic
+    /// stock decrement, and never re-issues a refund once one has already succeeded — Razorpay
+    /// refunds are not safely repeatable and PaymentStatus must never be downgraded from
+    /// "Refunded" back to "Paid".
+    /// </summary>
+    private async Task<ActionResult<OrderDto>> HandleOutOfStockRetryAsync(
+        Order order,
+        RazorpayVerifyRequest request,
+        string? ip,
+        CancellationToken cancellationToken)
+    {
+        if (order.PaymentStatus == "Refunded")
+        {
+            logger.LogDebug(
+                "Razorpay verify idempotent for {OrderNumber}: already out-of-stock and refunded; no refund API call made.",
+                order.OrderNumber);
+
+            await paymentLogs.LogAsync(
+                eventType: "OutOfStockRetryIdempotent",
+                status: order.PaymentStatus,
+                message: $"Retry verify for out-of-stock order {order.OrderNumber} short-circuited; already refunded.",
+                orderId: order.Id,
+                orderNumber: order.OrderNumber,
+                razorpayOrderId: request.RazorpayOrderId,
+                razorpayPaymentId: order.RazorpayPaymentId ?? request.RazorpayPaymentId,
+                amount: order.AmountInr,
+                currency: order.Currency,
+                customerEmail: order.Email,
+                errorCode: "OUT_OF_STOCK_RETRY",
+                ipAddress: ip,
+                cancellationToken: cancellationToken);
+
+            return Conflict(new
+            {
+                message = "An item in your order just sold out and your payment has been refunded. Please reorder the remaining items.",
+                orderNumber = order.OrderNumber,
+                refunded = true,
+            });
+        }
+
+        // PaymentStatus is "Paid" here — the original refund attempt failed or Razorpay was
+        // unavailable. Allow one more attempt on retry instead of stranding the customer.
+        var paymentId = order.RazorpayPaymentId ?? request.RazorpayPaymentId;
+        var refunded = await razorpay.TryRefundPaymentAsync(
+            paymentId,
+            reason: $"Out of stock refund retry for order {order.OrderNumber}",
+            cancellationToken);
+
+        if (refunded)
+        {
+            order.PaymentStatus = "Refunded";
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        logger.LogCritical(
+            "Out-of-stock verify retry for order {OrderNumber} ({OrderId}): refund retry {RefundOutcome}.",
+            order.OrderNumber,
+            order.Id,
+            refunded ? "succeeded" : "failed or unavailable — still needs manual support follow-up");
+
+        await paymentLogs.LogAsync(
+            eventType: "OutOfStockRetryRefundAttempt",
+            status: order.PaymentStatus,
+            message: $"Retry verify for out-of-stock order {order.OrderNumber}; refund retry {(refunded ? "succeeded" : "failed or unavailable")}.",
+            orderId: order.Id,
+            orderNumber: order.OrderNumber,
+            razorpayOrderId: request.RazorpayOrderId,
+            razorpayPaymentId: paymentId,
+            amount: order.AmountInr,
+            currency: order.Currency,
+            customerEmail: order.Email,
+            errorCode: "OUT_OF_STOCK_RETRY",
+            ipAddress: ip,
+            cancellationToken: cancellationToken);
+
+        return Conflict(new
+        {
+            message = refunded
+                ? "An item in your order just sold out and your payment has been refunded. Please reorder the remaining items."
+                : "Your payment was received but an item in your order just sold out. Our team has been notified — please contact support with your order number for a refund.",
+            orderNumber = order.OrderNumber,
+            refunded,
+        });
     }
 
     [HttpPost("razorpay/failure")]

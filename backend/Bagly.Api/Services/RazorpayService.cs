@@ -122,7 +122,9 @@ public class RazorpayService(
             var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.KeyId}:{_options.KeySecret}"));
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
 
-            var payload = new { speed = "normal", notes = new { reason } };
+            // Idempotency note in the refund reason so Razorpay's dashboard/support can correlate
+            // retries of the same out-of-stock refund back to this order without side effects.
+            var payload = new { speed = "normal", notes = new { reason, idempotency_note = "bagly-out-of-stock-refund" } };
             request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             logger.LogInformation(
@@ -142,6 +144,24 @@ public class RazorpayService(
                 return true;
             }
 
+            var errorDescription = TryExtractErrorDescription(raw);
+
+            // Razorpay returns HTTP 400 BAD_REQUEST_ERROR with a description like "The payment has
+            // been fully refunded already" if a refund is retried after it already succeeded (e.g.
+            // our own retry, or a duplicate webhook). Treat that as success so we never downgrade
+            // PaymentStatus from "Refunded" back to "Paid" on a retried verify call.
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest &&
+                errorDescription is not null &&
+                errorDescription.Contains("refund", StringComparison.OrdinalIgnoreCase) &&
+                errorDescription.Contains("already", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation(
+                    "Razorpay refund for payment {PaymentId} was already refunded (treated as success). {Description}",
+                    razorpayPaymentId,
+                    errorDescription);
+                return true;
+            }
+
             logger.LogError(
                 "Razorpay refund failed for payment {PaymentId}: HTTP {StatusCode}. {Response}. Reason={Reason}.",
                 razorpayPaymentId,
@@ -158,6 +178,20 @@ public class RazorpayService(
                 razorpayPaymentId,
                 reason);
             return false;
+        }
+    }
+
+    /// <summary>Best-effort parse of Razorpay's <c>{ "error": { "description": "..." } }</c> shape. Returns null on any parse failure.</summary>
+    private static string? TryExtractErrorDescription(string raw)
+    {
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<RazorpayErrorResponse>(raw);
+            return parsed?.Error?.Description;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -193,5 +227,20 @@ public class RazorpayService(
 
         [JsonPropertyName("status")]
         public string? Status { get; set; }
+    }
+
+    private sealed class RazorpayErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public RazorpayErrorDetail? Error { get; set; }
+    }
+
+    private sealed class RazorpayErrorDetail
+    {
+        [JsonPropertyName("code")]
+        public string? Code { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
     }
 }
