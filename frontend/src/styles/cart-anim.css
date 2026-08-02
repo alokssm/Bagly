@@ -1,0 +1,86 @@
+/* Cart icon bump + badge pulse (triggered via bagly:cart-add) */
+.cart-btn.cart-btn--bump {
+  animation: cart-bump 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cart-btn.cart-btn--bump .cart-count {
+  animation: cart-badge-pulse 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes cart-bump {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14);
+  }
+  60% {
+    transform: scale(0.96);
+  }
+  80% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes cart-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    background: var(--forest);
+  }
+  40% {
+    transform: scale(1.4);
+    background: var(--brass);
+    box-shadow: 0 0 0 3px rgba(176, 138, 85, 0.28);
+  }
+  70% {
+    transform: scale(0.92);
+    background: var(--forest-deep);
+  }
+}
+
+/* Flying dot from add button toward cart */
+.cart-fly-dot {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d4b88a, var(--brass));
+  box-shadow:
+    0 2px 8px rgba(18, 40, 30, 0.22),
+    0 0 0 2px rgba(176, 138, 85, 0.2);
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform, opacity;
+}
+
+/* Brief scale feedback on add-to-cart buttons */
+.btn-add-cart--tap {
+  animation: add-cart-tap 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes add-cart-tap {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.93);
+  }
+  75% {
+    transform: scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-btn.cart-btn--bump,
+  .cart-btn.cart-btn--bump .cart-count,
+  .btn-add-cart--tap {
+    animation: none;
+  }
+
+  .cart-fly-dot {
+    display: none;
+  }
+}

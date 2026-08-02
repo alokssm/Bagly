@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import { CUSTOMER_LOGOUT_EVENT } from '../constants/events'
+import { CART_ADD_EVENT, CUSTOMER_LOGOUT_EVENT } from '../constants/events'
 import { mapCartFromApi } from '../utils/format'
 
 const CartContext = createContext(null)
@@ -86,7 +86,7 @@ export function CartProvider({ children }) {
   }, [applyCart])
 
   const addItem = useCallback(
-    async (product, { color, quantity = 1 } = {}) => {
+    async (product, { color, quantity = 1, sourceRect = null } = {}) => {
       setBusy(true)
       setError('')
       try {
@@ -97,6 +97,11 @@ export function CartProvider({ children }) {
           quantity,
         })
         applyCart(updated)
+        window.dispatchEvent(
+          new CustomEvent(CART_ADD_EVENT, {
+            detail: { sourceRect },
+          }),
+        )
       } catch (err) {
         setError(err.message || 'Unable to add item.')
         throw err

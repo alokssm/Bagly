@@ -3,7 +3,11 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
+import { CART_ADD_EVENT } from '../constants/events'
+import { handleCartAddAnimation } from '../utils/cartAnim'
 import CustomerMenu from './CustomerMenu'
+
+const CART_BUMP_MS = 400
 
 const links = [
   { to: '/', label: 'Home', end: true },
@@ -18,6 +22,7 @@ export default function Navbar() {
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [cartBump, setCartBump] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -30,6 +35,23 @@ export default function Navbar() {
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    let bumpTimer
+
+    const onCartAdd = (event) => {
+      setCartBump(true)
+      handleCartAddAnimation(event)
+      window.clearTimeout(bumpTimer)
+      bumpTimer = window.setTimeout(() => setCartBump(false), CART_BUMP_MS)
+    }
+
+    window.addEventListener(CART_ADD_EVENT, onCartAdd)
+    return () => {
+      window.removeEventListener(CART_ADD_EVENT, onCartAdd)
+      window.clearTimeout(bumpTimer)
+    }
   }, [])
 
   const firstName = user?.name?.split(' ')[0] || 'there'
@@ -75,8 +97,9 @@ export default function Navbar() {
               )}
             </div>
             <Link
+              id="bagly-cart-icon"
               to="/cart"
-              className="cart-btn"
+              className={`cart-btn${cartBump ? ' cart-btn--bump' : ''}`}
               aria-label={`Cart, ${itemCount} item${itemCount === 1 ? '' : 's'}`}
               onClick={() => setOpen(false)}
             >

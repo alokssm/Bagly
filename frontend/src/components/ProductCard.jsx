@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
+import { pulseAddButton } from '../utils/cartAnim'
 
 export default function ProductCard({ product }) {
   const { addItem } = useCart()
+  const addBtnRef = useRef(null)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
 
@@ -14,7 +16,9 @@ export default function ProductCard({ product }) {
     setAdding(true)
     setError('')
     try {
-      await addItem(product, { color: product.colors?.[0], quantity: 1 })
+      const sourceRect = addBtnRef.current?.getBoundingClientRect() ?? null
+      await addItem(product, { color: product.colors?.[0], quantity: 1, sourceRect })
+      pulseAddButton(addBtnRef.current)
     } catch (err) {
       setError(err.message || 'Unable to add item.')
     } finally {
@@ -56,7 +60,13 @@ export default function ProductCard({ product }) {
             Sold out
           </button>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={adding}>
+          <button
+            ref={addBtnRef}
+            type="button"
+            className="btn btn-primary"
+            onClick={handleAdd}
+            disabled={adding}
+          >
             {adding ? 'Adding…' : 'Add to cart'}
           </button>
         )}

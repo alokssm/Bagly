@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
+import { pulseAddButton } from '../utils/cartAnim'
 
 export default function ProductDetail() {
   const { id } = useParams()
   const { addItem, busy } = useCart()
+  const addBtnRef = useRef(null)
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -71,7 +73,9 @@ export default function ProductDetail() {
   const handleAdd = async () => {
     if (soldOut) return
     try {
-      await addItem(product, { color, quantity: qty })
+      const sourceRect = addBtnRef.current?.getBoundingClientRect() ?? null
+      await addItem(product, { color, quantity: qty, sourceRect })
+      pulseAddButton(addBtnRef.current)
       setAdded(true)
       window.setTimeout(() => setAdded(false), 1800)
     } catch {
@@ -178,7 +182,13 @@ export default function ProductDetail() {
                   Sold out
                 </button>
               ) : (
-                <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={busy}>
+                <button
+                  ref={addBtnRef}
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleAdd}
+                  disabled={busy}
+                >
                   {added ? 'Added ✓' : busy ? 'Adding…' : 'Add to cart'}
                 </button>
               )}
