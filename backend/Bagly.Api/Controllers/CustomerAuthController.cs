@@ -237,6 +237,48 @@ public class CustomerAuthController(
         });
     }
 
+    [HttpPatch("me")]
+    [Authorize(Roles = "Customer")]
+    public async Task<ActionResult<CustomerAuthResponse>> UpdateMe(
+        [FromBody] UpdateCustomerProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        var name = request.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new { message = "Name is required." });
+        }
+
+        var raw = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(raw, out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var customer = await db.CustomerUsers.FirstOrDefaultAsync(u => u.Id == customerId, cancellationToken);
+        if (customer is null)
+        {
+            return NotFound();
+        }
+
+        customer.Name = name;
+        await db.SaveChangesAsync(cancellationToken);
+
+        await auditLog.LogAsync(
+            category: "CustomerAuth",
+            action: "ProfileUpdate",
+            message: $"Customer '{customer.Email}' updated their profile name.",
+            actorEmail: customer.Email,
+            entityType: "CustomerUser",
+            entityId: customer.Id.ToString(),
+            ipAddress: HttpContext.GetClientIp(),
+            requestPath: HttpContext.GetRequestPath(),
+            cancellationToken: cancellationToken);
+
+        // Reissue the token so the "name" claim baked into the JWT stays in sync.
+        return Ok(BuildResponse(customer));
+    }
+
     private CustomerAuthResponse BuildResponse(CustomerUser customer)
     {
         var token = tokenService.CreateCustomerToken(customer.Id, customer.Email, customer.Name);

@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
+import CustomerMenu from './CustomerMenu'
 
 const links = [
   { to: '/', label: 'Home', end: true },
@@ -31,6 +32,8 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  const firstName = user?.name?.split(' ')[0] || 'there'
+
   return (
     <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="container">
@@ -50,13 +53,7 @@ export default function Navbar() {
           <div className="nav-actions">
             {isAuthenticated ? (
               <div className="customer-nav">
-                <span className="customer-name">Hi, {user?.name?.split(' ')[0] || 'there'}</span>
-                <Link to="/orders" className="btn-ghost" onClick={() => setOpen(false)}>
-                  My Orders
-                </Link>
-                <button type="button" className="btn-ghost" onClick={handleLogout}>
-                  Logout
-                </button>
+                <CustomerMenu name={firstName} onLogout={handleLogout} variant="desktop" />
               </div>
             ) : (
               <div className="customer-nav">
@@ -70,9 +67,7 @@ export default function Navbar() {
             )}
             <div className="nav-mobile-action">
               {isAuthenticated ? (
-                <Link to="/orders" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
-                  My Orders
-                </Link>
+                <CustomerMenu name={firstName} onLogout={handleLogout} variant="mobile" />
               ) : (
                 <Link to="/login" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
                   Sign in
@@ -106,20 +101,11 @@ export default function Navbar() {
               {link.label}
             </NavLink>
           ))}
-          {isAuthenticated ? (
-            <>
-              <NavLink to="/orders" onClick={() => setOpen(false)}>
-                My Orders
-              </NavLink>
-              <button type="button" className="mobile-nav-btn" onClick={handleLogout}>
-                Logout ({user?.name?.split(' ')[0] || 'Account'})
-              </button>
-            </>
-          ) : (
+          {!isAuthenticated ? (
             <NavLink to="/register" onClick={() => setOpen(false)}>
               Create Account
             </NavLink>
-          )}
+          ) : null}
           {/* <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={() => setOpen(false)}>
             {isAdmin ? 'Admin' : 'Admin login'}
           </NavLink> */}

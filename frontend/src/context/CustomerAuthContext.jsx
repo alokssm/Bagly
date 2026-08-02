@@ -67,6 +67,11 @@ export function CustomerAuthProvider({ children }) {
     [applySession],
   )
 
+  const updateProfile = useCallback(
+    async (name) => applySession(await api.updateCustomerProfile(name)),
+    [applySession],
+  )
+
   const logout = useCallback(() => {
     setCustomerToken(null)
     setToken(null)
@@ -83,9 +88,10 @@ export function CustomerAuthProvider({ children }) {
       register,
       login,
       loginWithGoogle,
+      updateProfile,
       logout,
     }),
-    [user, token, loading, register, login, loginWithGoogle, logout],
+    [user, token, loading, register, login, loginWithGoogle, updateProfile, logout],
   )
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>

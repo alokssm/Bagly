@@ -15,6 +15,8 @@ import ProductDetail from './pages/ProductDetail'
 import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import Orders from './pages/Orders'
+import Profile from './pages/Profile'
+import Addresses from './pages/Addresses'
 import About from './pages/About'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -58,6 +60,22 @@ export default function App() {
                   element={
                     <CustomerRoute>
                       <Orders />
+                    </CustomerRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <CustomerRoute>
+                      <Profile />
+                    </CustomerRoute>
+                  }
+                />
+                <Route
+                  path="/addresses"
+                  element={
+                    <CustomerRoute>
+                      <Addresses />
                     </CustomerRoute>
                   }
                 />

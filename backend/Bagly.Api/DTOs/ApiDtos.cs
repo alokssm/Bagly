@@ -35,6 +35,8 @@ public record CustomerGoogleLoginRequest(string IdToken);
 
 public record CustomerAuthResponse(string Token, Guid Id, string Email, string Name, DateTime ExpiresAt);
 
+public record UpdateCustomerProfileRequest(string Name);
+
 public record UpsertCategoryRequest(string Id, string Label, int SortOrder);
 
 public record UpsertProductRequest(

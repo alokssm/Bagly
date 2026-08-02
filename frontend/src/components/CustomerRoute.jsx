@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
 
-/** Gates storefront pages (e.g. /orders) behind a logged-in customer session. */
+/** Gates storefront pages (e.g. /orders, /profile, /addresses) behind a logged-in customer session. */
 export default function CustomerRoute({ children }) {
   const { isAuthenticated, loading } = useCustomerAuth()
   const location = useLocation()
@@ -19,7 +19,7 @@ export default function CustomerRoute({ children }) {
       <Navigate
         to="/login"
         replace
-        state={{ from: location.pathname, message: 'Sign in to view your orders.' }}
+        state={{ from: location.pathname, message: 'Sign in to view your account.' }}
       />
     )
   }

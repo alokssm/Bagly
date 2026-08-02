@@ -200,6 +200,13 @@ export const api = {
 
   customerMe: () => request('/auth/customer/me', { auth: 'customer' }),
 
+  updateCustomerProfile: (name) =>
+    request('/auth/customer/me', {
+      method: 'PATCH',
+      body: { name: String(name || '').trim() },
+      auth: 'customer',
+    }),
+
   getProducts: ({ category, sort } = {}) => {
     const query = new URLSearchParams()
     if (category && category !== 'all') query.set('category', category)
