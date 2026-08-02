@@ -37,6 +37,7 @@ public static class DatabaseBootstrapper
         await EnsureStockQuantityAndAlertsAsync(db, cancellationToken);
         await EnsureShippingAddressesTableAsync(db, cancellationToken);
         await EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken);
+        await EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -52,7 +53,10 @@ public static class DatabaseBootstrapper
                  await TableExistsAsync(db, "PaymentLogs", cancellationToken) &&
                  await ColumnExistsAsync(db, "Orders", "PaymentStatus", cancellationToken)) ||
                 (migrationId.Contains("CustomerUserId", StringComparison.OrdinalIgnoreCase) &&
-                 await ColumnExistsAsync(db, "Orders", "CustomerUserId", cancellationToken));
+                 await ColumnExistsAsync(db, "Orders", "CustomerUserId", cancellationToken)) ||
+                (migrationId.Contains("SchoolBagsCategoryHierarchy", StringComparison.OrdinalIgnoreCase) &&
+                 await ColumnExistsAsync(db, "Categories", "ParentId", cancellationToken) &&
+                 await ColumnExistsAsync(db, "Products", "SubCategoryId", cancellationToken));
 
             if (shouldMark)
             {
@@ -415,6 +419,45 @@ public static class DatabaseBootstrapper
                 CREATE INDEX [IX_Orders_CustomerUserId] ON [dbo].[Orders] ([CustomerUserId]);
             """,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds Categories.IsActive + Categories.ParentId (subcategory hierarchy, e.g. School Bags →
+    /// Boys/Girls/Kids) and Products.SubCategoryId so existing Azure/Render databases pick up the
+    /// School Bags catalog without a full migration.
+    /// </summary>
+    private static async Task EnsureCategoryHierarchyAndSubCategoryColumnsAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "Categories", cancellationToken))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                IF COL_LENGTH('dbo.Categories', 'IsActive') IS NULL
+                    ALTER TABLE [dbo].[Categories] ADD [IsActive] BIT NOT NULL CONSTRAINT [DF_Categories_IsActive] DEFAULT (1);
+
+                IF COL_LENGTH('dbo.Categories', 'ParentId') IS NULL
+                    ALTER TABLE [dbo].[Categories] ADD [ParentId] NVARCHAR(50) NULL;
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Categories_ParentId' AND object_id = OBJECT_ID(N'dbo.Categories'))
+                    CREATE INDEX [IX_Categories_ParentId] ON [dbo].[Categories] ([ParentId]);
+                """,
+                cancellationToken);
+        }
+
+        if (await TableExistsAsync(db, "Products", cancellationToken))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                IF COL_LENGTH('dbo.Products', 'SubCategoryId') IS NULL
+                    ALTER TABLE [dbo].[Products] ADD [SubCategoryId] NVARCHAR(50) NULL;
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_SubCategoryId' AND object_id = OBJECT_ID(N'dbo.Products'))
+                    CREATE INDEX [IX_Products_SubCategoryId] ON [dbo].[Products] ([SubCategoryId]);
+                """,
+                cancellationToken);
+        }
     }
 
     private static async Task<bool> ColumnExistsAsync(

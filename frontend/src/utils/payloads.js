@@ -109,6 +109,7 @@ export function buildUpsertProductPayload(form, { includeId = false } = {}) {
   const payload = {
     name: String(form.name || '').trim(),
     category: String(form.category || '').trim(),
+    subCategoryId: String(form.subCategoryId || '').trim() || null,
     price: Number(form.price),
     compareAt: form.compareAt === '' || form.compareAt == null ? null : Number(form.compareAt),
     colors: colors.length ? colors : ['Default'],
@@ -137,5 +138,7 @@ export function buildUpsertCategoryPayload(form) {
     id: String(form.id || '').trim(),
     label: String(form.label || '').trim(),
     sortOrder: Number(form.sortOrder) || 0,
+    isActive: Boolean(form.isActive),
+    parentId: String(form.parentId || '').trim() || null,
   }
 }

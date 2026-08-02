@@ -17,6 +17,7 @@ public static class ProductMapper
             product.Id,
             product.Name,
             product.Category,
+            product.SubCategoryId,
             product.Price,
             product.CompareAt,
             DeserializeList(product.ColorsJson),
@@ -39,6 +40,7 @@ public static class ProductMapper
             product.Id,
             product.Name,
             product.Category,
+            product.SubCategoryId,
             product.Price,
             product.CompareAt,
             DeserializeList(product.ColorsJson),
@@ -61,6 +63,7 @@ public static class ProductMapper
     {
         product.Name = request.Name.Trim();
         product.Category = request.Category.Trim();
+        product.SubCategoryId = string.IsNullOrWhiteSpace(request.SubCategoryId) ? null : request.SubCategoryId.Trim();
         product.Price = request.Price;
         product.CompareAt = request.CompareAt;
         product.Material = request.Material?.Trim() ?? string.Empty;

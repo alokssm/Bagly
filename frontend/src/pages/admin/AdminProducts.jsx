@@ -81,7 +81,10 @@ export default function AdminProducts() {
                       </div>
                     </div>
                   </td>
-                  <td>{product.category}</td>
+                  <td>
+                    {product.category}
+                    {product.subCategoryId ? <small> / {product.subCategoryId}</small> : null}
+                  </td>
                   <td>{formatPrice(product.price)}</td>
                   <td>
                     <span className={`admin-pill ${product.stockQuantity > 0 ? 'on' : 'off'}`}>

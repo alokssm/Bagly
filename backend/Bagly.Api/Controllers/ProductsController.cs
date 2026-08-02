@@ -13,6 +13,7 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts(
         [FromQuery] string? category,
+        [FromQuery] string? subCategory,
         [FromQuery] string? sort,
         CancellationToken cancellationToken)
     {
@@ -22,6 +23,12 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
             !string.Equals(category, "all", StringComparison.OrdinalIgnoreCase))
         {
             query = query.Where(p => p.Category == category);
+        }
+
+        if (!string.IsNullOrWhiteSpace(subCategory) &&
+            !string.Equals(subCategory, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(p => p.SubCategoryId == subCategory);
         }
 
         var products = await query.ToListAsync(cancellationToken);

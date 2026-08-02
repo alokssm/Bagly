@@ -207,9 +207,10 @@ export const api = {
       auth: 'customer',
     }),
 
-  getProducts: ({ category, sort } = {}) => {
+  getProducts: ({ category, subCategory, sort } = {}) => {
     const query = new URLSearchParams()
     if (category && category !== 'all') query.set('category', category)
+    if (subCategory && subCategory !== 'all') query.set('subCategory', subCategory)
     if (sort && sort !== 'featured') query.set('sort', sort)
     const qs = query.toString()
     return request(`/products${qs ? `?${qs}` : ''}`)

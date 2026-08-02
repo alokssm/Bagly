@@ -28,6 +28,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.Id).HasMaxLength(100);
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.SubCategoryId).HasMaxLength(50);
             entity.Property(x => x.Price).HasColumnType("decimal(18,2)");
             entity.Property(x => x.CompareAt).HasColumnType("decimal(18,2)");
             entity.Property(x => x.Material).HasMaxLength(100);
@@ -40,6 +41,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.GalleryJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.StockQuantity).HasDefaultValue(999);
             entity.HasIndex(x => x.Category);
+            entity.HasIndex(x => x.SubCategoryId);
             entity.HasIndex(x => x.IsActive);
         });
 
@@ -49,6 +51,9 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasMaxLength(50);
             entity.Property(x => x.Label).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.ParentId).HasMaxLength(50);
+            entity.HasIndex(x => x.ParentId);
         });
 
         modelBuilder.Entity<Cart>(entity =>
@@ -100,6 +105,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => x.RazorpayOrderId);
             entity.HasIndex(x => x.PaymentStatus);
+            entity.HasIndex(x => x.CustomerUserId);
             entity.HasMany(x => x.Items)
                 .WithOne(x => x.Order!)
                 .HasForeignKey(x => x.OrderId)

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { buildUpsertCategoryPayload } from '../../utils/payloads'
 
-const emptyForm = { id: '', label: '', sortOrder: 0 }
+const emptyForm = { id: '', label: '', sortOrder: 0, isActive: true, parentId: '' }
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState([])
@@ -40,16 +40,20 @@ export default function AdminCategories() {
       id: category.id,
       label: category.label,
       sortOrder: category.sortOrder ?? 0,
+      isActive: category.isActive !== false,
+      parentId: category.parentId || '',
     })
   }
 
   const onChange = (e) => {
-    const { name, value } = e.target
+    const { name, value, type, checked } = e.target
     setForm((prev) => ({
       ...prev,
-      [name]: name === 'sortOrder' ? Number(value) : value,
+      [name]: type === 'checkbox' ? checked : name === 'sortOrder' ? Number(value) : value,
     }))
   }
+
+  const topLevelCategories = categories.filter((cat) => !cat.parentId && cat.id !== editingId)
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -134,7 +138,25 @@ export default function AdminCategories() {
                 onChange={onChange}
               />
             </div>
+            <div className="form-field">
+              <label htmlFor="cat-parent">Parent category (optional)</label>
+              <select id="cat-parent" name="parentId" value={form.parentId} onChange={onChange}>
+                <option value="">None (top-level category)</option>
+                {topLevelCategories
+                  .filter((cat) => cat.id !== 'all')
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.label}
+                    </option>
+                  ))}
+              </select>
+              <small>Use this to add a subcategory, e.g. Boys/Girls/Kids under School Bags.</small>
+            </div>
           </div>
+          <label className="admin-check full">
+            <input type="checkbox" name="isActive" checked={form.isActive} onChange={onChange} />
+            Active (visible in storefront filters)
+          </label>
           <div className="admin-actions-row">
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add category'}
@@ -154,7 +176,9 @@ export default function AdminCategories() {
               <tr>
                 <th>ID</th>
                 <th>Label</th>
+                <th>Parent</th>
                 <th>Sort</th>
+                <th>Status</th>
                 <th />
               </tr>
             </thead>
@@ -163,7 +187,13 @@ export default function AdminCategories() {
                 <tr key={category.id}>
                   <td>{category.id}</td>
                   <td>{category.label}</td>
+                  <td>{category.parentId || '—'}</td>
                   <td>{category.sortOrder}</td>
+                  <td>
+                    <span className={`admin-pill ${category.isActive ? 'on' : 'off'}`}>
+                      {category.isActive ? 'Active' : 'Hidden'}
+                    </span>
+                  </td>
                   <td className="admin-row-actions">
                     <button type="button" className="btn btn-secondary" onClick={() => startEdit(category)}>
                       Edit

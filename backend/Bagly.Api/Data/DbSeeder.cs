@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Bagly.Api.Mapping;
 using Bagly.Api.Models;
 using Bagly.Api.Options;
 using Bagly.Api.Services;
@@ -12,6 +13,9 @@ public static class DbSeeder
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    private const string SchoolBagsCategoryId = "school-bags";
+    private static readonly string[] LegacyCategoryIds = ["tote", "backpack", "crossbody", "travel", "work"];
 
     public static async Task SeedAsync(BaglyDbContext db, AdminOptions? adminOptions = null)
     {
@@ -34,6 +38,11 @@ public static class DbSeeder
         }
 
         await db.SaveChangesAsync();
+
+        // Always runs (even when categories/products already exist from a prior seed) so School
+        // Bags + its Boys/Girls/Kids subcategories stay active/populated on every deploy, and so
+        // calling POST /api/setup/seed again on a non-empty Azure/Render database still syncs it.
+        await EnsureSchoolBagsCatalogAsync(db);
 
         await SeedAdminUserAsync(db, adminOptions);
 
@@ -208,6 +217,230 @@ public static class DbSeeder
         existing.IsActive = true;
         existing.Role = "Admin";
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures the School Bags catalog (category + Boys/Girls/Kids subcategories + 60 products)
+    /// exists and is active, deactivating legacy categories so the storefront's category filter
+    /// focuses on School Bags. Safe to call repeatedly (e.g. via POST /api/setup/seed) even when
+    /// the database already has products — categories are upserted and products are added only
+    /// if their id doesn't already exist.
+    /// </summary>
+    private static async Task EnsureSchoolBagsCatalogAsync(BaglyDbContext db)
+    {
+        var categories = await db.Categories.ToListAsync();
+        var byId = categories.ToDictionary(c => c.Id, c => c, StringComparer.OrdinalIgnoreCase);
+
+        UpsertCategory(db, byId, SchoolBagsCategoryId, "School Bags", sortOrder: 1, parentId: null);
+        UpsertCategory(db, byId, "boys", "Boys", sortOrder: 2, parentId: SchoolBagsCategoryId);
+        UpsertCategory(db, byId, "girls", "Girls", sortOrder: 3, parentId: SchoolBagsCategoryId);
+        UpsertCategory(db, byId, "kids", "Kids", sortOrder: 4, parentId: SchoolBagsCategoryId);
+
+        // Legacy demo categories are hidden (not deleted) so the storefront's category filter
+        // focuses on School Bags, while existing legacy products remain purchasable via direct link.
+        foreach (var legacyId in LegacyCategoryIds)
+        {
+            if (byId.TryGetValue(legacyId, out var legacy))
+            {
+                legacy.IsActive = false;
+            }
+        }
+
+        if (byId.TryGetValue("all", out var all))
+        {
+            all.IsActive = true;
+        }
+
+        await db.SaveChangesAsync();
+
+        var existingIds = (await db.Products.Select(p => p.Id).ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var newSchoolBagProducts = CreateSchoolBagProducts()
+            .Where(p => !existingIds.Contains(p.Id))
+            .ToList();
+
+        if (newSchoolBagProducts.Count > 0)
+        {
+            db.Products.AddRange(newSchoolBagProducts);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static void UpsertCategory(
+        BaglyDbContext db,
+        Dictionary<string, Category> byId,
+        string id,
+        string label,
+        int sortOrder,
+        string? parentId)
+    {
+        if (byId.TryGetValue(id, out var existing))
+        {
+            existing.Label = label;
+            existing.SortOrder = sortOrder;
+            existing.IsActive = true;
+            existing.ParentId = parentId;
+            return;
+        }
+
+        var category = new Category
+        {
+            Id = id,
+            Label = label,
+            SortOrder = sortOrder,
+            IsActive = true,
+            ParentId = parentId,
+        };
+        db.Categories.Add(category);
+        byId[id] = category;
+    }
+
+    // Verified, product-style Unsplash backpack photos, cycled across the 60 School Bags products
+    // (image + gallery) — reuses the same "pattern" as the original demo seeder above.
+    private static readonly string[] SchoolBagImagePool =
+    [
+        "photo-1774977867285-3c55012e1a56",
+        "photo-1581605405669-fcdf81165afa",
+        "photo-1535982330050-f1c2fb79ff78",
+        "photo-1726726192148-af52008ff663",
+        "photo-1577733975197-3b950ca5cabe",
+        "photo-1622560481156-01fc7e1693e6",
+        "photo-1726726192241-a36ce220c2b3",
+        "photo-1650500426868-27a68714a4a4",
+        "photo-1551974222-1d49f576a2a4",
+        "photo-1765516833058-c322c800fee1",
+        "photo-1504424715129-fa3bcb0b8903",
+        "photo-1553062407-98eeb64c6a62",
+        "photo-1622560480605-d83c853bc5c3",
+        "photo-1594608661623-aa0bd3a69d98",
+        "photo-1495968283540-e1df41995ba6",
+    ];
+
+    private static string SchoolBagImage(int index, int offset) =>
+        $"https://images.unsplash.com/{SchoolBagImagePool[(index + offset) % SchoolBagImagePool.Length]}?auto=format&fit=crop&w=900&q=80";
+
+    private static IEnumerable<Product> CreateSchoolBagProducts()
+    {
+        var boys = GenerateSchoolBagVariant(
+            subCategoryId: "boys",
+            subCategoryLabel: "boys",
+            imageOffset: 0,
+            colorPool: ["Navy Blue", "Charcoal Grey", "Racing Red", "Forest Green", "Jet Black", "Steel Blue", "Burnt Orange"],
+            featurePool:
+            [
+                "Padded laptop/tablet sleeve", "Reinforced bottom panel", "Adjustable padded shoulder straps",
+                "Side mesh water bottle pockets", "Multiple zip compartments", "Breathable back padding",
+            ],
+            names:
+            [
+                "Turbo Blast Backpack", "Galaxy Racer School Bag", "Thunder Bolt Backpack", "Cricket Champion Bag",
+                "Robo Warrior Backpack", "Dino Explorer School Bag", "Football Star Backpack", "Space Mission Bag",
+                "Jungle Safari Backpack", "Superhero Squad Bag", "Racing Stripe Backpack", "Camo Commando Bag",
+                "Shark Attack Backpack", "Pirate Adventure Bag", "Dragon Force Backpack", "Skate Park Bag",
+                "Ninja Strike Backpack", "Rocket Ship School Bag", "Wild Tiger Backpack", "Champion League Bag",
+            ]);
+
+        var girls = GenerateSchoolBagVariant(
+            subCategoryId: "girls",
+            subCategoryLabel: "girls",
+            imageOffset: 5,
+            colorPool: ["Blush Pink", "Lavender", "Lilac Purple", "Peach", "Rose Gold", "Mint Green", "Soft White"],
+            featurePool:
+            [
+                "Cute front pocket detailing", "Adjustable padded shoulder straps", "Roomy main compartment",
+                "Side mesh water bottle pockets", "Sparkle print finish", "Breathable back padding",
+            ],
+            names:
+            [
+                "Unicorn Dream Backpack", "Princess Sparkle School Bag", "Rainbow Magic Backpack", "Butterfly Garden Bag",
+                "Floral Charm Backpack", "Mermaid Tales School Bag", "Sweet Blossom Bag", "Star Dazzle Backpack",
+                "Fairy Tale School Bag", "Polka Dot Petal Bag", "Glitter Bow Backpack", "Cherry Blossom Bag",
+                "Ballerina Dream Backpack", "Candy Pop School Bag", "Heart & Hues Bag", "Sunshine Daisy Backpack",
+                "Kitty Whiskers Bag", "Pastel Cloud Backpack", "Bloom & Sparkle School Bag", "Moonlight Fairy Bag",
+            ]);
+
+        var kids = GenerateSchoolBagVariant(
+            subCategoryId: "kids",
+            subCategoryLabel: "little kids",
+            imageOffset: 10,
+            colorPool: ["Sunshine Yellow", "Sky Blue", "Mint Green", "Coral", "Lilac", "Cream", "Turquoise"],
+            featurePool:
+            [
+                "Lightweight & easy to carry", "Wipe-clean lining", "Chest strap for extra stability",
+                "Fun front pocket for small items", "Rounded safe-edge design", "Breathable back padding",
+            ],
+            names:
+            [
+                "Little Explorer Mini Backpack", "Cartoon Buddy School Bag", "Puppy Pal Backpack", "Panda Cub School Bag",
+                "Bunny Hop Backpack", "Choo Choo Train Bag", "Happy Farm Backpack", "ABC Learner Bag",
+                "Teddy Bear Backpack", "Jungle Friends School Bag", "Rocket Tot Backpack", "Cloud Nine Mini Bag",
+                "Baby Dino Backpack", "Fun Friends School Bag", "Playtime Pals Backpack", "Little Star Bag",
+                "Kindergarten Buddy Backpack", "Chirpy Bird School Bag", "Sunny Day Mini Backpack", "First Day Hero Bag",
+            ]);
+
+        return boys.Concat(girls).Concat(kids);
+    }
+
+    private static IEnumerable<Product> GenerateSchoolBagVariant(
+        string subCategoryId,
+        string subCategoryLabel,
+        int imageOffset,
+        string[] colorPool,
+        string[] featurePool,
+        string[] names)
+    {
+        var materials = new[] { "Waterproof Polyester", "Ripstop Nylon", "Durable Canvas", "Polyester Blend", "Oxford Fabric" };
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            var name = names[i];
+            var id = $"{subCategoryId}-{ProductMapper.Slugify(name)}";
+            var material = materials[i % materials.Length];
+            var primaryColor = colorPool[i % colorPool.Length];
+            var secondaryColor = colorPool[(i + 2) % colorPool.Length];
+            var price = Math.Round((799m + i * (4999m - 799m) / (names.Length - 1)) / 10m) * 10m;
+            var compareAt = i % 4 == 0 ? Math.Round(price * 1.18m / 10m) * 10m : (decimal?)null;
+            var stock = 25 + (i * 11) % 90;
+            var rating = Math.Round(4.0 + (i % 10) * 0.09, 1);
+            var reviews = 35 + (i * 13) % 260;
+            var badge = i % 6 == 0 ? "Bestseller" : i % 6 == 3 ? "New" : null;
+            var image = SchoolBagImage(i, imageOffset);
+            var gallery = new[] { image, SchoolBagImage(i + 1, imageOffset) };
+            var features = new[]
+            {
+                featurePool[i % featurePool.Length],
+                featurePool[(i + 1) % featurePool.Length],
+                featurePool[(i + 2) % featurePool.Length],
+                featurePool[(i + 3) % featurePool.Length],
+            };
+
+            yield return new Product
+            {
+                Id = id,
+                Name = name,
+                Category = SchoolBagsCategoryId,
+                SubCategoryId = subCategoryId,
+                Price = price,
+                CompareAt = compareAt,
+                Material = material,
+                Rating = rating,
+                Reviews = reviews,
+                Badge = badge,
+                ShortDescription = $"{material} school bag in {primaryColor.ToLowerInvariant()}, made for {subCategoryLabel}.",
+                Description =
+                    $"{name} is a durable {material.ToLowerInvariant()} school bag in {primaryColor.ToLowerInvariant()} " +
+                    $"with {secondaryColor.ToLowerInvariant()} accents. Roomy compartments, comfortable padded straps, " +
+                    $"and everyday-tough construction make it a reliable pick for {subCategoryLabel} heading to school.",
+                Image = image,
+                ColorsJson = JsonSerializer.Serialize(new[] { primaryColor, secondaryColor }, JsonOptions),
+                FeaturesJson = JsonSerializer.Serialize(features, JsonOptions),
+                GalleryJson = JsonSerializer.Serialize(gallery, JsonOptions),
+                IsActive = true,
+                StockQuantity = stock,
+                CreatedAt = DateTime.UtcNow,
+            };
+        }
     }
 
     private static IEnumerable<Product> CreateProducts() =>

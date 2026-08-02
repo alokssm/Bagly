@@ -6,11 +6,15 @@ import { api } from '../api/client'
 export default function Shop() {
   const [params, setParams] = useSearchParams()
   const activeCategory = params.get('category') || 'all'
+  const activeSubCategory = params.get('subCategory') || 'all'
   const [sort, setSort] = useState('featured')
   const [categories, setCategories] = useState([{ id: 'all', label: 'All bags' }])
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const topLevelCategories = categories.filter((cat) => !cat.parentId)
+  const subCategories = categories.filter((cat) => cat.parentId === activeCategory)
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +45,7 @@ export default function Shop() {
       try {
         const data = await api.getProducts({
           category: activeCategory,
+          subCategory: activeSubCategory,
           sort,
         })
         if (!cancelled) setProducts(data)
@@ -58,12 +63,21 @@ export default function Shop() {
     return () => {
       cancelled = true
     }
-  }, [activeCategory, sort])
+  }, [activeCategory, activeSubCategory, sort])
 
   const setCategory = (id) => {
     const next = new URLSearchParams(params)
     if (id === 'all') next.delete('category')
     else next.set('category', id)
+    // Switching the top-level category clears any subcategory picked for the previous one.
+    next.delete('subCategory')
+    setParams(next)
+  }
+
+  const setSubCategory = (id) => {
+    const next = new URLSearchParams(params)
+    if (id === 'all') next.delete('subCategory')
+    else next.set('subCategory', id)
     setParams(next)
   }
 
@@ -77,7 +91,7 @@ export default function Shop() {
         </div>
 
         <div className="filters" role="tablist" aria-label="Categories">
-          {categories.map((cat) => (
+          {topLevelCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
@@ -88,6 +102,28 @@ export default function Shop() {
             </button>
           ))}
         </div>
+
+        {subCategories.length ? (
+          <div className="filters filters-sub" role="tablist" aria-label="Subcategories">
+            <button
+              type="button"
+              className={`filter-chip filter-chip-sub ${activeSubCategory === 'all' ? 'active' : ''}`}
+              onClick={() => setSubCategory('all')}
+            >
+              All
+            </button>
+            {subCategories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={`filter-chip filter-chip-sub ${activeSubCategory === cat.id ? 'active' : ''}`}
+                onClick={() => setSubCategory(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="shop-toolbar">
           <p>

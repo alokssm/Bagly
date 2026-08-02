@@ -52,6 +52,12 @@ public class AdminProductsController(
             return BadRequest(new { message = $"Category '{request.Category}' does not exist." });
         }
 
+        if (!string.IsNullOrWhiteSpace(request.SubCategoryId) &&
+            !await db.Categories.AnyAsync(c => c.Id == request.SubCategoryId, cancellationToken))
+        {
+            return BadRequest(new { message = $"Subcategory '{request.SubCategoryId}' does not exist." });
+        }
+
         var id = string.IsNullOrWhiteSpace(request.Id)
             ? ProductMapper.Slugify(request.Name)
             : ProductMapper.Slugify(request.Id);
@@ -106,6 +112,12 @@ public class AdminProductsController(
         if (!await db.Categories.AnyAsync(c => c.Id == request.Category && c.Id != "all", cancellationToken))
         {
             return BadRequest(new { message = $"Category '{request.Category}' does not exist." });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SubCategoryId) &&
+            !await db.Categories.AnyAsync(c => c.Id == request.SubCategoryId, cancellationToken))
+        {
+            return BadRequest(new { message = $"Subcategory '{request.SubCategoryId}' does not exist." });
         }
 
         var before = new { product.Name, product.Category, product.Price, product.IsActive };

@@ -15,7 +15,7 @@ export default function Home() {
       setLoading(true)
       setError('')
       try {
-        const products = await api.getProducts()
+        const products = await api.getProducts({ category: 'school-bags' })
         if (cancelled) return
         const featured = products.filter((p) => p.badge).slice(0, 3)
         const rest = products.filter((p) => !p.badge).slice(0, 3)
@@ -46,9 +46,10 @@ export default function Home() {
           <p className="hero-brand">
             Bag<em>ly</em>
           </p>
-          <h1 className="hero-headline">Bags built for the life you carry.</h1>
+          <h1 className="hero-headline">School bags built for every school day.</h1>
           <p className="hero-copy">
-            Premium totes, packs, and travel bags — thoughtfully made for daily rhythm and long journeys.
+            Durable, comfortable backpacks for Boys, Girls, and Kids — thoughtfully made for the daily walk to
+            school and everything in between.
           </p>
           <div className="hero-ctas">
             <Link to="/shop" className="btn btn-brass">
@@ -63,18 +64,18 @@ export default function Home() {
 
       <div className="collections" aria-hidden="true">
         <div className="marquee">
-          <span>Leather totes</span>
-          <span>Daypacks</span>
-          <span>Weekenders</span>
-          <span>Work briefs</span>
-          <span>Crossbody</span>
-          <span>Travel ready</span>
-          <span>Leather totes</span>
-          <span>Daypacks</span>
-          <span>Weekenders</span>
-          <span>Work briefs</span>
-          <span>Crossbody</span>
-          <span>Travel ready</span>
+          <span>School Bags</span>
+          <span>Boys</span>
+          <span>Girls</span>
+          <span>Kids</span>
+          <span>Back to school</span>
+          <span>Study essentials</span>
+          <span>School Bags</span>
+          <span>Boys</span>
+          <span>Girls</span>
+          <span>Kids</span>
+          <span>Back to school</span>
+          <span>Study essentials</span>
         </div>
       </div>
 
@@ -83,7 +84,7 @@ export default function Home() {
           <div className="section-head">
             <div>
               <span className="eyebrow">Featured</span>
-              <h2>Carry well. Travel light.</h2>
+              <h2>School Bags for Boys, Girls &amp; Kids</h2>
             </div>
           </div>
 

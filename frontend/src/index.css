@@ -790,6 +790,24 @@ p {
   color: #fff;
 }
 
+.filters-sub {
+  margin-top: -1rem;
+  margin-bottom: 1.75rem;
+}
+
+.filter-chip-sub {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  background: transparent;
+}
+
+.filter-chip-sub:hover,
+.filter-chip-sub.active {
+  background: var(--brass, var(--forest));
+  border-color: var(--brass, var(--forest));
+  color: #fff;
+}
+
 .shop-toolbar {
   display: flex;
   flex-wrap: wrap;

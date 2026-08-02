@@ -7,6 +7,7 @@ const emptyForm = {
   id: '',
   name: '',
   category: '',
+  subCategoryId: '',
   price: '',
   compareAt: '',
   colors: '',
@@ -28,6 +29,7 @@ function toForm(product) {
     id: product.id || '',
     name: product.name || '',
     category: product.category || '',
+    subCategoryId: product.subCategoryId || '',
     price: String(product.price ?? ''),
     compareAt: product.compareAt != null ? String(product.compareAt) : '',
     colors: (product.colors || []).join(', '),
@@ -70,8 +72,11 @@ export default function AdminProductForm() {
         if (isEdit) {
           const product = await api.adminGetProduct(id)
           if (!cancelled) setForm(toForm(product))
-        } else if (usable[0] && !cancelled) {
-          setForm((prev) => ({ ...prev, category: usable[0].id }))
+        } else {
+          const defaultCategory = usable.find((c) => !c.parentId)
+          if (defaultCategory && !cancelled) {
+            setForm((prev) => ({ ...prev, category: defaultCategory.id }))
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Unable to load form data.')
@@ -88,8 +93,15 @@ export default function AdminProductForm() {
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target
-    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+      // Switching the top-level category invalidates any previously picked subcategory.
+      ...(name === 'category' ? { subCategoryId: '' } : {}),
+    }))
   }
+
+  const subCategoryOptions = categories.filter((cat) => cat.parentId === form.category)
 
   const handleImageUpload = async (e, target) => {
     const file = e.target.files?.[0]
@@ -185,13 +197,29 @@ export default function AdminProductForm() {
             <label htmlFor="category">Category</label>
             <select id="category" name="category" required value={form.category} onChange={onChange}>
               <option value="">Select category</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label}
-                </option>
-              ))}
+              {categories
+                .filter((cat) => !cat.parentId)
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
             </select>
           </div>
+
+          {subCategoryOptions.length ? (
+            <div className="form-field">
+              <label htmlFor="subCategoryId">Subcategory</label>
+              <select id="subCategoryId" name="subCategoryId" value={form.subCategoryId} onChange={onChange}>
+                <option value="">None</option>
+                {subCategoryOptions.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="form-field">
             <label htmlFor="price">Price (₹)</label>

@@ -4,6 +4,7 @@ public record ProductDto(
     string Id,
     string Name,
     string Category,
+    string? SubCategoryId,
     decimal Price,
     decimal? CompareAt,
     IReadOnlyList<string> Colors,
@@ -21,7 +22,13 @@ public record ProductDto(
     bool InStock
 );
 
-public record CategoryDto(string Id, string Label, int SortOrder = 0);
+public record CategoryDto(
+    string Id,
+    string Label,
+    int SortOrder = 0,
+    bool IsActive = true,
+    string? ParentId = null
+);
 
 public record LoginRequest(string Email, string Password);
 
@@ -37,7 +44,13 @@ public record CustomerAuthResponse(string Token, Guid Id, string Email, string N
 
 public record UpdateCustomerProfileRequest(string Name);
 
-public record UpsertCategoryRequest(string Id, string Label, int SortOrder);
+public record UpsertCategoryRequest(
+    string Id,
+    string Label,
+    int SortOrder,
+    bool IsActive = true,
+    string? ParentId = null
+);
 
 public record UpsertProductRequest(
     string? Id,
@@ -56,13 +69,15 @@ public record UpsertProductRequest(
     string Image,
     IReadOnlyList<string> Gallery,
     bool IsActive = true,
-    int StockQuantity = 999
+    int StockQuantity = 999,
+    string? SubCategoryId = null
 );
 
 public record AdminProductDto(
     string Id,
     string Name,
     string Category,
+    string? SubCategoryId,
     decimal Price,
     decimal? CompareAt,
     IReadOnlyList<string> Colors,

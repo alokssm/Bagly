@@ -7,6 +7,9 @@ public class Product
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+
+    /// <summary>Optional subcategory id (Category.Id of a category whose ParentId == Category), e.g. "boys".</summary>
+    public string? SubCategoryId { get; set; }
     public decimal Price { get; set; }
     public decimal? CompareAt { get; set; }
     public string Material { get; set; } = string.Empty;
