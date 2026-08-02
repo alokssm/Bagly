@@ -77,11 +77,24 @@ export default function Navbar() {
             <Link
               to="/cart"
               className="cart-btn"
-              aria-label={itemCount > 0 ? `Cart with ${itemCount} items` : 'Cart'}
+              aria-label={`Cart, ${itemCount} item${itemCount === 1 ? '' : 's'}`}
               onClick={() => setOpen(false)}
             >
-              Cart
-              {itemCount > 0 && <span className="cart-count">{itemCount}</span>}
+              <span className="cart-icon" aria-hidden="true">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7" />
+                  <path d="M5 7h14l-1.2 13H6.2L5 7z" />
+                </svg>
+              </span>
+              <span className="cart-count">{itemCount}</span>
             </Link>
             <button
               type="button"

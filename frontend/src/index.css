@@ -341,8 +341,10 @@ p {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.9rem;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--forest);
@@ -354,18 +356,35 @@ p {
   background: #fff;
 }
 
-.cart-count {
-  min-width: 1.35rem;
-  height: 1.35rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: var(--forest);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
+.cart-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.cart-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.cart-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--forest);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(18, 40, 30, 0.15);
 }
 
 .menu-toggle {
