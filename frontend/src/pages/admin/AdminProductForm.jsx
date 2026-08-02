@@ -64,9 +64,11 @@ export default function AdminProductForm() {
 
     async function load() {
       try {
-        const cats = await api.adminGetCategories()
+        // Category counts are small in practice; pull the max page so every category is available
+        // for the dropdowns below regardless of the admin categories table's own pagination.
+        const catsResult = await api.adminGetCategories({ pageSize: 100 })
         if (cancelled) return
-        const usable = cats.filter((c) => c.id !== 'all')
+        const usable = (catsResult.items || []).filter((c) => c.id !== 'all')
         setCategories(usable)
 
         if (isEdit) {

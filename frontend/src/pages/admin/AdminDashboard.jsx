@@ -11,15 +11,17 @@ export default function AdminDashboard() {
 
     async function load() {
       try {
-        const [products, categories] = await Promise.all([
-          api.adminGetProducts(),
-          api.adminGetCategories(),
+        // Lightweight count-only queries — avoids pulling the full (360+) product/category lists
+        // just to display totals on the dashboard.
+        const [productStats, categoriesResult] = await Promise.all([
+          api.adminGetProductStats(),
+          api.adminGetCategories({ page: 1, pageSize: 1 }),
         ])
         if (cancelled) return
         setStats({
-          products: products.length,
-          categories: categories.length,
-          active: products.filter((p) => p.isActive).length,
+          products: productStats.totalCount,
+          categories: categoriesResult.totalCount,
+          active: productStats.activeCount,
         })
       } catch (err) {
         if (!cancelled) setError(err.message || 'Unable to load dashboard.')

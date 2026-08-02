@@ -3,6 +3,7 @@ using Bagly.Api.DTOs;
 using Bagly.Api.Extensions;
 using Bagly.Api.Mapping;
 using Bagly.Api.Models;
+using Bagly.Api.Models.Dtos;
 using Bagly.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,15 +16,56 @@ namespace Bagly.Api.Controllers;
 [Route("api/admin/categories")]
 public class AdminCategoriesController(BaglyDbContext db, IAuditLogService auditLog) : ControllerBase
 {
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 100;
+
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResult<AdminCategoryDto>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
-        var categories = await db.Categories.AsNoTracking()
+        (page, pageSize) = NormalizePaging(page, pageSize);
+
+        var query = db.Categories.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(c => c.Label.Contains(term) || c.Id.Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        var pageItems = await query
             .OrderBy(c => c.SortOrder)
-            .Select(c => new CategoryDto(c.Id, c.Label, c.SortOrder, c.IsActive, c.ParentId))
+            .ThenBy(c => c.Label)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new { c.Id, c.Label, c.SortOrder, c.IsActive, c.ParentId })
             .ToListAsync(cancellationToken);
 
-        return Ok(categories);
+        // Batch-resolve parent labels in one extra query instead of per-row lookups (no N+1).
+        var parentIds = pageItems.Where(c => c.ParentId != null).Select(c => c.ParentId!).Distinct().ToList();
+        var parentLabels = parentIds.Count == 0
+            ? new Dictionary<string, string>()
+            : await db.Categories.AsNoTracking()
+                .Where(c => parentIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Label, cancellationToken);
+
+        var items = pageItems
+            .Select(c => new AdminCategoryDto(
+                c.Id,
+                c.Label,
+                c.SortOrder,
+                c.IsActive,
+                c.ParentId,
+                c.ParentId != null && parentLabels.TryGetValue(c.ParentId, out var parentLabel) ? parentLabel : null))
+            .ToList();
+
+        return Ok(new PagedResult<AdminCategoryDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpPost]
@@ -182,5 +224,13 @@ public class AdminCategoriesController(BaglyDbContext db, IAuditLogService audit
         if (string.IsNullOrWhiteSpace(request.Id)) return "Id is required.";
         if (string.IsNullOrWhiteSpace(request.Label)) return "Label is required.";
         return null;
+    }
+
+    private static (int Page, int PageSize) NormalizePaging(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = DefaultPageSize;
+        if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+        return (page, pageSize);
     }
 }

@@ -96,6 +96,32 @@ public record AdminProductDto(
     DateTime CreatedAt
 );
 
+/// <summary>Lean row shape for the admin products list/table — avoids shipping gallery/features/colors JSON for every row.</summary>
+public record AdminProductListItemDto(
+    string Id,
+    string Name,
+    string Category,
+    string? SubCategoryId,
+    decimal Price,
+    int StockQuantity,
+    string Image,
+    bool IsActive,
+    bool IsAvailable,
+    DateTime CreatedAt
+);
+
+public record ProductStatsDto(int TotalCount, int ActiveCount);
+
+/// <summary>Admin categories list row — adds the parent's label so the table doesn't need a lookup.</summary>
+public record AdminCategoryDto(
+    string Id,
+    string Label,
+    int SortOrder,
+    bool IsActive,
+    string? ParentId,
+    string? ParentLabel
+);
+
 public record AddCartItemRequest(string ProductId, string? Color, int Quantity = 1);
 
 public record UpdateCartItemRequest(int Quantity);

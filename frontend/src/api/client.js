@@ -301,7 +301,15 @@ export const api = {
       auth: 'customer',
     }),
 
-  adminGetProducts: () => request('/admin/products', { auth: true }),
+  adminGetProducts: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/products${query ? `?${query}` : ''}`, { auth: true })
+  },
+  adminGetProductStats: () => request('/admin/products/stats', { auth: true }),
   adminGetProduct: (id) => request(`/admin/products/${encodeURIComponent(id)}`, { auth: true }),
   adminCreateProduct: (payload) =>
     request('/admin/products', { method: 'POST', body: payload, auth: true }),
@@ -317,7 +325,14 @@ export const api = {
   /** Uploads an image file to Cloudinary via the backend and returns { url }. */
   adminUploadImage: (file) => requestUpload('/admin/uploads/image', file),
 
-  adminGetCategories: () => request('/admin/categories', { auth: true }),
+  adminGetCategories: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/categories${query ? `?${query}` : ''}`, { auth: true })
+  },
   adminCreateCategory: (payload) =>
     request('/admin/categories', { method: 'POST', body: payload, auth: true }),
   adminUpdateCategory: (id, payload) =>

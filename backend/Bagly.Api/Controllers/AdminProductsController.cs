@@ -3,6 +3,7 @@ using Bagly.Api.DTOs;
 using Bagly.Api.Extensions;
 using Bagly.Api.Mapping;
 using Bagly.Api.Models;
+using Bagly.Api.Models.Dtos;
 using Bagly.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,14 +19,67 @@ public class AdminProductsController(
     IAuditLogService auditLog,
     IStockAlertNotificationDispatcher stockAlertDispatcher) : ControllerBase
 {
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 100;
+
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<AdminProductDto>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResult<AdminProductListItemDto>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? search = null,
+        [FromQuery] string? category = null,
+        [FromQuery] string? subCategory = null,
+        CancellationToken cancellationToken = default)
     {
-        var products = await db.Products.AsNoTracking()
+        (page, pageSize) = NormalizePaging(page, pageSize);
+
+        var query = db.Products.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(category))
+            query = query.Where(p => p.Category == category.Trim());
+
+        if (!string.IsNullOrWhiteSpace(subCategory))
+            query = query.Where(p => p.SubCategoryId == subCategory.Trim());
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(p =>
+                p.Name.Contains(term) ||
+                p.Id.Contains(term) ||
+                db.Categories.Any(c => c.Id == p.Category && c.Label.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        var items = await query
             .OrderByDescending(p => p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new AdminProductListItemDto(
+                p.Id,
+                p.Name,
+                p.Category,
+                p.SubCategoryId,
+                p.Price,
+                p.StockQuantity,
+                p.Image,
+                p.IsActive,
+                p.IsActive && p.StockQuantity > 0,
+                p.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        return Ok(products.Select(ProductMapper.ToAdminDto));
+        return Ok(new PagedResult<AdminProductListItemDto>(items, page, pageSize, totalCount, totalPages));
+    }
+
+    [HttpGet("stats")]
+    public async Task<ActionResult<ProductStatsDto>> GetStats(CancellationToken cancellationToken)
+    {
+        var totalCount = await db.Products.CountAsync(cancellationToken);
+        var activeCount = await db.Products.CountAsync(p => p.IsActive && p.StockQuantity > 0, cancellationToken);
+        return Ok(new ProductStatsDto(totalCount, activeCount));
     }
 
     [HttpGet("{id}")]
@@ -183,5 +237,13 @@ public class AdminProductsController(
         if (request.StockQuantity < 0) return "Stock quantity must be zero or greater.";
         if (string.IsNullOrWhiteSpace(request.Image)) return "Image URL is required.";
         return null;
+    }
+
+    private static (int Page, int PageSize) NormalizePaging(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = DefaultPageSize;
+        if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+        return (page, pageSize);
     }
 }
