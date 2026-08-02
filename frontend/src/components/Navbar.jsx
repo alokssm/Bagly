@@ -90,8 +90,11 @@ export default function Navbar() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7" />
-                  <path d="M5 7h14l-1.2 13H6.2L5 7z" />
+                  <path d="M3 4h6.5" />
+                  <path d="M6 4v4.5" />
+                  <path d="M6 8.5h13l-1.3 10.5H7.3L6 8.5z" />
+                  <circle cx="9" cy="20.5" r="1.5" />
+                  <circle cx="17" cy="20.5" r="1.5" />
                 </svg>
               </span>
               <span className="cart-count">{itemCount}</span>
