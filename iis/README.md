@@ -72,7 +72,9 @@ Customer login/register support Google sign-in via Google Identity Services (GIS
 3. Under **Authorized JavaScript origins**, add:
    - `http://localhost:8080` (local IIS storefront)
    - `http://localhost:5173` (Vite dev server)
-   - `https://bagly-one.vercel.app` (production frontend — adjust to your actual Vercel URL)
+   - `https://www.bagly.co.in` (production custom domain)
+   - `https://bagly.co.in` (apex, if used)
+   - `https://bagly-one.vercel.app` (Vercel preview/production URL)
 4. **Authorized redirect URIs** are not needed — GIS uses the One Tap / credential button flow (returns an ID token directly, no redirect).
 5. Copy the generated **Client ID** (looks like `xxxxxxxx-xxxx.apps.googleusercontent.com`).
 6. Set it in **both**:

@@ -33,10 +33,16 @@ services:
         value: INR
       - key: Razorpay__UsdToInrRate
         value: "83"
+      # Render env vars override appsettings.json. Set all three origins in the dashboard
+      # (see deploy/STEP1-RENDER.md). Defaults below apply only on first Blueprint deploy.
       - key: Cors__AllowedOrigins__0
-        sync: false
+        value: https://www.bagly.co.in
+      - key: Cors__AllowedOrigins__1
+        value: https://bagly.co.in
+      - key: Cors__AllowedOrigins__2
+        value: https://bagly-one.vercel.app
       - key: Storefront__BaseUrl
-        sync: false
+        value: https://www.bagly.co.in
       - key: Email__Enabled
         value: "true"
       - key: Email__Provider

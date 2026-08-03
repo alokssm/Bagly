@@ -5,6 +5,6 @@ public class StorefrontOptions
 {
     public const string SectionName = "Storefront";
 
-    /// <summary>e.g. https://bagly-one.vercel.app. Falls back to the first Cors:AllowedOrigins entry when unset.</summary>
+    /// <summary>e.g. https://www.bagly.co.in. Falls back to the first Cors:AllowedOrigins entry when unset.</summary>
     public string? BaseUrl { get; set; }
 }

@@ -79,8 +79,10 @@ Set these **before** or right after first deploy:
 | `Razorpay__KeySecret` | your test secret |
 | `Razorpay__Currency` | `INR` |
 | `Razorpay__UsdToInrRate` | `83` |
-| `Cors__AllowedOrigins__0` | your future Vercel URL (Step 2), e.g. `https://bagly.vercel.app` |
-| `Storefront__BaseUrl` | optional; storefront URL used for product links in restock alert emails, e.g. `https://bagly.vercel.app`. Falls back to `Cors__AllowedOrigins__0` if unset. |
+| `Cors__AllowedOrigins__0` | primary storefront origin, e.g. `https://www.bagly.co.in` |
+| `Cors__AllowedOrigins__1` | apex domain if used, e.g. `https://bagly.co.in` |
+| `Cors__AllowedOrigins__2` | legacy/preview host, e.g. `https://bagly-one.vercel.app` |
+| `Storefront__BaseUrl` | storefront URL for product links in restock alert emails, e.g. `https://www.bagly.co.in`. Falls back to `Cors__AllowedOrigins__0` if unset. |
 | `Email__Enabled` | `true` |
 | `Email__Provider` | `Resend` on Render **free** tier (SMTP ports blocked); `SendGrid` or `Smtp` also supported |
 | `Email__ResendApiKey` | Resend API key (`re_xxx`) — **mark Secret**; uses HTTPS so it works on Render free |
@@ -98,6 +100,14 @@ Set these **before** or right after first deploy:
 | `Cloudinary__ApiSecret` | Cloudinary API Secret — **mark Secret** |
 
 Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders.
+
+> **CORS on Render:** Environment variables **override** `appsettings.json`. If you only set `Cors__AllowedOrigins__0`, that becomes the sole allowed origin — you must set `__0`, `__1`, `__2` explicitly for each host. After changing CORS env vars, **Manual Deploy** (or push to `main`) and verify with:
+>
+> ```powershell
+> curl.exe -s -i "https://bagly.onrender.com/api/health" -H "Origin: https://www.bagly.co.in"
+> ```
+>
+> Response must include `access-control-allow-origin: https://www.bagly.co.in`.
 
 > **Render free tier blocks outbound SMTP** on ports 25, 465, and 587. Use an HTTPS email API instead: **Resend** (recommended) or SendGrid.
 

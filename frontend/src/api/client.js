@@ -36,6 +36,25 @@ function getApiBase() {
   return resolveApiBase()
 }
 
+function isLocalDevHost() {
+  if (typeof window === 'undefined' || !window.location?.hostname) return false
+  const host = window.location.hostname
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === 'bagly.local' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+  )
+}
+
+function networkErrorMessage(apiBase) {
+  if (isLocalDevHost()) {
+    return `Cannot reach Bagly API at ${apiBase}. Is Bagly.Api running on IIS port 8081?`
+  }
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'this site'
+  return `Cannot reach Bagly API at ${apiBase}. The API may be down or CORS may not allow origin ${origin}.`
+}
+
 /**
  * Derives the SignalR hub base URL from the API base.
  * - Absolute (e.g. https://x.com/api) → https://x.com/hubs
@@ -101,7 +120,7 @@ async function request(path, options = {}) {
       ...rest,
     })
   } catch {
-    throw new Error(`Cannot reach Bagly API at ${apiBase}. Is Bagly.Api running on IIS port 8081?`)
+    throw new Error(networkErrorMessage(apiBase))
   }
 
   if (!response.ok) {
@@ -145,7 +164,7 @@ async function requestUpload(path, file) {
       body: formData,
     })
   } catch {
-    throw new Error(`Cannot reach Bagly API at ${apiBase}. Is Bagly.Api running?`)
+    throw new Error(networkErrorMessage(apiBase))
   }
 
   if (!response.ok) {

@@ -42,12 +42,38 @@ Test:
 
 ---
 
-## C) Optional: custom CORS origin on Render
+## C) Custom domain (bagly.co.in)
 
-CORS already allows `*.vercel.app`.  
-Optional: on Render env add:
+Production storefront: **https://www.bagly.co.in/** (Vercel custom domain).
 
-`Cors__AllowedOrigins__0` = `https://YOUR-APP.vercel.app`
+| Vercel env | Value |
+|------------|--------|
+| `VITE_API_URL` | `https://bagly.onrender.com/api` (unchanged) |
+| `VITE_GOOGLE_CLIENT_ID` | same Google OAuth Web Client ID as Render |
+
+**Render → Environment** (required — env overrides appsettings; set all three):
+
+```
+Cors__AllowedOrigins__0=https://www.bagly.co.in
+Cors__AllowedOrigins__1=https://bagly.co.in
+Cors__AllowedOrigins__2=https://bagly-one.vercel.app
+Storefront__BaseUrl=https://www.bagly.co.in
+```
+
+Redeploy the API after saving. Verify CORS:
+
+```powershell
+curl.exe -s -i "https://bagly.onrender.com/api/health" -H "Origin: https://www.bagly.co.in"
+```
+
+Look for `access-control-allow-origin: https://www.bagly.co.in`.
+
+**Google Cloud Console** → OAuth client → **Authorized JavaScript origins** — add:
+
+- `https://www.bagly.co.in`
+- `https://bagly.co.in` (if apex redirects or is used)
+
+CORS also allows `*.vercel.app` automatically in code, but custom domains must be listed in Render env vars above.
 
 ---
 
