@@ -25,6 +25,8 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
 import AdminProductForm from './pages/admin/AdminProductForm'
 import AdminCategories from './pages/admin/AdminCategories'
+import AdminOrders from './pages/admin/AdminOrders'
+import AdminAnalytics from './pages/admin/AdminAnalytics'
 import AdminReports from './pages/admin/AdminReports'
 
 function StoreLayout() {
@@ -98,6 +100,8 @@ export default function App() {
                 <Route path="products/new" element={<AdminProductForm />} />
                 <Route path="products/:id/edit" element={<AdminProductForm />} />
                 <Route path="categories" element={<AdminCategories />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="reports" element={<AdminReports />} />
               </Route>
 

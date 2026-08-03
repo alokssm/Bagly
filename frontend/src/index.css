@@ -2229,6 +2229,59 @@ p {
   color: var(--forest);
 }
 
+.admin-panel {
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+.admin-panel h2 {
+  font-size: 1.3rem;
+  color: var(--forest);
+}
+
+.admin-stats-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.analytics-bars {
+  display: grid;
+  gap: 0.65rem;
+}
+.analytics-bar-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr 3rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+.analytics-bar-label {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.analytics-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(27, 61, 47, 0.08);
+  overflow: hidden;
+}
+.analytics-bar-track-sm {
+  height: 6px;
+  margin-top: 0.35rem;
+  max-width: 12rem;
+}
+.analytics-bar-fill {
+  height: 100%;
+  background: var(--brass);
+  border-radius: 999px;
+}
+.analytics-bar-value {
+  text-align: right;
+  font-weight: 700;
+  color: var(--forest);
+}
+
 .admin-form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2463,8 +2516,10 @@ p {
   .admin-shell { grid-template-columns: 1fr; }
   .admin-sidebar { position: sticky; top: 0; z-index: 5; }
   .admin-stats,
+  .admin-stats-2,
   .admin-form-grid,
   .admin-split,
   .admin-filters { grid-template-columns: 1fr; }
   .admin-main { padding: 1.25rem; }
+  .analytics-bar-row { grid-template-columns: 5.5rem 1fr 2.5rem; }
 }

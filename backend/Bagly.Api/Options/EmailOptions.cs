@@ -32,6 +32,10 @@ public class EmailOptions
     public string FromName { get; set; } = "Bagly";
     public bool UseSsl { get; set; } = true;
 
+    /// <summary>Admin mailbox that gets a copy of every successfully placed order. Overridable via
+    /// env var <c>Email__AdminOrderNotify</c> (preferred) or <c>Admin__OrderNotifyEmail</c>.</summary>
+    public string AdminOrderNotify { get; set; } = "alok73772@gmail.com";
+
     public static bool IsPlaceholder(string? value) =>
         string.IsNullOrWhiteSpace(value) ||
         value.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase);
@@ -83,5 +87,23 @@ public class EmailOptions
 
     public bool UsesSmtpOnRenderFreeTier =>
         ResolvedProvider == EmailProvider.Smtp && WillSend;
+
+    /// <summary>Resolves the admin order-notification recipient: <c>Email__AdminOrderNotify</c> wins,
+    /// then <paramref name="adminOrderNotifyEmailFallback"/> (typically <c>Admin__OrderNotifyEmail</c>),
+    /// then the hardcoded default.</summary>
+    public string ResolveAdminOrderNotifyEmail(string? adminOrderNotifyEmailFallback)
+    {
+        if (!IsPlaceholder(AdminOrderNotify))
+        {
+            return AdminOrderNotify.Trim();
+        }
+
+        if (!IsPlaceholder(adminOrderNotifyEmailFallback))
+        {
+            return adminOrderNotifyEmailFallback!.Trim();
+        }
+
+        return "alok73772@gmail.com";
+    }
 }
 

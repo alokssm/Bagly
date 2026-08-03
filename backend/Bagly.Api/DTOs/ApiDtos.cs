@@ -210,6 +210,50 @@ public record CustomerOrderDto(
     IReadOnlyList<CustomerOrderItemDto> Items
 );
 
+/// <summary>Lean row shape for the admin orders table — avoids shipping full line-item detail for every row.</summary>
+public record AdminOrderListItemDto(
+    Guid Id,
+    string OrderNumber,
+    string CustomerName,
+    string Email,
+    string Status,
+    string PaymentStatus,
+    string? PaymentProvider,
+    string Currency,
+    decimal Total,
+    int ItemCount,
+    DateTime CreatedAt);
+
+/// <summary>Response shape for <c>GET /api/admin/orders</c>. <c>TodayCount</c> is always "today in
+/// Asia/Kolkata (IST)" regardless of the from/to filter applied to <c>Items</c>.</summary>
+public record AdminOrdersPagedResult(
+    IReadOnlyList<AdminOrderListItemDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize,
+    int TotalPages,
+    int TodayCount);
+
+public record OrderStatusCountDto(string Status, int Count);
+
+public record TopProductSoldDto(string ProductId, string ProductName, int QuantitySold, decimal Revenue);
+
+/// <summary>Response shape for <c>GET /api/admin/analytics</c>. <c>OrdersToday</c>/<c>ThisWeek</c>/
+/// <c>ThisMonth</c> are always computed in Asia/Kolkata (IST) and are independent of the from/to filter,
+/// which instead scopes <c>TotalOrders</c>, <c>TotalRevenue</c>, <c>AverageOrderValue</c>,
+/// <c>OrdersByStatus</c>, and <c>TopProducts</c>.</summary>
+public record AdminAnalyticsDto(
+    DateOnly? From,
+    DateOnly? To,
+    int TotalOrders,
+    decimal TotalRevenue,
+    decimal AverageOrderValue,
+    int OrdersToday,
+    int OrdersThisWeek,
+    int OrdersThisMonth,
+    IReadOnlyList<OrderStatusCountDto> OrdersByStatus,
+    IReadOnlyList<TopProductSoldDto> TopProducts);
+
 public record GoogleAuthConfigDto(bool Enabled, string? ClientId);
 
 public record RazorpayConfigDto(bool Enabled, string? KeyId, string Currency);

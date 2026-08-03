@@ -382,4 +382,24 @@ export const api = {
     const query = qs.toString()
     return request(`/admin/reports/system-logs${query ? `?${query}` : ''}`, { auth: true })
   },
+
+  adminGetOrders: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/orders${query ? `?${query}` : ''}`, { auth: true })
+  },
+
+  adminGetOrder: (id) => request(`/admin/orders/${encodeURIComponent(id)}`, { auth: true }),
+
+  adminGetAnalytics: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/analytics${query ? `?${query}` : ''}`, { auth: true })
+  },
 }

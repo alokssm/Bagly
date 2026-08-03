@@ -94,12 +94,13 @@ Set these **before** or right after first deploy:
 | `Email__FromAddress` | verified sender/domain in Resend (see below) or Gmail for SMTP |
 | `Email__FromName` | `Bagly` |
 | `Email__UseSsl` | `true` |
+| `Email__AdminOrderNotify` | Mailbox that gets a copy of every successfully placed order (order number, customer, shipping address, items, totals, payment status). Defaults to `alok73772@gmail.com` in `appsettings.json` if unset. `Admin__OrderNotifyEmail` is also read as a fallback if `Email__AdminOrderNotify` is not set. Sending this copy never fails the customer's order — a failure is only logged. |
 | `GoogleAuth__ClientId` | Google OAuth Web Client ID for "Continue with Google" (optional — leave unset to hide the button). See `iis/README.md` → "Google sign-in setup" for how to create one. Must match frontend `VITE_GOOGLE_CLIENT_ID`. |
 | `Cloudinary__CloudName` | Your Cloudinary cloud name (optional — leave unset to hide admin image uploads; URL-paste still works). See "Cloudinary setup" below. |
 | `Cloudinary__ApiKey` | Cloudinary API Key |
 | `Cloudinary__ApiSecret` | Cloudinary API Secret — **mark Secret** |
 
-Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders.
+Order confirmation emails are sent after Razorpay payment verify succeeds (India) and after non-India checkout orders. An admin copy (`Email__AdminOrderNotify`, see above) is sent alongside each of these — never on out-of-stock/refund emails.
 
 > **CORS on Render:** Environment variables **override** `appsettings.json`. If you only set `Cors__AllowedOrigins__0`, that becomes the sole allowed origin — you must set `__0`, `__1`, `__2` explicitly for each host. After changing CORS env vars, **Manual Deploy** (or push to `main`) and verify with:
 >

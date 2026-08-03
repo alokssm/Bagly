@@ -16,6 +16,10 @@ public class AdminOptions
     public string Password { get; set; } = string.Empty;
     public string Name { get; set; } = "Admin";
 
+    /// <summary>Alternate config key for the order-notification recipient (fallback to
+    /// <c>EmailOptions.AdminOrderNotify</c> when unset). See <c>EmailOptions.ResolveAdminOrderNotifyEmail</c>.</summary>
+    public string? OrderNotifyEmail { get; set; }
+
     public bool IsPasswordConfigured =>
         !string.IsNullOrWhiteSpace(Password) &&
         !Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase);
