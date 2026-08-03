@@ -13,6 +13,7 @@ const links = [
   { to: '/', label: 'Home', end: true },
   { to: '/shop', label: 'Shop' },
   { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
 ]
 
 export default function Navbar() {

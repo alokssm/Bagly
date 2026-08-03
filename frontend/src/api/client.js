@@ -394,6 +394,9 @@ export const api = {
 
   adminGetOrder: (id) => request(`/admin/orders/${encodeURIComponent(id)}`, { auth: true }),
 
+  submitContactForm: (payload) =>
+    request('/contact', { method: 'POST', body: payload }),
+
   adminGetAnalytics: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {

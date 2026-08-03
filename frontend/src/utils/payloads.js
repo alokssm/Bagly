@@ -85,6 +85,17 @@ export function buildShippingAddressPayload({
   }
 }
 
+export function buildContactPayload({ firstName, lastName, phone, email, companyName, message }) {
+  return {
+    firstName: String(firstName || '').trim(),
+    lastName: String(lastName || '').trim(),
+    phone: String(phone || '').trim(),
+    email: String(email || '').trim(),
+    companyName: companyName ? String(companyName).trim() : null,
+    message: String(message || '').trim(),
+  }
+}
+
 function splitList(value, { multiline = false } = {}) {
   if (!value?.trim()) return []
   if (multiline) {

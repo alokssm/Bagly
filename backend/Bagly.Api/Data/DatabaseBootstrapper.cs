@@ -38,6 +38,7 @@ public static class DatabaseBootstrapper
         await EnsureShippingAddressesTableAsync(db, cancellationToken);
         await EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken);
         await EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken);
+        await EnsureContactMessagesTableAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -56,7 +57,9 @@ public static class DatabaseBootstrapper
                  await ColumnExistsAsync(db, "Orders", "CustomerUserId", cancellationToken)) ||
                 (migrationId.Contains("SchoolBagsCategoryHierarchy", StringComparison.OrdinalIgnoreCase) &&
                  await ColumnExistsAsync(db, "Categories", "ParentId", cancellationToken) &&
-                 await ColumnExistsAsync(db, "Products", "SubCategoryId", cancellationToken));
+                 await ColumnExistsAsync(db, "Products", "SubCategoryId", cancellationToken)) ||
+                (migrationId.Contains("ContactMessages", StringComparison.OrdinalIgnoreCase) &&
+                 await TableExistsAsync(db, "ContactMessages", cancellationToken));
 
             if (shouldMark)
             {
@@ -458,6 +461,40 @@ public static class DatabaseBootstrapper
                 """,
                 cancellationToken);
         }
+    }
+
+    /// <summary>Adds the ContactMessages table used by the public "Contact us" form so already
+    /// deployed Azure/Render databases pick it up without a full migration.</summary>
+    private static async Task EnsureContactMessagesTableAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "ContactMessages", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE [dbo].[ContactMessages]
+            (
+                [Id]          INT IDENTITY(1,1) NOT NULL,
+                [FirstName]   NVARCHAR(100)     NOT NULL,
+                [LastName]    NVARCHAR(100)     NOT NULL,
+                [Phone]       NVARCHAR(30)      NOT NULL,
+                [Email]       NVARCHAR(256)     NOT NULL,
+                [CompanyName] NVARCHAR(200)     NULL,
+                [Message]     NVARCHAR(4000)    NOT NULL,
+                [IpAddress]   NVARCHAR(64)      NULL,
+                [EmailSent]   BIT               NOT NULL CONSTRAINT [DF_ContactMessages_EmailSent] DEFAULT (0),
+                [CreatedAt]   DATETIME2         NOT NULL,
+                CONSTRAINT [PK_ContactMessages] PRIMARY KEY ([Id])
+            );
+
+            CREATE INDEX [IX_ContactMessages_CreatedAt] ON [dbo].[ContactMessages] ([CreatedAt]);
+            CREATE INDEX [IX_ContactMessages_Email] ON [dbo].[ContactMessages] ([Email]);
+            """,
+            cancellationToken);
     }
 
     private static async Task<bool> ColumnExistsAsync(

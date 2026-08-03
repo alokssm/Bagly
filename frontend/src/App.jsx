@@ -18,6 +18,7 @@ import Orders from './pages/Orders'
 import Profile from './pages/Profile'
 import Addresses from './pages/Addresses'
 import About from './pages/About'
+import Contact from './pages/Contact'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import AdminLogin from './pages/admin/AdminLogin'
@@ -82,6 +83,7 @@ export default function App() {
                   }
                 />
                 <Route path="/about" element={<About />} />
+                <Route path="/contact" element={<Contact />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
               </Route>

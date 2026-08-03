@@ -125,6 +125,8 @@ try
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
     builder.Services.AddScoped<IEmailSender, EmailSender>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
+    builder.Services.AddScoped<IContactEmailService, ContactEmailService>();
+    builder.Services.AddSingleton<IContactRateLimiter, ContactRateLimiter>();
     builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();
     builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();

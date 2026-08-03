@@ -302,6 +302,15 @@ public record ShippingAddressDto(
     DateTime CreatedAt
 );
 
+public record ContactRequest(
+    string FirstName,
+    string LastName,
+    string Phone,
+    string Email,
+    string? CompanyName,
+    string Message
+);
+
 public record UpsertShippingAddressRequest(
     string? Label,
     string FirstName,

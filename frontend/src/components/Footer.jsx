@@ -37,7 +37,7 @@ export default function Footer() {
                 <Link to="/about">Our story</Link>
               </li>
               <li>
-                <a href="mailto:hello@bagly.store">Contact</a>
+                <Link to="/contact">Contact</Link>
               </li>
             </ul>
           </div>

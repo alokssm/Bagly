@@ -18,6 +18,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
     public DbSet<StockAlert> StockAlerts => Set<StockAlert>();
     public DbSet<CustomerShippingAddress> ShippingAddresses => Set<CustomerShippingAddress>();
+    public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -244,6 +245,22 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => x.CustomerUserId);
             entity.HasIndex(x => new { x.CustomerUserId, x.IsDefault });
+        });
+
+        modelBuilder.Entity<ContactMessage>(entity =>
+        {
+            entity.ToTable("ContactMessages");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.CompanyName).HasMaxLength(200);
+            entity.Property(x => x.Message).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.IpAddress).HasMaxLength(64);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => x.Email);
         });
     }
 }
