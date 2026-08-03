@@ -45,24 +45,37 @@ public class AdminAnalyticsController(BaglyDbContext db) : ControllerBase
             : await successfulQuery.SumAsync(o => o.Total, cancellationToken);
         var averageOrderValue = successfulCount == 0 ? 0m : totalRevenue / successfulCount;
 
-        var ordersByStatus = await query
+        // NOTE: project GroupBy aggregates into an anonymous type and keep GROUP BY / ORDER BY /
+        // TOP in SQL, but defer constructing the record DTO until *after* ToListAsync. EF Core 8's
+        // SQL Server translator cannot reliably translate `GroupBy(...).Select(g => new
+        // SomeRecord(g.Key, g.Count()))` — it throws "The LINQ expression ... could not be
+        // translated" at request time (caught by ExceptionLoggingMiddleware and surfaced to the
+        // admin UI as the generic "An unexpected error occurred." message). Mapping to the DTO
+        // client-side after materializing the anonymous-type rows sidesteps that limitation.
+        var ordersByStatus = (await query
             .GroupBy(o => o.Status)
-            .Select(g => new OrderStatusCountDto(g.Key, g.Count()))
+            .Select(g => new { Status = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Select(x => new OrderStatusCountDto(x.Status, x.Count))
+            .ToList();
 
-        var topProducts = await (
+        var topProducts = (await (
             from oi in db.OrderItems.AsNoTracking()
             join o in successfulQuery on oi.OrderId equals o.Id
             group oi by new { oi.ProductId, oi.ProductName } into g
             orderby g.Sum(x => x.Quantity) descending
-            select new TopProductSoldDto(
+            select new
+            {
                 g.Key.ProductId,
                 g.Key.ProductName,
-                g.Sum(x => x.Quantity),
-                g.Sum(x => x.UnitPrice * x.Quantity)))
+                QuantitySold = g.Sum(x => x.Quantity),
+                Revenue = g.Sum(x => x.UnitPrice * x.Quantity),
+            })
             .Take(10)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Select(x => new TopProductSoldDto(x.ProductId, x.ProductName, x.QuantitySold, x.Revenue))
+            .ToList();
 
         // Today/this-week/this-month are fixed "now" anchors in IST — independent of the from/to
         // filter above, which instead scopes the totals, breakdown, and top-products figures.
