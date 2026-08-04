@@ -540,7 +540,7 @@ static string? ResolveConnectionString(IConfiguration config)
             continue;
         }
 
-        return value;
+        return ToNpgsqlKeywordConnectionString(value);
     }
 
     return null;
@@ -563,4 +563,99 @@ static string? NormalizeConnectionString(string? value)
     }
 
     return trimmed;
+}
+
+// Neon (and most Postgres hosts) offer connection strings as a URI, e.g.
+// postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
+// but Npgsql/EF Core expect the keyword=value format, e.g.
+// Host=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true
+// NpgsqlConnectionStringBuilder cannot parse the URI form directly (it throws a
+// confusing KeyNotFoundException/"invalid connection string format" error), so detect
+// and convert it here — the single place every consumer (UseNpgsql, /api/health, the
+// startup host-check log) reads the resolved connection string from.
+static bool LooksLikePostgresUri(string value) =>
+    value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+    value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase);
+
+static string ToNpgsqlKeywordConnectionString(string value)
+{
+    if (!LooksLikePostgresUri(value))
+    {
+        return value;
+    }
+
+    try
+    {
+        return ConvertPostgresUriToNpgsqlConnectionString(value);
+    }
+    catch (Exception ex)
+    {
+        // Don't log `value` here — it contains the password.
+        Log.Warning(ex, "Connection string looked like a postgres:// URI but could not be parsed as one. Falling back to the raw value.");
+        return value;
+    }
+}
+
+static string ConvertPostgresUriToNpgsqlConnectionString(string uriString)
+{
+    var uri = new Uri(uriString);
+
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+    };
+
+    var database = uri.AbsolutePath.Trim('/');
+    if (!string.IsNullOrWhiteSpace(database))
+    {
+        builder.Database = Uri.UnescapeDataString(database);
+    }
+
+    if (!string.IsNullOrWhiteSpace(uri.UserInfo))
+    {
+        var userParts = uri.UserInfo.Split(':', 2);
+        builder.Username = Uri.UnescapeDataString(userParts[0]);
+        if (userParts.Length > 1)
+        {
+            // Passwords are frequently URL-encoded (e.g. "@" -> "%40") inside the URI.
+            builder.Password = Uri.UnescapeDataString(userParts[1]);
+        }
+    }
+
+    var sslModeSet = false;
+    if (!string.IsNullOrWhiteSpace(uri.Query))
+    {
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split('=', 2);
+            var key = Uri.UnescapeDataString(kv[0]);
+            var val = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+
+            if (string.Equals(key, "sslmode", StringComparison.OrdinalIgnoreCase) &&
+                Enum.TryParse<SslMode>(val, ignoreCase: true, out var parsedSslMode))
+            {
+                builder.SslMode = parsedSslMode;
+                sslModeSet = true;
+            }
+
+            // Other Neon query params (e.g. channel_binding) aren't Npgsql keywords — ignore them
+            // instead of letting NpgsqlConnectionStringBuilder throw on an unrecognized key.
+        }
+    }
+
+    if (!sslModeSet)
+    {
+        // Neon (and most managed Postgres) require TLS; default to Require when the URI omits sslmode.
+        builder.SslMode = SslMode.Require;
+    }
+
+    if (builder.SslMode is SslMode.Require or SslMode.VerifyCA or SslMode.VerifyFull)
+    {
+#pragma warning disable CS0618 // Obsolete in current Npgsql, but kept for parity with the keyword-format connection string documented in appsettings.json/health hints.
+        builder.TrustServerCertificate = true;
+#pragma warning restore CS0618
+    }
+
+    return builder.ConnectionString;
 }
