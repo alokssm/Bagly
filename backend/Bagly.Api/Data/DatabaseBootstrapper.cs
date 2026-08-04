@@ -29,18 +29,25 @@ public static class DatabaseBootstrapper
         }
 
         // Ensure AdminUsers exists even if migration has not run yet.
-        await EnsureAdminUsersTableAsync(db, cancellationToken);
-        await EnsureCustomerUsersTableAsync(db, cancellationToken);
-        await EnsureAuditLogsTableAsync(db, cancellationToken);
-        await EnsurePaymentLogsTableAsync(db, cancellationToken);
-        await EnsureOrderPaymentColumnsAsync(db, cancellationToken);
-        await EnsureStockQuantityAndAlertsAsync(db, cancellationToken);
-        await EnsureShippingAddressesTableAsync(db, cancellationToken);
-        await EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken);
-        await EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken);
-        await EnsureContactMessagesTableAsync(db, cancellationToken);
-        await EnsureSiteHitsTableAsync(db, cancellationToken);
-        await EnsureProductSeoColumnsAsync(db, cancellationToken);
+        // Each step runs independently (failure isolated + logged) so one broken helper — e.g. a
+        // one-off data issue in ContactMessages/SiteHits — can never prevent a later, unrelated
+        // helper (like the Products SEO columns below) from running. Previously these awaits were
+        // unguarded, so a single throw here skipped every remaining Ensure*Async call for the rest
+        // of the app's lifetime (only re-attempted on a fresh restart), which could leave columns
+        // like Products.Slug missing and make every GET /api/products fail with a SQL "invalid
+        // column name" error surfaced to users as "An unexpected error occurred."
+        await RunEnsureStepAsync("AdminUsers", () => EnsureAdminUsersTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("CustomerUsers", () => EnsureCustomerUsersTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("AuditLogs", () => EnsureAuditLogsTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("PaymentLogs", () => EnsurePaymentLogsTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("OrderPaymentColumns", () => EnsureOrderPaymentColumnsAsync(db, cancellationToken));
+        await RunEnsureStepAsync("StockQuantityAndAlerts", () => EnsureStockQuantityAndAlertsAsync(db, cancellationToken));
+        await RunEnsureStepAsync("ShippingAddresses", () => EnsureShippingAddressesTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("OrderCustomerUserIdColumn", () => EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken));
+        await RunEnsureStepAsync("CategoryHierarchyAndSubCategoryColumns", () => EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken));
+        await RunEnsureStepAsync("ContactMessages", () => EnsureContactMessagesTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("SiteHits", () => EnsureSiteHitsTableAsync(db, cancellationToken));
+        await RunEnsureStepAsync("ProductSeoColumns", () => EnsureProductSeoColumnsAsync(db, cancellationToken));
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -104,6 +111,31 @@ public static class DatabaseBootstrapper
             await db.Categories.CountAsync(cancellationToken),
             await db.Products.CountAsync(cancellationToken),
             await db.AdminUsers.CountAsync(cancellationToken));
+    }
+
+    /// <summary>Runs a single bootstrap step in isolation so a failure (e.g. unexpected existing
+    /// data on Azure/Render) is logged but doesn't stop the remaining, unrelated Ensure*Async
+    /// steps from running.</summary>
+    private static async Task RunEnsureStepAsync(string stepName, Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step '{stepName}' failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Re-runs just the Products-table schema fixups (SubCategoryId + SEO columns).
+    /// Safe to call repeatedly/concurrently. Used as a self-heal fallback by ProductsController
+    /// when a query fails because a column is unexpectedly missing (e.g. the app started before
+    /// startup bootstrap finished adding it, or bootstrap hit an unrelated error first).</summary>
+    public static async Task EnsureProductsSchemaAsync(BaglyDbContext db, CancellationToken cancellationToken = default)
+    {
+        await RunEnsureStepAsync("CategoryHierarchyAndSubCategoryColumns", () => EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken));
+        await RunEnsureStepAsync("ProductSeoColumns", () => EnsureProductSeoColumnsAsync(db, cancellationToken));
     }
 
     private static async Task EnsureMigrationsHistoryTableAsync(
