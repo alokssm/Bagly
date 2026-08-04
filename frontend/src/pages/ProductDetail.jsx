@@ -16,6 +16,7 @@ export default function ProductDetail() {
   const [qty, setQty] = useState(1)
   const [activeImage, setActiveImage] = useState(0)
   const [added, setAdded] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -31,6 +32,7 @@ export default function ProductDetail() {
         setQty(1)
         setActiveImage(0)
         setAdded(false)
+        setLightboxOpen(false)
       } catch (err) {
         if (!cancelled) {
           setProduct(null)
@@ -70,6 +72,22 @@ export default function ProductDetail() {
 
   const gallery = useMemo(() => product?.gallery ?? [], [product])
   const soldOut = product?.inStock === false
+  const mainImageSrc = gallery[activeImage] || product?.image
+
+  useEffect(() => {
+    if (!lightboxOpen) return
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setLightboxOpen(false)
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [lightboxOpen])
 
   if (loading) {
     return (
@@ -113,14 +131,31 @@ export default function ProductDetail() {
 
         <div className="pdp">
           <div className="pdp-gallery">
-            <div className={`pdp-main-image ${soldOut ? 'is-sold' : ''}`}>
-              <img src={gallery[activeImage] || product.image} alt={product.name} />
-              {soldOut ? (
+            {soldOut ? (
+              <div className="pdp-main-image is-sold">
+                <img src={mainImageSrc} alt={product.name} />
                 <span className="sold-stamp" aria-label="Sold out">
                   Sold
                 </span>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="pdp-main-image is-zoomable"
+                onClick={() => setLightboxOpen(true)}
+                aria-label={`Zoom ${product.name}`}
+              >
+                <img src={mainImageSrc} alt={product.name} />
+                <span className="pdp-zoom-hint" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    <line x1="11" y1="8" x2="11" y2="14" />
+                    <line x1="8" y1="11" x2="14" y2="11" />
+                  </svg>
+                </span>
+              </button>
+            )}
             {gallery.length > 1 ? (
               <div className="pdp-thumbs">
                 {gallery.map((src, index) => (
@@ -226,6 +261,28 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {lightboxOpen ? (
+        <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={`${product.name} enlarged view`}>
+          <button
+            type="button"
+            className="image-lightbox-backdrop"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close zoom view"
+          />
+          <button
+            type="button"
+            className="image-lightbox-close"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close zoom view"
+          >
+            ×
+          </button>
+          <div className="image-lightbox-panel">
+            <img src={mainImageSrc} alt={product.name} />
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

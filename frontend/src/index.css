@@ -631,7 +631,9 @@ p {
 
 .product-media {
   position: relative;
-  aspect-ratio: 8 / 9;
+  aspect-ratio: 1 / 1;
+  max-width: 75%;
+  margin-inline: auto;
   overflow: hidden;
   background: var(--sage);
   border: 1px solid var(--line);
@@ -867,15 +869,28 @@ p {
 .pdp-gallery {
   display: grid;
   gap: 0.75rem;
-  max-width: min(100%, 420px);
+  max-width: min(100%, 315px);
 }
 
 .pdp-main-image {
-  aspect-ratio: 8 / 9;
+  position: relative;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background: var(--sage);
   border: 1px solid var(--line);
   transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.pdp-main-image.is-zoomable {
+  cursor: zoom-in;
+  padding: 0;
+  width: 100%;
+  text-align: inherit;
+}
+
+.pdp-main-image.is-zoomable:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 3px;
 }
 
 .pdp-main-image img {
@@ -884,6 +899,29 @@ p {
   object-fit: cover;
   transition: transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: transform;
+  pointer-events: none;
+}
+
+.pdp-zoom-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 40, 30, 0.28);
+  color: var(--surface);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.pdp-zoom-hint svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 8px rgba(18, 40, 30, 0.35));
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -892,9 +930,90 @@ p {
     box-shadow: 0 16px 40px rgba(18, 40, 30, 0.12);
   }
 
-  .pdp-main-image:not(.is-sold):hover img {
-    transform: scale(1.2);
+  .pdp-main-image.is-zoomable:not(.is-sold):hover .pdp-zoom-hint {
+    opacity: 1;
   }
+
+  .pdp-main-image:not(.is-sold):hover img {
+    transform: scale(1.08);
+  }
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(18, 40, 30, 0.88);
+  animation: lightboxFadeIn 0.25s ease;
+}
+
+@keyframes lightboxFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.image-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-out;
+}
+
+.image-lightbox-panel {
+  position: relative;
+  z-index: 1;
+  max-width: min(92vw, 960px);
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-lightbox-panel img {
+  max-width: 100%;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid rgba(176, 138, 85, 0.35);
+  box-shadow: var(--shadow-soft);
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(176, 138, 85, 0.45);
+  border-radius: 50%;
+  background: rgba(247, 249, 247, 0.95);
+  color: var(--forest);
+  font-size: 1.5rem;
+  line-height: 1;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.image-lightbox-close:hover {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: var(--surface);
 }
 
 .pdp-thumbs {
