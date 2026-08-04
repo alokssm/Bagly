@@ -127,6 +127,13 @@ try
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
     builder.Services.AddScoped<IContactEmailService, ContactEmailService>();
     builder.Services.AddSingleton<IContactRateLimiter, ContactRateLimiter>();
+    builder.Services.AddSingleton<ISiteHitRateLimiter, SiteHitRateLimiter>();
+    builder.Services.AddSingleton<IIpGeolocationService, IpGeolocationService>();
+    builder.Services.AddHttpClient("IpGeolocation", client =>
+    {
+        client.BaseAddress = new Uri("http://ip-api.com/");
+        client.Timeout = TimeSpan.FromSeconds(3);
+    });
     builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();
     builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();

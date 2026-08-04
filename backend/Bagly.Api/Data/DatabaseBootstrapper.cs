@@ -39,6 +39,7 @@ public static class DatabaseBootstrapper
         await EnsureOrderCustomerUserIdColumnAsync(db, cancellationToken);
         await EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken);
         await EnsureContactMessagesTableAsync(db, cancellationToken);
+        await EnsureSiteHitsTableAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -59,7 +60,9 @@ public static class DatabaseBootstrapper
                  await ColumnExistsAsync(db, "Categories", "ParentId", cancellationToken) &&
                  await ColumnExistsAsync(db, "Products", "SubCategoryId", cancellationToken)) ||
                 (migrationId.Contains("ContactMessages", StringComparison.OrdinalIgnoreCase) &&
-                 await TableExistsAsync(db, "ContactMessages", cancellationToken));
+                 await TableExistsAsync(db, "ContactMessages", cancellationToken)) ||
+                (migrationId.Contains("SiteHits", StringComparison.OrdinalIgnoreCase) &&
+                 await TableExistsAsync(db, "SiteHits", cancellationToken));
 
             if (shouldMark)
             {
@@ -493,6 +496,40 @@ public static class DatabaseBootstrapper
 
             CREATE INDEX [IX_ContactMessages_CreatedAt] ON [dbo].[ContactMessages] ([CreatedAt]);
             CREATE INDEX [IX_ContactMessages_Email] ON [dbo].[ContactMessages] ([Email]);
+            """,
+            cancellationToken);
+    }
+
+    /// <summary>Adds the SiteHits table used by the public storefront traffic beacon (see
+    /// AnalyticsController) so already deployed Azure/Render databases pick it up without a full migration.</summary>
+    private static async Task EnsureSiteHitsTableAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(db, "SiteHits", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE [dbo].[SiteHits]
+            (
+                [Id]            BIGINT IDENTITY(1,1) NOT NULL,
+                [Path]          NVARCHAR(500)        NOT NULL,
+                [OccurredAtUtc] DATETIME2            NOT NULL,
+                [IpAddress]     NVARCHAR(64)         NULL,
+                [Country]       NVARCHAR(100)        NOT NULL,
+                [Region]        NVARCHAR(100)        NULL,
+                [City]          NVARCHAR(100)        NULL,
+                [UserAgent]     NVARCHAR(300)        NULL,
+                [SessionId]     NVARCHAR(100)        NULL,
+                CONSTRAINT [PK_SiteHits] PRIMARY KEY ([Id])
+            );
+
+            CREATE INDEX [IX_SiteHits_OccurredAtUtc] ON [dbo].[SiteHits] ([OccurredAtUtc]);
+            CREATE INDEX [IX_SiteHits_Country] ON [dbo].[SiteHits] ([Country]);
+            CREATE INDEX [IX_SiteHits_SessionId] ON [dbo].[SiteHits] ([SessionId]);
             """,
             cancellationToken);
     }

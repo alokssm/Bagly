@@ -102,4 +102,64 @@ public class AdminAnalyticsController(BaglyDbContext db) : ControllerBase
             ordersByStatus,
             topProducts));
     }
+
+    [HttpGet("locations")]
+    public async Task<ActionResult<AdminLocationsAnalyticsDto>> GetLocationAnalytics(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = db.SiteHits.AsNoTracking().AsQueryable();
+
+        if (from is DateOnly fromDate)
+        {
+            query = query.Where(h => h.OccurredAtUtc >= IstTime.ToUtc(fromDate));
+        }
+
+        if (to is DateOnly toDate)
+        {
+            var toExclusiveUtc = IstTime.ToUtc(toDate.AddDays(1));
+            query = query.Where(h => h.OccurredAtUtc < toExclusiveUtc);
+        }
+
+        var totalHits = await query.CountAsync(cancellationToken);
+
+        var uniqueSessions = await query
+            .Where(h => h.SessionId != null)
+            .Select(h => h.SessionId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        // Two narrow, separately-materialized queries (hit counts per country, then session ids
+        // per country) instead of one GroupBy with a nested Distinct/Count — see the note on
+        // GroupBy translation above; the same SQL Server LINQ translator limitation applies here.
+        var hitsByCountry = await query
+            .GroupBy(h => h.Country)
+            .Select(g => new { Country = g.Key, Hits = g.Count() })
+            .OrderByDescending(x => x.Hits)
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        var sessionPairs = await query
+            .Where(h => h.SessionId != null)
+            .Select(h => new { h.Country, h.SessionId })
+            .ToListAsync(cancellationToken);
+
+        var uniqueSessionsByCountry = sessionPairs
+            .GroupBy(x => x.Country, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.SessionId).Distinct().Count(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var locations = hitsByCountry
+            .Select(x => new LocationHitDto(
+                x.Country,
+                x.Hits,
+                uniqueSessionsByCountry.GetValueOrDefault(x.Country),
+                totalHits == 0 ? 0 : Math.Round(x.Hits * 100.0 / totalHits, 1)))
+            .ToList();
+
+        return Ok(new AdminLocationsAnalyticsDto(from, to, totalHits, uniqueSessions, locations));
+    }
 }

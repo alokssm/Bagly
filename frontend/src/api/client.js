@@ -405,4 +405,17 @@ export const api = {
     const query = qs.toString()
     return request(`/admin/analytics${query ? `?${query}` : ''}`, { auth: true })
   },
+
+  // Fire-and-forget storefront page-view beacon. Never auth'd, never surfaces errors to the caller.
+  recordSiteHit: (payload) =>
+    request('/analytics/hit', { method: 'POST', body: payload }).catch(() => null),
+
+  adminGetLocationAnalytics: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/analytics/locations${query ? `?${query}` : ''}`, { auth: true })
+  },
 }

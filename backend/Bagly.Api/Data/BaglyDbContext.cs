@@ -19,6 +19,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<StockAlert> StockAlerts => Set<StockAlert>();
     public DbSet<CustomerShippingAddress> ShippingAddresses => Set<CustomerShippingAddress>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+    public DbSet<SiteHit> SiteHits => Set<SiteHit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -261,6 +262,23 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.IpAddress).HasMaxLength(64);
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => x.Email);
+        });
+
+        modelBuilder.Entity<SiteHit>(entity =>
+        {
+            entity.ToTable("SiteHits");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.Path).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.IpAddress).HasMaxLength(64);
+            entity.Property(x => x.Country).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Region).HasMaxLength(100);
+            entity.Property(x => x.City).HasMaxLength(100);
+            entity.Property(x => x.UserAgent).HasMaxLength(300);
+            entity.Property(x => x.SessionId).HasMaxLength(100);
+            entity.HasIndex(x => x.OccurredAtUtc);
+            entity.HasIndex(x => x.Country);
+            entity.HasIndex(x => x.SessionId);
         });
     }
 }

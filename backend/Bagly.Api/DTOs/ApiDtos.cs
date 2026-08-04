@@ -311,6 +311,29 @@ public record ContactRequest(
     string Message
 );
 
+/// <summary>Body for the public, unauthenticated <c>POST /api/analytics/hit</c> beacon fired once
+/// per storefront page navigation. <c>SessionId</c> is an optional client-generated GUID (stored in
+/// localStorage) used only to compute "unique sessions" per location — never tied to an account.</summary>
+public record SiteHitRequest(string Path, string? SessionId);
+
+/// <summary>One row of the admin locations breakdown — <c>Hits</c> is total page views from that
+/// country, <c>UniqueSessions</c> counts distinct client-generated session ids (nulls counted individually
+/// since they can't be deduplicated), and <c>Percentage</c> is this row's share of <c>TotalHits</c>.</summary>
+public record LocationHitDto(
+    string Country,
+    int Hits,
+    int UniqueSessions,
+    double Percentage);
+
+/// <summary>Response shape for <c>GET /api/admin/analytics/locations</c>. Top 50 countries by hit
+/// count, plus grand totals for the selected (optional) date range.</summary>
+public record AdminLocationsAnalyticsDto(
+    DateOnly? From,
+    DateOnly? To,
+    int TotalHits,
+    int UniqueSessions,
+    IReadOnlyList<LocationHitDto> Locations);
+
 public record UpsertShippingAddressRequest(
     string? Label,
     string FirstName,

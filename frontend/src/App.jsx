@@ -28,10 +28,13 @@ import AdminProductForm from './pages/admin/AdminProductForm'
 import AdminCategories from './pages/admin/AdminCategories'
 import AdminOrders from './pages/admin/AdminOrders'
 import AdminAnalytics from './pages/admin/AdminAnalytics'
+import AdminTraffic from './pages/admin/AdminTraffic'
 import AdminReports from './pages/admin/AdminReports'
+import usePageViewTracking from './hooks/usePageViewTracking'
 
 function StoreLayout() {
   const { isAuthenticated, token } = useCustomerAuth()
+  usePageViewTracking()
   return (
     <div className="app-shell">
       <InstallPrompt />
@@ -104,6 +107,7 @@ export default function App() {
                 <Route path="categories" element={<AdminCategories />} />
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
+                <Route path="traffic" element={<AdminTraffic />} />
                 <Route path="reports" element={<AdminReports />} />
               </Route>
 
