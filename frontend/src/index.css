@@ -631,20 +631,30 @@ p {
 
 .product-media {
   position: relative;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 8 / 9;
   overflow: hidden;
   background: var(--sage);
+  border: 1px solid var(--line);
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 .product-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.6s ease;
+  transition: transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
 }
 
-.product-card:hover .product-media img {
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .product-card:not(.is-sold):hover .product-media {
+    border-color: rgba(176, 138, 85, 0.45);
+    box-shadow: 0 12px 32px rgba(18, 40, 30, 0.1);
+  }
+
+  .product-card:not(.is-sold):hover .product-media img {
+    transform: scale(1.08);
+  }
 }
 
 .product-badge {
@@ -855,18 +865,34 @@ p {
 .pdp-gallery {
   display: grid;
   gap: 0.75rem;
+  max-width: min(100%, 420px);
 }
 
 .pdp-main-image {
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 8 / 9;
   overflow: hidden;
   background: var(--sage);
+  border: 1px solid var(--line);
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 .pdp-main-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pdp-main-image:not(.is-sold):hover {
+    border-color: rgba(176, 138, 85, 0.45);
+    box-shadow: 0 16px 40px rgba(18, 40, 30, 0.12);
+  }
+
+  .pdp-main-image:not(.is-sold):hover img {
+    transform: scale(1.1);
+  }
 }
 
 .pdp-thumbs {
