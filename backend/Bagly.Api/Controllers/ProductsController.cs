@@ -2,8 +2,8 @@ using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Mapping;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Bagly.Api.Controllers;
 
@@ -101,8 +101,8 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
         }
     }
 
-    /// <summary>SQL Server error 207 is "Invalid column name" — exactly what EF Core throws when
-    /// the mapped entity has a property (e.g. Product.Slug) that doesn't exist as a column yet.</summary>
+    /// <summary>Postgres SQLSTATE 42703 is "undefined_column" — exactly what Npgsql/EF Core throws
+    /// when the mapped entity has a property (e.g. Product.Slug) that doesn't exist as a column yet.</summary>
     private static bool IsMissingColumnError(Exception ex) =>
-        (ex.GetBaseException() as SqlException)?.Number == 207;
+        (ex.GetBaseException() as PostgresException)?.SqlState == PostgresErrorCodes.UndefinedColumn;
 }

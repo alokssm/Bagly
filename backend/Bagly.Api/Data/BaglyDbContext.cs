@@ -38,9 +38,9 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.ShortDescription).HasMaxLength(500);
             entity.Property(x => x.Description).HasMaxLength(4000);
             entity.Property(x => x.Image).HasMaxLength(1000);
-            entity.Property(x => x.ColorsJson).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.FeaturesJson).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.GalleryJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ColorsJson).HasColumnType("text");
+            entity.Property(x => x.FeaturesJson).HasColumnType("text");
+            entity.Property(x => x.GalleryJson).HasColumnType("text");
             entity.Property(x => x.StockQuantity).HasDefaultValue(999);
             entity.Property(x => x.Slug).HasMaxLength(160);
             entity.Property(x => x.SeoTitle).HasMaxLength(160);
@@ -49,7 +49,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.Category);
             entity.HasIndex(x => x.SubCategoryId);
             entity.HasIndex(x => x.IsActive);
-            entity.HasIndex(x => x.Slug).IsUnique().HasFilter("[Slug] IS NOT NULL");
+            entity.HasIndex(x => x.Slug).IsUnique().HasFilter("\"Slug\" IS NOT NULL");
         });
 
         modelBuilder.Entity<Category>(entity =>
@@ -149,7 +149,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.PasswordHash).HasMaxLength(500);
             entity.Property(x => x.GoogleSubject).HasMaxLength(100);
             entity.HasIndex(x => x.Email).IsUnique();
-            entity.HasIndex(x => x.GoogleSubject).IsUnique().HasFilter("[GoogleSubject] IS NOT NULL");
+            entity.HasIndex(x => x.GoogleSubject).IsUnique().HasFilter("\"GoogleSubject\" IS NOT NULL");
             entity.HasIndex(x => x.IsActive);
         });
 
@@ -165,7 +165,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.EntityType).HasMaxLength(100);
             entity.Property(x => x.EntityId).HasMaxLength(100);
             entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
-            entity.Property(x => x.DetailsJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.DetailsJson).HasColumnType("text");
             entity.Property(x => x.IpAddress).HasMaxLength(64);
             entity.Property(x => x.RequestPath).HasMaxLength(500);
             entity.HasIndex(x => x.TimestampUtc);
@@ -176,16 +176,18 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
 
         modelBuilder.Entity<SystemLog>(entity =>
         {
-            // Owned by Serilog sink — do not let EF migrations alter this table.
-            entity.ToTable("Logs", t => t.ExcludeFromMigrations());
+            // Logging is console-only (Serilog) since the Neon/Postgres migration, so this table
+            // is no longer populated by a DB sink. Kept (EF-managed) so AdminReportsController's
+            // system-logs endpoint keeps working — it just always returns an empty page for now.
+            entity.ToTable("Logs");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).ValueGeneratedOnAdd();
-            entity.Property(x => x.Message).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.MessageTemplate).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.Level).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.TimeStamp).HasColumnType("datetime");
-            entity.Property(x => x.Exception).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.LogEvent).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.Message).HasColumnType("text");
+            entity.Property(x => x.MessageTemplate).HasColumnType("text");
+            entity.Property(x => x.Level).HasColumnType("text");
+            entity.Property(x => x.TimeStamp).HasColumnType("timestamp with time zone");
+            entity.Property(x => x.Exception).HasColumnType("text");
+            entity.Property(x => x.LogEvent).HasColumnType("text");
             entity.Property(x => x.RequestPath).HasMaxLength(500);
             entity.Property(x => x.ActorEmail).HasMaxLength(256);
             entity.Property(x => x.AuditCategory).HasMaxLength(50);
@@ -208,8 +210,8 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.Currency).HasMaxLength(10);
             entity.Property(x => x.CustomerEmail).HasMaxLength(256);
             entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
-            entity.Property(x => x.RequestJson).HasColumnType("nvarchar(max)");
-            entity.Property(x => x.ResponseJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.RequestJson).HasColumnType("text");
+            entity.Property(x => x.ResponseJson).HasColumnType("text");
             entity.Property(x => x.ErrorCode).HasMaxLength(100);
             entity.Property(x => x.IpAddress).HasMaxLength(64);
             entity.HasIndex(x => x.TimestampUtc);

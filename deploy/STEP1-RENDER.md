@@ -2,7 +2,7 @@
 
 This guide deploys only the **backend** (`backend/Bagly.Api`).
 
-> Azure SQL (Step 3) is required for a fully working API.  
+> A [Neon](https://neon.tech) Postgres database (Step 3) is required for a fully working API.  
 > You can still create the Render service now and set the DB connection string in Step 3.
 
 ---
@@ -70,7 +70,7 @@ Set these **before** or right after first deploy:
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `EnableSwagger` | `true` (useful while testing) |
 | `EnableHttpsRedirection` | `false` |
-| `ConnectionStrings__DefaultConnection` | *(leave empty until Step 3 — Azure SQL)* |
+| `ConnectionStrings__DefaultConnection` | *(leave empty until Step 3 — Neon Postgres)* |
 | `Jwt__Key` | long random string (32+ chars) |
 | `Admin__Email` | `admin@bagly.store` |
 | `Admin__Password` | your strong password |
@@ -188,5 +188,23 @@ Local secrets stay in `appsettings.Development.json` (gitignored). Cloud secrets
 
 ## Next
 
-- **Step 2:** Deploy frontend on Vercel (`VITE_API_URL=https://YOUR-SERVICE.onrender.com/api`)  
-- **Step 3:** Create Azure SQL free DB → paste connection string into Render → redeploy / restart
+- **Step 2:** Deploy frontend on Vercel (`VITE_API_URL=https://YOUR-SERVICE.onrender.com/api`)
+- **Step 3:** Create a free [Neon](https://neon.tech) Postgres project → copy the connection string → paste into Render as `ConnectionStrings__DefaultConnection` (Npgsql format, see below) → Manual Deploy
+
+### Step 3 details — Neon Postgres
+
+1. Sign up at https://neon.tech (free tier) → **New Project** (choose a region close to your Render region).
+2. On the project dashboard, click **Connect** and copy the connection details, or build the Npgsql-format string yourself:
+   ```
+   Host=ep-xxxx.region.aws.neon.tech;Database=neondb;Username=neondb_owner;Password=YOUR_PASSWORD;SSL Mode=Require;Trust Server Certificate=true
+   ```
+   (Neon's dashboard shows a `postgresql://user:password@host/db?sslmode=require` URI — convert it to the `Key=Value;...` format above; Npgsql does not accept the `postgresql://` URI form directly in this app.)
+3. In Render → **Environment**, set `ConnectionStrings__DefaultConnection` to that string (mark it **Secret**), or use `BAGLY_CONNECTION_STRING` instead (checked first).
+4. **Manual Deploy**. On startup the API runs EF Core migrations automatically (`db.Database.MigrateAsync()`), creating all tables on the empty Neon database.
+5. Seed demo data + the admin account by calling:
+   ```powershell
+   curl.exe -s -X POST "https://YOUR-SERVICE.onrender.com/api/setup/seed"
+   ```
+6. Check `https://YOUR-SERVICE.onrender.com/api/health` → `database.status` should be `"connected"`.
+
+> Neon's free tier auto-suspends idle databases; the first request after idle can take a few seconds while it wakes up.

@@ -10,6 +10,8 @@ Thumbs.db
 **/bin/
 **/obj/
 **/publish/
+backend/_build_out/
+backend/_build_verify/
 frontend/dist/
 frontend/node_modules/
 

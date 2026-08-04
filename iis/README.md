@@ -32,7 +32,20 @@ VITE_API_URL=http://localhost:8081/api
 3. **Install URL Rewrite** (SPA routes like `/shop`, `/admin`)  
    https://www.iis.net/downloads/microsoft/url-rewrite
 
-4. SQL Server Express running with database **BaglyDb**.
+4. A Postgres database to develop against — either:
+   - **Neon** (recommended, no local install): create a free project at https://neon.tech and use its connection string directly, or
+   - **Local Postgres**: install [PostgreSQL](https://www.postgresql.org/download/windows/) and create a `bagly` database.
+
+   Set the connection string in `backend\Bagly.Api\appsettings.Development.json` (gitignored — create it if it doesn't exist):
+   ```json
+   {
+     "ConnectionStrings": {
+       "DefaultConnection": "Host=ep-xxxx.region.aws.neon.tech;Database=neondb;Username=neondb_owner;Password=YOUR_PASSWORD;SSL Mode=Require;Trust Server Certificate=true"
+     }
+   }
+   ```
+   For local Postgres instead of Neon: `Host=localhost;Port=5432;Database=bagly;Username=postgres;Password=YOUR_PASSWORD`.
+   On startup the API runs EF Core migrations automatically, creating all tables.
 
 ## Publish + create sites
 
@@ -107,11 +120,12 @@ Without Cloudinary configured, the upload buttons show an error but the **URL-pa
 
 | Symptom | Fix |
 |---------|-----|
-| **500.30 app failed to start** / login failed for `IIS APPPOOL\BaglyApiAppPool` | Run `backend\scripts\Grant-IisAppPoolSqlAccess.sql` (Setup-IIS.ps1 does this automatically) |
 | 500.19 / 500.30 module missing | Install Hosting Bundle + `iisreset` |
 | Blank page on refresh of `/shop` | Install URL Rewrite |
 | CORS / API failed | Confirm API at http://localhost:8081/api/health |
-| DB errors | Start SQL Server (`SQLEXPRESS`) and check connection string |
+| DB errors | Check `ConnectionStrings:DefaultConnection` in `appsettings.Development.json` — for Neon, confirm the project isn't suspended; for local Postgres, confirm the service is running |
 | Port in use | Change ports in `Setup-IIS.ps1` and update `frontend/.env.iis` |
+
+> Legacy SQL Server scripts in `backend\scripts\*.sql` (from before the Postgres/Neon migration) are no longer used and can be ignored/removed.
 
 API stdout logs (when enabled): `publish\iis\api\logs\`

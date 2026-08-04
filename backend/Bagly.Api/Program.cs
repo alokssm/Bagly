@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 using Serilog;
 using Serilog.Events;
-using Serilog.Sinks.MSSqlServer;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -33,21 +33,21 @@ try
     if (string.IsNullOrWhiteSpace(connectionString))
     {
         Log.Error(
-            "Database connection string is missing. In Render → Environment add KEY exactly 'BAGLY_CONNECTION_STRING' (or 'ConnectionStrings__DefaultConnection') with your Azure SQL ADO.NET value, then Manual Deploy.");
+            "Database connection string is missing. In Render → Environment add KEY exactly 'BAGLY_CONNECTION_STRING' (or 'ConnectionStrings__DefaultConnection') with your Neon Postgres connection string, then Manual Deploy.");
         // Keep process alive so /api/health can report what's missing.
         connectionString =
-            "Server=127.0.0.1,1433;Database=missing;User ID=missing;Password=missing;Encrypt=False;TrustServerCertificate=True;Connection Timeout=1;";
+            "Host=127.0.0.1;Port=5432;Database=missing;Username=missing;Password=missing;Timeout=1;";
     }
 
     try
     {
-        var ds = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource;
-        Log.Information("Using SQL data source: {DataSource}", ds);
-        if (ds.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
-            ds.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-            ds.Contains("SQLEXPRESS", StringComparison.OrdinalIgnoreCase))
+        var host = new NpgsqlConnectionStringBuilder(connectionString).Host;
+        Log.Information("Using Postgres host: {Host}", host);
+        if (!string.IsNullOrWhiteSpace(host) &&
+            (host.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+             host.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
         {
-            Log.Warning("SQL data source looks local/placeholder ({DataSource}). Set Azure SQL on Render env vars and redeploy.", ds);
+            Log.Warning("Postgres host looks local/placeholder ({Host}). Set the Neon connection string on Render env vars and redeploy.", host);
         }
     }
     catch (Exception ex)
@@ -60,9 +60,6 @@ try
     {
         ["ConnectionStrings:DefaultConnection"] = connectionString,
     });
-
-    var sqlLoggingEnabled = !string.IsNullOrWhiteSpace(connectionString)
-        && connectionString.Contains("database.windows.net", StringComparison.OrdinalIgnoreCase);
 
     builder.Host.UseSerilog((context, services, configuration) =>
     {
@@ -78,36 +75,6 @@ try
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .WriteTo.Console();
-
-        if (!sqlLoggingEnabled)
-        {
-            return;
-        }
-
-        var sinkOptions = new MSSqlServerSinkOptions
-        {
-            TableName = "Logs",
-            SchemaName = "dbo",
-            AutoCreateSqlTable = true,
-            BatchPostingLimit = 50,
-            BatchPeriod = TimeSpan.FromSeconds(2),
-        };
-
-        var columnOptions = new ColumnOptions();
-        columnOptions.Store.Remove(StandardColumn.Properties);
-        columnOptions.Store.Add(StandardColumn.LogEvent);
-        columnOptions.AdditionalColumns =
-        [
-            new SqlColumn("RequestPath", System.Data.SqlDbType.NVarChar, dataLength: 500),
-            new SqlColumn("ActorEmail", System.Data.SqlDbType.NVarChar, dataLength: 256),
-            new SqlColumn("AuditCategory", System.Data.SqlDbType.NVarChar, dataLength: 50),
-            new SqlColumn("AuditAction", System.Data.SqlDbType.NVarChar, dataLength: 100),
-        ];
-
-        configuration.WriteTo.MSSqlServer(
-            connectionString: connectionString,
-            sinkOptions: sinkOptions,
-            columnOptions: columnOptions);
     });
 
     builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -245,7 +212,7 @@ try
     builder.Services.AddAuthorization();
 
     builder.Services.AddDbContext<BaglyDbContext>(options =>
-        options.UseSqlServer(connectionString));
+        options.UseNpgsql(connectionString));
 
     builder.Services.AddCors(options =>
     {
@@ -337,7 +304,7 @@ try
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Database initialization failed. API will start; configure ConnectionStrings__DefaultConnection (Azure SQL) and redeploy.");
+        Log.Error(ex, "Database initialization failed. API will start; configure ConnectionStrings__DefaultConnection (Neon Postgres) and redeploy.");
     }
 
     var enableSwagger = app.Environment.IsDevelopment()
@@ -400,8 +367,8 @@ try
         string? dataSource = null;
         try
         {
-            var builderCs = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(cs);
-            dataSource = builderCs.DataSource;
+            var builderCs = new NpgsqlConnectionStringBuilder(cs);
+            dataSource = builderCs.Host;
         }
         catch
         {
@@ -411,9 +378,7 @@ try
         var looksLocal =
             !string.IsNullOrWhiteSpace(dataSource) &&
             (dataSource.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
-             dataSource.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-             dataSource.Contains("SQLEXPRESS", StringComparison.OrdinalIgnoreCase) ||
-             dataSource.Contains(".\\", StringComparison.OrdinalIgnoreCase));
+             dataSource.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase));
 
         string dbStatus;
         string? dbError = null;
@@ -451,7 +416,7 @@ try
             {
                 status = dbStatus,
                 dataSource,
-                usingLocalSqlExpress = looksLocal,
+                usingLocalPostgres = looksLocal,
                 envVarsDetected = new
                 {
                     BAGLY_CONNECTION_STRING = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BAGLY_CONNECTION_STRING")),
@@ -459,7 +424,7 @@ try
                 },
                 connectionRelatedEnvKeys,
                 hint = dbStatus != "connected"
-                    ? "DB still unreachable from Render. Check: (1) SQL server Networking → Public access On, (2) firewall rule saved on the SERVER not only the database, (3) BAGLY_CONNECTION_STRING is the Azure ADO.NET string with Encrypt=True and correct password, (4) Render → Manual Deploy after env changes. See database.error for the SQL message."
+                    ? "DB still unreachable from Render. Check: (1) the Neon project is active (not suspended), (2) BAGLY_CONNECTION_STRING is the Npgsql-format Neon connection string (Host=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true), (3) the password has no stray quotes/whitespace, (4) Render → Manual Deploy after env changes. See database.error for the Postgres message."
                     : null,
                 error = dbError,
             },
@@ -535,7 +500,7 @@ try
         });
     });
 
-    Log.Information("Bagly API starting with Serilog SQL Server logging");
+    Log.Information("Bagly API starting (Npgsql/Postgres, console logging)");
     app.Run();
 }
 catch (Exception ex)
@@ -568,10 +533,9 @@ static string? ResolveConnectionString(IConfiguration config)
         }
 
         // Ignore placeholders still sitting in appsettings.json
-        if (value.Contains("YOUR_SERVER", StringComparison.OrdinalIgnoreCase) ||
-            value.Contains("YOUR_ADMIN", StringComparison.OrdinalIgnoreCase) ||
-            value.Contains("YOUR_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
-            value.Contains("SET_VIA_ENV_", StringComparison.OrdinalIgnoreCase))
+        if (value.Contains("ep-xxxx", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("YOUR_NEON", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase))
         {
             continue;
         }

@@ -105,4 +105,4 @@ If https://bagly-one.vercel.app/ still lacks **Login / Register** in the navbar,
 ## Notes
 
 - First Render API call after idle can take 30–60s (free sleep)
-- Azure SQL may need seed data if shop is empty — tell me if products don’t show
+- Neon Postgres may need seed data if shop is empty — `POST /api/setup/seed`, or tell me if products don’t show

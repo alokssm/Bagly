@@ -15,6 +15,10 @@ services:
         value: "true"
       - key: EnableHttpsRedirection
         value: "false"
+      # Neon Postgres connection string (Npgsql format), e.g.:
+      # Host=ep-xxxx.region.aws.neon.tech;Database=neondb;Username=neondb_owner;Password=***;SSL Mode=Require;Trust Server Certificate=true
+      # Set this in Render → Environment (never commit the real value). BAGLY_CONNECTION_STRING
+      # also works and takes priority if both are set.
       - key: ConnectionStrings__DefaultConnection
         sync: false
       - key: Jwt__Key
