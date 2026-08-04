@@ -419,12 +419,15 @@ try
         string? dbError = null;
         try
         {
-            var canConnect = await db.Database.CanConnectAsync();
-            dbStatus = canConnect ? "connected" : "unreachable";
+            // CanConnectAsync often returns false with no exception on network/auth failures.
+            // Open a real connection so /api/health.error shows the actionable SQL message.
+            await db.Database.OpenConnectionAsync();
+            await db.Database.CloseConnectionAsync();
+            dbStatus = "connected";
         }
         catch (Exception ex)
         {
-            dbStatus = "error";
+            dbStatus = "unreachable";
             dbError = ex.GetBaseException().Message;
         }
 
@@ -455,8 +458,8 @@ try
                     ConnectionStrings__DefaultConnection = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")),
                 },
                 connectionRelatedEnvKeys,
-                hint = looksLocal || dbStatus != "connected"
-                    ? "Azure firewall alone is not enough. Render must inject BAGLY_CONNECTION_STRING into THIS web service. Check Environment keys listed in connectionRelatedEnvKeys, then Save + Manual Deploy."
+                hint = dbStatus != "connected"
+                    ? "DB still unreachable from Render. Check: (1) SQL server Networking → Public access On, (2) firewall rule saved on the SERVER not only the database, (3) BAGLY_CONNECTION_STRING is the Azure ADO.NET string with Encrypt=True and correct password, (4) Render → Manual Deploy after env changes. See database.error for the SQL message."
                     : null,
                 error = dbError,
             },
