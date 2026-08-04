@@ -135,6 +135,10 @@ export function buildUpsertProductPayload(form, { includeId = false } = {}) {
     gallery,
     isActive: Boolean(form.isActive),
     stockQuantity: Math.max(0, Number(form.stockQuantity) || 0),
+    slug: String(form.slug || '').trim() || null,
+    seoTitle: String(form.seoTitle || '').trim() || null,
+    seoDescription: String(form.seoDescription || '').trim() || null,
+    seoKeywords: String(form.seoKeywords || '').trim() || null,
   }
 
   if (includeId && form.id) {

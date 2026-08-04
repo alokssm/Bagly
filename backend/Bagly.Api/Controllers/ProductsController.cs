@@ -46,15 +46,20 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
         return Ok(mapped);
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<ProductDto>> GetProduct(string id, CancellationToken cancellationToken)
+    /// <summary>Looks up by <c>Id</c> first (legacy/bookmarked links keep working), then falls back
+    /// to <c>Slug</c> so SEO-friendly product URLs (e.g. <c>/product/leather-tote-bag</c>) resolve too.</summary>
+    [HttpGet("{idOrSlug}")]
+    public async Task<ActionResult<ProductDto>> GetProduct(string idOrSlug, CancellationToken cancellationToken)
     {
         var product = await db.Products.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id && p.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == idOrSlug && p.IsActive, cancellationToken);
+
+        product ??= await db.Products.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Slug == idOrSlug && p.IsActive, cancellationToken);
 
         if (product is null)
         {
-            return NotFound(new { message = $"Product '{id}' was not found." });
+            return NotFound(new { message = $"Product '{idOrSlug}' was not found." });
         }
 
         return Ok(ProductMapper.ToDto(product));

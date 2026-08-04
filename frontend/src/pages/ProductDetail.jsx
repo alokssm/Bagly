@@ -47,6 +47,27 @@ export default function ProductDetail() {
     }
   }, [id])
 
+  useEffect(() => {
+    if (!product) return
+
+    const previousTitle = document.title
+    const metaDescription = document.querySelector('meta[name="description"]')
+    const previousDescription = metaDescription?.getAttribute('content') ?? null
+
+    document.title = `${product.seoTitle || product.name} — Bagly`
+    const description = product.seoDescription || product.shortDescription
+    if (metaDescription && description) {
+      metaDescription.setAttribute('content', description)
+    }
+
+    return () => {
+      document.title = previousTitle
+      if (metaDescription && previousDescription != null) {
+        metaDescription.setAttribute('content', previousDescription)
+      }
+    }
+  }, [product])
+
   const gallery = useMemo(() => product?.gallery ?? [], [product])
   const soldOut = product?.inStock === false
 

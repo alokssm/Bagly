@@ -121,9 +121,13 @@ public class AdminProductsController(
             id = $"{id}-{Guid.NewGuid():N}"[..Math.Min(100, id.Length + 9)];
         }
 
+        var slugBase = ProductMapper.Slugify(string.IsNullOrWhiteSpace(request.Slug) ? request.Name : request.Slug);
+        var slug = await GenerateUniqueSlugAsync(slugBase, excludeId: null, cancellationToken);
+
         var product = new Product
         {
             Id = id,
+            Slug = slug,
             CreatedAt = DateTime.UtcNow,
         };
         ProductMapper.ApplyUpsert(product, request);
@@ -176,6 +180,18 @@ public class AdminProductsController(
 
         var before = new { product.Name, product.Category, product.Price, product.IsActive };
         var wasAvailable = product.IsAvailable;
+
+        // Only touch the slug when the requester actually changed it (or it's missing from a
+        // legacy row) — this keeps already-shared/bookmarked SEO URLs stable across edits.
+        var requestedSlugBase = ProductMapper.Slugify(
+            string.IsNullOrWhiteSpace(request.Slug)
+                ? (string.IsNullOrWhiteSpace(product.Slug) ? request.Name : product.Slug)
+                : request.Slug);
+        if (!string.Equals(requestedSlugBase, product.Slug, StringComparison.Ordinal))
+        {
+            product.Slug = await GenerateUniqueSlugAsync(requestedSlugBase, product.Id, cancellationToken);
+        }
+
         ProductMapper.ApplyUpsert(product, request);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -237,6 +253,20 @@ public class AdminProductsController(
         if (request.StockQuantity < 0) return "Stock quantity must be zero or greater.";
         if (string.IsNullOrWhiteSpace(request.Image)) return "Image URL is required.";
         return null;
+    }
+
+    /// <summary><paramref name="baseSlug"/> is expected to already be slugified; this appends
+    /// a <c>-2</c>, <c>-3</c>, … suffix until it no longer collides with another product's slug.</summary>
+    private async Task<string> GenerateUniqueSlugAsync(string baseSlug, string? excludeId, CancellationToken cancellationToken)
+    {
+        var candidate = baseSlug;
+        var suffix = 2;
+        while (await db.Products.AnyAsync(p => p.Slug == candidate && p.Id != excludeId, cancellationToken))
+        {
+            candidate = $"{baseSlug}-{suffix}";
+            suffix++;
+        }
+        return candidate;
     }
 
     private static (int Page, int PageSize) NormalizePaging(int page, int pageSize)

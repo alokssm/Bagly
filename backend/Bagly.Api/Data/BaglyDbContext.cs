@@ -42,9 +42,14 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.FeaturesJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.GalleryJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.StockQuantity).HasDefaultValue(999);
+            entity.Property(x => x.Slug).HasMaxLength(160);
+            entity.Property(x => x.SeoTitle).HasMaxLength(160);
+            entity.Property(x => x.SeoDescription).HasMaxLength(300);
+            entity.Property(x => x.SeoKeywords).HasMaxLength(300);
             entity.HasIndex(x => x.Category);
             entity.HasIndex(x => x.SubCategoryId);
             entity.HasIndex(x => x.IsActive);
+            entity.HasIndex(x => x.Slug).IsUnique().HasFilter("[Slug] IS NOT NULL");
         });
 
         modelBuilder.Entity<Category>(entity =>

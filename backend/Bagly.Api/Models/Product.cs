@@ -26,6 +26,19 @@ public class Product
     public int StockQuantity { get; set; } = 999;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>URL-friendly, unique-ish identifier used for SEO-friendly product links
+    /// (e.g. <c>/product/leather-tote-bag</c>). Backfilled from <see cref="Id"/> for legacy rows.</summary>
+    public string? Slug { get; set; }
+
+    /// <summary>Optional override for the storefront <c>&lt;title&gt;</c> tag; falls back to <see cref="Name"/> when empty.</summary>
+    public string? SeoTitle { get; set; }
+
+    /// <summary>Optional override for the storefront meta description tag; falls back to <see cref="ShortDescription"/> when empty.</summary>
+    public string? SeoDescription { get; set; }
+
+    /// <summary>Optional comma-separated focus keywords for search engines.</summary>
+    public string? SeoKeywords { get; set; }
+
     /// <summary>A product can be bought when it is active and in stock.</summary>
     [NotMapped]
     public bool IsAvailable => IsActive && StockQuantity > 0;

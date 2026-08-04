@@ -32,7 +32,10 @@ public static class ProductMapper
             DeserializeList(product.GalleryJson),
             product.StockQuantity,
             product.IsAvailable,
-            product.StockQuantity > 0
+            product.StockQuantity > 0,
+            product.Slug,
+            product.SeoTitle,
+            product.SeoDescription
         );
 
     public static AdminProductDto ToAdminDto(Product product) =>
@@ -56,7 +59,11 @@ public static class ProductMapper
             product.IsActive,
             product.StockQuantity,
             product.IsAvailable,
-            product.CreatedAt
+            product.CreatedAt,
+            product.Slug,
+            product.SeoTitle,
+            product.SeoDescription,
+            product.SeoKeywords
         );
 
     public static void ApplyUpsert(Product product, UpsertProductRequest request)
@@ -82,6 +89,9 @@ public static class ProductMapper
             JsonOptions);
         product.IsActive = request.IsActive;
         product.StockQuantity = Math.Max(0, request.StockQuantity);
+        product.SeoTitle = string.IsNullOrWhiteSpace(request.SeoTitle) ? null : request.SeoTitle.Trim();
+        product.SeoDescription = string.IsNullOrWhiteSpace(request.SeoDescription) ? null : request.SeoDescription.Trim();
+        product.SeoKeywords = string.IsNullOrWhiteSpace(request.SeoKeywords) ? null : request.SeoKeywords.Trim();
     }
 
     public static string Slugify(string value)

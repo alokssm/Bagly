@@ -40,6 +40,7 @@ public static class DatabaseBootstrapper
         await EnsureCategoryHierarchyAndSubCategoryColumnsAsync(db, cancellationToken);
         await EnsureContactMessagesTableAsync(db, cancellationToken);
         await EnsureSiteHitsTableAsync(db, cancellationToken);
+        await EnsureProductSeoColumnsAsync(db, cancellationToken);
 
         // Re-read pending after possible history updates.
         pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
@@ -62,7 +63,10 @@ public static class DatabaseBootstrapper
                 (migrationId.Contains("ContactMessages", StringComparison.OrdinalIgnoreCase) &&
                  await TableExistsAsync(db, "ContactMessages", cancellationToken)) ||
                 (migrationId.Contains("SiteHits", StringComparison.OrdinalIgnoreCase) &&
-                 await TableExistsAsync(db, "SiteHits", cancellationToken));
+                 await TableExistsAsync(db, "SiteHits", cancellationToken)) ||
+                (migrationId.Contains("ProductSeo", StringComparison.OrdinalIgnoreCase) &&
+                 await ColumnExistsAsync(db, "Products", "Slug", cancellationToken) &&
+                 await ColumnExistsAsync(db, "Products", "SeoTitle", cancellationToken));
 
             if (shouldMark)
             {
@@ -496,6 +500,40 @@ public static class DatabaseBootstrapper
 
             CREATE INDEX [IX_ContactMessages_CreatedAt] ON [dbo].[ContactMessages] ([CreatedAt]);
             CREATE INDEX [IX_ContactMessages_Email] ON [dbo].[ContactMessages] ([Email]);
+            """,
+            cancellationToken);
+    }
+
+    /// <summary>Adds Products.Slug/SeoTitle/SeoDescription/SeoKeywords so already deployed
+    /// Azure/Render databases pick up SEO-friendly product URLs and meta tags without a full
+    /// migration. Backfills Slug from Id for existing rows so old links keep working.</summary>
+    private static async Task EnsureProductSeoColumnsAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(db, "Products", cancellationToken))
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('dbo.Products', 'Slug') IS NULL
+                ALTER TABLE [dbo].[Products] ADD [Slug] NVARCHAR(160) NULL;
+
+            IF COL_LENGTH('dbo.Products', 'SeoTitle') IS NULL
+                ALTER TABLE [dbo].[Products] ADD [SeoTitle] NVARCHAR(160) NULL;
+
+            IF COL_LENGTH('dbo.Products', 'SeoDescription') IS NULL
+                ALTER TABLE [dbo].[Products] ADD [SeoDescription] NVARCHAR(300) NULL;
+
+            IF COL_LENGTH('dbo.Products', 'SeoKeywords') IS NULL
+                ALTER TABLE [dbo].[Products] ADD [SeoKeywords] NVARCHAR(300) NULL;
+
+            UPDATE [dbo].[Products] SET [Slug] = [Id] WHERE [Slug] IS NULL OR [Slug] = N'';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_Slug' AND object_id = OBJECT_ID(N'dbo.Products'))
+                CREATE UNIQUE INDEX [IX_Products_Slug] ON [dbo].[Products] ([Slug]) WHERE [Slug] IS NOT NULL;
             """,
             cancellationToken);
     }

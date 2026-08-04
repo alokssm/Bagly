@@ -11,6 +11,7 @@ export default function ProductCard({ product }) {
   const [error, setError] = useState('')
 
   const soldOut = product.inStock === false
+  const productHref = `/product/${product.slug || product.id}`
 
   const handleAdd = async () => {
     setAdding(true)
@@ -28,7 +29,7 @@ export default function ProductCard({ product }) {
 
   return (
     <article className={`product-card ${soldOut ? 'is-sold' : ''}`}>
-      <Link to={`/product/${product.id}`} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
+      <Link to={productHref} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
         <img src={product.image} alt={product.name} loading="lazy" />
         {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
         {soldOut ? (
@@ -40,7 +41,7 @@ export default function ProductCard({ product }) {
 
       <div className="product-meta">
         <span className="product-category">{product.category}</span>
-        <Link to={`/product/${product.id}`}>
+        <Link to={productHref}>
           <h3>{product.name}</h3>
         </Link>
         <div className="product-price-row">
@@ -52,7 +53,7 @@ export default function ProductCard({ product }) {
       </div>
 
       <div className="product-actions">
-        <Link to={`/product/${product.id}`} className="btn btn-secondary">
+        <Link to={productHref} className="btn btn-secondary">
           View
         </Link>
         {soldOut ? (

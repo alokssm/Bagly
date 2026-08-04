@@ -19,7 +19,10 @@ public record ProductDto(
     IReadOnlyList<string> Gallery,
     int StockQuantity,
     bool IsAvailable,
-    bool InStock
+    bool InStock,
+    string? Slug,
+    string? SeoTitle,
+    string? SeoDescription
 );
 
 public record CategoryDto(
@@ -70,7 +73,11 @@ public record UpsertProductRequest(
     IReadOnlyList<string> Gallery,
     bool IsActive = true,
     int StockQuantity = 999,
-    string? SubCategoryId = null
+    string? SubCategoryId = null,
+    string? Slug = null,
+    string? SeoTitle = null,
+    string? SeoDescription = null,
+    string? SeoKeywords = null
 );
 
 public record AdminProductDto(
@@ -93,7 +100,11 @@ public record AdminProductDto(
     bool IsActive,
     int StockQuantity,
     bool IsAvailable,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? Slug,
+    string? SeoTitle,
+    string? SeoDescription,
+    string? SeoKeywords
 );
 
 /// <summary>Lean row shape for the admin products list/table — avoids shipping gallery/features/colors JSON for every row.</summary>
