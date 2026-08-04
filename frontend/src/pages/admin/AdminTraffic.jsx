@@ -56,8 +56,8 @@ export default function AdminTraffic() {
           <p className="eyebrow">Visitors</p>
           <h1>Traffic</h1>
           <p className="admin-subtitle">
-            Page views by visitor location, resolved from IP address (ip-api.com, cached 24h per
-            IP to respect its free 45 requests/min limit). Private/local IPs are grouped as
+            Page views by visitor location, resolved from IP address (ipwho.is with GeoJS fallback,
+            cached 24h per IP). Private/local IPs are grouped as
             &ldquo;Local&rdquo;; lookups that fail or time out show as &ldquo;Unknown&rdquo;.
           </p>
         </div>

@@ -128,10 +128,16 @@ try
     builder.Services.AddScoped<IContactEmailService, ContactEmailService>();
     builder.Services.AddSingleton<IContactRateLimiter, ContactRateLimiter>();
     builder.Services.AddSingleton<ISiteHitRateLimiter, SiteHitRateLimiter>();
+    builder.Services.Configure<GeoIpOptions>(builder.Configuration.GetSection(GeoIpOptions.SectionName));
     builder.Services.AddSingleton<IIpGeolocationService, IpGeolocationService>();
-    builder.Services.AddHttpClient("IpGeolocation", client =>
+    builder.Services.AddHttpClient("GeoIpIpWhoIs", client =>
     {
-        client.BaseAddress = new Uri("http://ip-api.com/");
+        client.BaseAddress = new Uri("https://ipwho.is/");
+        client.Timeout = TimeSpan.FromSeconds(3);
+    });
+    builder.Services.AddHttpClient("GeoIpGeoJs", client =>
+    {
+        client.BaseAddress = new Uri("https://get.geojs.io/");
         client.Timeout = TimeSpan.FromSeconds(3);
     });
     builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();

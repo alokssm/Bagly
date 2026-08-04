@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Bagly.Api.Options;
+using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Services;
 
@@ -15,17 +17,21 @@ public interface IIpGeolocationService
 }
 
 /// <summary>
-/// Free-tier IP geolocation via ip-api.com (45 requests/min limit on the free plan), backed by an
-/// in-memory 24h cache keyed by IP so repeat visitors from the same address never re-hit the API.
-/// Registered as a singleton so the cache survives across requests; ip-api.com is called with a
-/// hard 2s timeout so a slow/unreachable API never meaningfully delays the hit beacon response.
+/// Free IP geolocation via ipwho.is (primary) with GeoJS fallback — both allow commercial use and
+/// require no API key. Backed by an in-memory 24h cache keyed by IP so repeat visitors from the
+/// same address never re-hit the API. Registered as a singleton so the cache survives across
+/// requests; lookups use a hard 2s timeout so a slow/unreachable API never meaningfully delays
+/// the hit beacon response.
 /// </summary>
 public sealed class IpGeolocationService(
     IHttpClientFactory httpClientFactory,
+    IOptions<GeoIpOptions> options,
     ILogger<IpGeolocationService> logger) : IIpGeolocationService
 {
-    private const string HttpClientName = "IpGeolocation";
+    private const string IpWhoIsClientName = "GeoIpIpWhoIs";
+    private const string GeoJsClientName = "GeoIpGeoJs";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+    private static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(2);
     private static readonly GeoLocation LocalLocation = new("Local", null, null);
     private static readonly GeoLocation UnknownLocation = new("Unknown", null, null);
 
@@ -56,44 +62,132 @@ public sealed class IpGeolocationService(
 
     private async Task<GeoLocation> FetchAsync(string ipAddress, CancellationToken cancellationToken)
     {
+        var useGeoJsFirst = string.Equals(
+            options.Value.Provider?.Trim(),
+            "geojs",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (useGeoJsFirst)
+        {
+            var geoJs = await TryGeoJsAsync(ipAddress, cancellationToken);
+            if (geoJs is not null)
+            {
+                return geoJs;
+            }
+
+            var ipWhoIs = await TryIpWhoIsAsync(ipAddress, cancellationToken);
+            if (ipWhoIs is not null)
+            {
+                return ipWhoIs;
+            }
+        }
+        else
+        {
+            var ipWhoIs = await TryIpWhoIsAsync(ipAddress, cancellationToken);
+            if (ipWhoIs is not null)
+            {
+                return ipWhoIs;
+            }
+
+            var geoJs = await TryGeoJsAsync(ipAddress, cancellationToken);
+            if (geoJs is not null)
+            {
+                return geoJs;
+            }
+        }
+
+        return UnknownLocation;
+    }
+
+    private async Task<GeoLocation?> TryIpWhoIsAsync(string ipAddress, CancellationToken cancellationToken)
+    {
         try
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(2));
+            timeoutCts.CancelAfter(LookupTimeout);
 
-            var client = httpClientFactory.CreateClient(HttpClientName);
-            var payload = await client.GetFromJsonAsync<IpApiResponse>(
-                $"json/{Uri.EscapeDataString(ipAddress)}?fields=status,country,regionName,city",
+            var client = httpClientFactory.CreateClient(IpWhoIsClientName);
+            var payload = await client.GetFromJsonAsync<IpWhoIsResponse>(
+                Uri.EscapeDataString(ipAddress),
                 timeoutCts.Token);
 
-            if (payload is null || !string.Equals(payload.Status, "success", StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(payload.Country))
+            if (payload is null || !payload.Success || string.IsNullOrWhiteSpace(payload.Country))
             {
-                return UnknownLocation;
+                return null;
             }
 
             return new GeoLocation(
                 payload.Country.Trim(),
-                string.IsNullOrWhiteSpace(payload.RegionName) ? null : payload.RegionName.Trim(),
+                string.IsNullOrWhiteSpace(payload.Region) ? null : payload.Region.Trim(),
                 string.IsNullOrWhiteSpace(payload.City) ? null : payload.City.Trim());
         }
         catch (Exception ex) when (ex is TaskCanceledException or OperationCanceledException or HttpRequestException)
         {
-            logger.LogWarning(ex, "IP geolocation lookup timed out or failed.");
-            return UnknownLocation;
+            logger.LogDebug(ex, "ipwho.is lookup timed out or failed for {IpAddress}.", ipAddress);
+            return null;
         }
     }
 
-    private sealed class IpApiResponse
+    private async Task<GeoLocation?> TryGeoJsAsync(string ipAddress, CancellationToken cancellationToken)
     {
-        [JsonPropertyName("status")]
-        public string? Status { get; set; }
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(LookupTimeout);
+
+            var client = httpClientFactory.CreateClient(GeoJsClientName);
+            var payload = await client.GetFromJsonAsync<GeoJsResponse>(
+                $"v1/ip/geo/{Uri.EscapeDataString(ipAddress)}.json",
+                timeoutCts.Token);
+
+            var country = payload?.Country?.Trim();
+            if (string.IsNullOrWhiteSpace(country))
+            {
+                country = payload?.CountryCode?.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(country))
+            {
+                return null;
+            }
+
+            return new GeoLocation(
+                country,
+                string.IsNullOrWhiteSpace(payload?.Region) ? null : payload.Region.Trim(),
+                string.IsNullOrWhiteSpace(payload?.City) ? null : payload.City.Trim());
+        }
+        catch (Exception ex) when (ex is TaskCanceledException or OperationCanceledException or HttpRequestException)
+        {
+            logger.LogDebug(ex, "GeoJS lookup timed out or failed for {IpAddress}.", ipAddress);
+            return null;
+        }
+    }
+
+    private sealed class IpWhoIsResponse
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
 
         [JsonPropertyName("country")]
         public string? Country { get; set; }
 
-        [JsonPropertyName("regionName")]
-        public string? RegionName { get; set; }
+        [JsonPropertyName("region")]
+        public string? Region { get; set; }
+
+        [JsonPropertyName("city")]
+        public string? City { get; set; }
+    }
+
+    private sealed class GeoJsResponse
+    {
+        [JsonPropertyName("country")]
+        public string? Country { get; set; }
+
+        [JsonPropertyName("country_code")]
+        public string? CountryCode { get; set; }
+
+        [JsonPropertyName("region")]
+        public string? Region { get; set; }
 
         [JsonPropertyName("city")]
         public string? City { get; set; }

@@ -82,7 +82,7 @@ public class AnalyticsController(
     }
 
     /// <summary>Prefers the CDN-provided country header (instant, no external call) and only
-    /// falls back to the ip-api.com lookup — which also gives region/city — when it's absent.</summary>
+    /// falls back to ipwho.is / GeoJS — which also give region/city — when it's absent.</summary>
     private async Task<(string Country, string? Region, string? City)> ResolveLocationAsync(
         string? ip,
         CancellationToken cancellationToken)
