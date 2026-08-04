@@ -38,14 +38,30 @@ public class CartController(BaglyDbContext db) : ControllerBase
             return BadRequest(new { message = "Quantity must be at least 1." });
         }
 
+        // The frontend generates the cart id client-side so the very first add-to-cart is a
+        // single request (no separate create-cart round trip first) — create the row here on
+        // demand instead of requiring it to already exist.
         var cart = await LoadCartAsync(cartId, cancellationToken);
         if (cart is null)
         {
-            return NotFound(new { message = "Cart not found." });
+            cart = new Cart { Id = cartId };
+            db.Carts.Add(cart);
         }
 
+        // Project only what's needed for the cart line instead of loading the full product
+        // row (descriptions, SEO fields, gallery JSON, etc.) that AddItem never uses.
         var product = await db.Products.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == request.ProductId && p.IsActive, cancellationToken);
+            .Where(p => p.Id == request.ProductId && p.IsActive)
+            .Select(p => new
+            {
+                p.Id,
+                p.Name,
+                p.Image,
+                p.Price,
+                p.StockQuantity,
+                p.ColorsJson,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (product is null)
         {
