@@ -647,13 +647,15 @@ p {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .product-card:not(.is-sold):hover .product-media {
+  .product-card:not(.is-sold):hover .product-media,
+  .product-media:not(.is-sold):hover {
     border-color: rgba(176, 138, 85, 0.45);
     box-shadow: 0 12px 32px rgba(18, 40, 30, 0.1);
   }
 
-  .product-card:not(.is-sold):hover .product-media img {
-    transform: scale(1.08);
+  .product-card:not(.is-sold):hover .product-media img,
+  .product-media:not(.is-sold):hover img {
+    transform: scale(1.18);
   }
 }
 
@@ -891,7 +893,7 @@ p {
   }
 
   .pdp-main-image:not(.is-sold):hover img {
-    transform: scale(1.1);
+    transform: scale(1.2);
   }
 }
 
