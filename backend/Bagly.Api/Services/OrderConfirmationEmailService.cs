@@ -353,10 +353,11 @@ public class OrderConfirmationEmailService(
     }
 
     private static string FormatPaymentLine(Order order) =>
-        order.PaymentStatus switch
+        (order.PaymentStatus, order.PaymentProvider) switch
         {
-            "Paid" => $"Payment received via {order.PaymentProvider ?? "online payment"}.",
-            "NotRequired" => "Payment: not required for this order.",
+            ("Paid", _) => $"Payment received via {order.PaymentProvider ?? "online payment"}.",
+            ("Pending", "COD") => "Payment method: Cash on delivery. Please keep the total ready when your order arrives.",
+            ("NotRequired", _) => "Payment: not required for this order.",
             _ => $"Payment status: {order.PaymentStatus}.",
         };
 

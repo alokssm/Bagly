@@ -32,6 +32,7 @@ export function buildCreateOrderPayload({
   country,
   cartId,
   items,
+  paymentMethod,
 }) {
   const payload = {
     email: String(email || '').trim(),
@@ -42,6 +43,10 @@ export function buildCreateOrderPayload({
     state: String(state || '').trim(),
     zip: String(zip || '').trim(),
     country: String(country || 'United States').trim(),
+  }
+
+  if (paymentMethod) {
+    payload.paymentMethod = String(paymentMethod).trim()
   }
 
   if (cartId) {

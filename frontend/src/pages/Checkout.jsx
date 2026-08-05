@@ -25,6 +25,8 @@ export default function Checkout() {
   const { user, isAuthenticated, loading: authLoading } = useCustomerAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
+  const [step, setStep] = useState('address')
+  const [paymentMethod, setPaymentMethod] = useState('')
   const [placed, setPlaced] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [confirmingOrder, setConfirmingOrder] = useState(false)
@@ -41,6 +43,14 @@ export default function Checkout() {
   const [setAsDefault, setSetAsDefault] = useState(false)
 
   const isIndia = form.country === 'India'
+  const razorpayAvailable = isIndia && !!razorpayConfig?.enabled
+  const codOnly = !razorpayAvailable
+
+  useEffect(() => {
+    if (step === 'payment' && codOnly && paymentMethod !== 'COD') {
+      setPaymentMethod('COD')
+    }
+  }, [step, codOnly, paymentMethod])
 
   useEffect(() => {
     let cancelled = false
@@ -198,6 +208,11 @@ export default function Checkout() {
                 Razorpay payment ID: {placed.razorpayPaymentId}
               </p>
             ) : null}
+            {placed.paymentProvider === 'COD' ? (
+              <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
+                Please keep {formatPrice(placed.total)} ready in cash for delivery.
+              </p>
+            ) : null}
           </div>
           <button type="button" className="btn btn-primary" onClick={() => navigate('/shop')}>
             Continue shopping
@@ -244,6 +259,12 @@ export default function Checkout() {
     setError(message)
   }
 
+  const backToAddress = () => {
+    setError('')
+    setStep('address')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const saveAddressIfRequested = async () => {
     if (!isAuthenticated || !saveAddress) return
     try {
@@ -257,8 +278,20 @@ export default function Checkout() {
 
   const onSubmit = async (e) => {
     e.preventDefault()
-    setSubmitting(true)
     setError('')
+
+    if (step === 'address') {
+      setStep('payment')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    if (!paymentMethod) {
+      setError('Please choose a payment method to continue.')
+      return
+    }
+
+    setSubmitting(true)
 
     try {
       const payload = buildCreateOrderPayload({
@@ -269,11 +302,12 @@ export default function Checkout() {
           color: item.color,
           quantity: item.quantity,
         })),
+        paymentMethod,
       })
 
       await saveAddressIfRequested()
 
-      if (isIndia) {
+      if (paymentMethod === 'RAZORPAY') {
         if (!razorpayConfig?.enabled) {
           throw new Error(
             'Razorpay is not configured yet. Add your test KeyId and KeySecret in backend appsettings.json.',
@@ -345,6 +379,9 @@ export default function Checkout() {
         <div className="page-hero">
           <span className="eyebrow">Checkout</span>
           <h1>Complete your order</h1>
+          <p>
+            {step === 'address' ? 'Step 1 of 2 — Shipping address' : 'Step 2 of 2 — Payment method'}
+          </p>
         </div>
 
         <form
@@ -353,7 +390,7 @@ export default function Checkout() {
           onSubmit={onSubmit}
         >
           <div className="form-card">
-            <h2>Shipping details</h2>
+            <h2>{step === 'address' ? 'Shipping details' : 'Payment method'}</h2>
             {error ? (
               <ApiErrorState
                 message={error}
@@ -363,141 +400,210 @@ export default function Checkout() {
               />
             ) : null}
 
-            {isAuthenticated ? (
-              <div className="saved-addresses">
-                <span className="saved-addresses__label">Saved addresses</span>
-                {addressesLoading ? (
-                  <LoadingState message="Loading your addresses…" compact />
-                ) : addresses.length === 0 ? (
-                  <p className="saved-addresses__hint">
-                    You don't have any saved addresses yet. Fill the form below and check "Save
-                    this address" to add one.
-                  </p>
-                ) : (
-                  <div className="saved-addresses__list">
-                    {addresses.map((addr) => (
-                      <button
-                        type="button"
-                        key={addr.id}
-                        className={`saved-address-card${selectedAddressId === addr.id ? ' active' : ''}`}
-                        onClick={() => selectSavedAddress(addr)}
-                      >
-                        <span className="saved-address-card__top">
-                          <strong>{addr.label || `${addr.firstName} ${addr.lastName}`}</strong>
-                          {addr.isDefault ? (
-                            <span className="saved-address-card__badge">Default</span>
-                          ) : null}
-                        </span>
-                        <span className="saved-address-card__body">
-                          {addr.address}, {addr.city}, {addr.state} {addr.zip}, {addr.country}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            <div className="form-grid">
-              <div className="form-field full">
-                <label htmlFor="email">Email</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={onChange}
-                  placeholder="you@example.com"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="firstName">First name</label>
-                <input
-                  id="firstName"
-                  name="firstName"
-                  required
-                  value={form.firstName}
-                  onChange={onChange}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="lastName">Last name</label>
-                <input
-                  id="lastName"
-                  name="lastName"
-                  required
-                  value={form.lastName}
-                  onChange={onChange}
-                />
-              </div>
-              <div className="form-field full">
-                <label htmlFor="address">Address</label>
-                <input
-                  id="address"
-                  name="address"
-                  required
-                  value={form.address}
-                  onChange={onChange}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="city">City</label>
-                <input id="city" name="city" required value={form.city} onChange={onChange} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="state">State</label>
-                <input id="state" name="state" required value={form.state} onChange={onChange} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="zip">{isIndia ? 'PIN code' : 'ZIP'}</label>
-                <input id="zip" name="zip" required value={form.zip} onChange={onChange} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="country">Country</label>
-                <select id="country" name="country" value={form.country} onChange={onChange}>
-                  <option>India</option>
-                  <option>United States</option>
-                  <option>Canada</option>
-                  <option>United Kingdom</option>
-                </select>
-              </div>
-            </div>
-
-            {isAuthenticated ? (
-              <div className="save-address-block">
-                <label className="save-address-check">
-                  <input
-                    type="checkbox"
-                    checked={saveAddress}
-                    onChange={(e) => setSaveAddress(e.target.checked)}
-                  />
-                  Save this address for next time
-                </label>
-                {saveAddress ? (
-                  <div className="save-address-options">
-                    <div className="form-field">
-                      <label htmlFor="addressLabel">Label (optional)</label>
-                      <input
-                        id="addressLabel"
-                        name="addressLabel"
-                        placeholder="Home, Work…"
-                        value={addressLabel}
-                        onChange={(e) => setAddressLabel(e.target.value)}
-                      />
-                    </div>
-                    <label className="save-address-check save-address-check--small">
-                      <input
-                        type="checkbox"
-                        checked={setAsDefault}
-                        onChange={(e) => setSetAsDefault(e.target.checked)}
-                      />
-                      Set as default address
-                    </label>
+            {step === 'address' ? (
+              <>
+                {isAuthenticated ? (
+                  <div className="saved-addresses">
+                    <span className="saved-addresses__label">Saved addresses</span>
+                    {addressesLoading ? (
+                      <LoadingState message="Loading your addresses…" compact />
+                    ) : addresses.length === 0 ? (
+                      <p className="saved-addresses__hint">
+                        You don't have any saved addresses yet. Fill the form below and check "Save
+                        this address" to add one.
+                      </p>
+                    ) : (
+                      <div className="saved-addresses__list">
+                        {addresses.map((addr) => (
+                          <button
+                            type="button"
+                            key={addr.id}
+                            className={`saved-address-card${selectedAddressId === addr.id ? ' active' : ''}`}
+                            onClick={() => selectSavedAddress(addr)}
+                          >
+                            <span className="saved-address-card__top">
+                              <strong>{addr.label || `${addr.firstName} ${addr.lastName}`}</strong>
+                              {addr.isDefault ? (
+                                <span className="saved-address-card__badge">Default</span>
+                              ) : null}
+                            </span>
+                            <span className="saved-address-card__body">
+                              {addr.address}, {addr.city}, {addr.state} {addr.zip}, {addr.country}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : null}
-              </div>
-            ) : null}
+
+                <div className="form-grid">
+                  <div className="form-field full">
+                    <label htmlFor="email">Email</label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      value={form.email}
+                      onChange={onChange}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="firstName">First name</label>
+                    <input
+                      id="firstName"
+                      name="firstName"
+                      required
+                      value={form.firstName}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="lastName">Last name</label>
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      required
+                      value={form.lastName}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field full">
+                    <label htmlFor="address">Address</label>
+                    <input
+                      id="address"
+                      name="address"
+                      required
+                      value={form.address}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="city">City</label>
+                    <input id="city" name="city" required value={form.city} onChange={onChange} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="state">State</label>
+                    <input id="state" name="state" required value={form.state} onChange={onChange} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="zip">{isIndia ? 'PIN code' : 'ZIP'}</label>
+                    <input id="zip" name="zip" required value={form.zip} onChange={onChange} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="country">Country</label>
+                    <select id="country" name="country" value={form.country} onChange={onChange}>
+                      <option>India</option>
+                      <option>United States</option>
+                      <option>Canada</option>
+                      <option>United Kingdom</option>
+                    </select>
+                  </div>
+                </div>
+
+                {isAuthenticated ? (
+                  <div className="save-address-block">
+                    <label className="save-address-check">
+                      <input
+                        type="checkbox"
+                        checked={saveAddress}
+                        onChange={(e) => setSaveAddress(e.target.checked)}
+                      />
+                      Save this address for next time
+                    </label>
+                    {saveAddress ? (
+                      <div className="save-address-options">
+                        <div className="form-field">
+                          <label htmlFor="addressLabel">Label (optional)</label>
+                          <input
+                            id="addressLabel"
+                            name="addressLabel"
+                            placeholder="Home, Work…"
+                            value={addressLabel}
+                            onChange={(e) => setAddressLabel(e.target.value)}
+                          />
+                        </div>
+                        <label className="save-address-check save-address-check--small">
+                          <input
+                            type="checkbox"
+                            checked={setAsDefault}
+                            onChange={(e) => setSetAsDefault(e.target.checked)}
+                          />
+                          Set as default address
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="checkout-address-summary">
+                  <div className="checkout-address-summary__body">
+                    <strong>
+                      {form.firstName} {form.lastName}
+                    </strong>
+                    <span>
+                      {form.address}, {form.city}, {form.state} {form.zip}, {form.country}
+                    </span>
+                    <span>{form.email}</span>
+                  </div>
+                  <button type="button" className="btn btn-secondary" onClick={backToAddress}>
+                    Change
+                  </button>
+                </div>
+
+                <div className="payment-method-list">
+                  <label
+                    className={`payment-method-card${paymentMethod === 'COD' ? ' active' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="COD"
+                      checked={paymentMethod === 'COD'}
+                      onChange={() => setPaymentMethod('COD')}
+                    />
+                    <span className="payment-method-card__body">
+                      <span className="payment-method-card__title">Cash on delivery</span>
+                      <span className="payment-method-card__desc">
+                        Pay in cash when your order is delivered.
+                      </span>
+                    </span>
+                  </label>
+
+                  {razorpayAvailable ? (
+                    <label
+                      className={`payment-method-card${paymentMethod === 'RAZORPAY' ? ' active' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="RAZORPAY"
+                        checked={paymentMethod === 'RAZORPAY'}
+                        onChange={() => setPaymentMethod('RAZORPAY')}
+                      />
+                      <span className="payment-method-card__body">
+                        <span className="payment-method-card__title">Pay now</span>
+                        <span className="payment-method-card__desc">
+                          Pay securely online via UPI, cards or netbanking (Razorpay).
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary checkout-back-btn"
+                  onClick={backToAddress}
+                >
+                  ← Back to address
+                </button>
+              </>
+            )}
           </div>
 
           <aside className="cart-summary">
@@ -526,14 +632,18 @@ export default function Checkout() {
               <span>Total</span>
               <span>{formatPrice(total)}</span>
             </div>
-            <button type="submit" className="btn btn-brass btn-block" disabled={submitting}>
-              {submitting
-                ? isIndia
-                  ? 'Opening Razorpay…'
-                  : 'Placing order…'
-                : isIndia
-                  ? 'Pay with Razorpay'
-                  : 'Place order'}
+            <button
+              type="submit"
+              className="btn btn-brass btn-block"
+              disabled={submitting || (step === 'payment' && !paymentMethod)}
+            >
+              {step === 'address'
+                ? 'Proceed to Pay'
+                : submitting
+                  ? paymentMethod === 'RAZORPAY'
+                    ? 'Opening Razorpay…'
+                    : 'Placing order…'
+                  : 'Continue'}
             </button>
           </aside>
         </form>
@@ -544,11 +654,11 @@ export default function Checkout() {
             role="alertdialog"
             aria-live="assertive"
             aria-busy="true"
-            aria-label={isIndia ? 'Confirming your payment' : 'Confirming your order'}
+            aria-label={paymentMethod === 'RAZORPAY' ? 'Confirming your payment' : 'Confirming your order'}
           >
             <div className="checkout-confirm-overlay__panel">
               <div className="checkout-confirm-overlay__spinner" aria-hidden="true" />
-              <h2>{isIndia ? 'Confirming your payment…' : 'Confirming your order…'}</h2>
+              <h2>{paymentMethod === 'RAZORPAY' ? 'Confirming your payment…' : 'Confirming your order…'}</h2>
               <p>Please don&apos;t refresh or go back.</p>
             </div>
           </div>

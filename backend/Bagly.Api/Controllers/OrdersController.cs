@@ -28,11 +28,14 @@ public class OrdersController(
             return BadRequest(new { message = "Shipping details are incomplete." });
         }
 
-        if (string.Equals(request.Country?.Trim(), "India", StringComparison.OrdinalIgnoreCase))
+        var isIndia = string.Equals(request.Country?.Trim(), "India", StringComparison.OrdinalIgnoreCase);
+        var isCod = IsCodPaymentMethod(request.PaymentMethod);
+
+        if (isIndia && !isCod)
         {
             return BadRequest(new
             {
-                message = "Indian customers must complete payment with Razorpay. Use /api/payments/razorpay/initiate.",
+                message = "Indian customers must complete payment with Razorpay, or select Cash on delivery. Use /api/payments/razorpay/initiate for online payment.",
             });
         }
 
@@ -97,8 +100,8 @@ public class OrdersController(
             Shipping = shipping,
             Total = subtotal + shipping,
             Status = "Confirmed",
-            PaymentStatus = "NotRequired",
-            PaymentProvider = null,
+            PaymentStatus = isCod ? "Pending" : "NotRequired",
+            PaymentProvider = isCod ? "COD" : null,
             Currency = "INR",
             Items = lineItems.Select(i => new OrderItem
             {
@@ -213,4 +216,11 @@ public class OrdersController(
         var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(raw, out var id) ? id : null;
     }
+
+    internal static bool IsCodPaymentMethod(string? method) =>
+        !string.IsNullOrWhiteSpace(method) &&
+        (string.Equals(method, "COD", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(method, "CashOnDelivery", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(method, "Cash on delivery", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(method, "PayOnDelivery", StringComparison.OrdinalIgnoreCase));
 }

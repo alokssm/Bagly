@@ -167,7 +167,10 @@ public record CreateOrderRequest(
     string Zip,
     string Country,
     Guid? CartId,
-    IReadOnlyList<CheckoutItemRequest>? Items
+    IReadOnlyList<CheckoutItemRequest>? Items,
+    /// <summary>Optional. "COD" / "CashOnDelivery" routes a create-order call through the cash-on-delivery
+    /// path (no Razorpay) even for India. Null/anything else keeps the legacy behaviour.</summary>
+    string? PaymentMethod = null
 );
 
 public record OrderItemDto(
