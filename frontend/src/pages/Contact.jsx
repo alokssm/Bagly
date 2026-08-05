@@ -116,7 +116,7 @@ export default function Contact() {
                       value={form.phone}
                       onChange={onChange}
                       disabled={submitting}
-                      placeholder="+91 98765 43210"
+                      placeholder="Phone"
                     />
                   </div>
                   <div className="form-field">
@@ -130,7 +130,7 @@ export default function Contact() {
                       value={form.email}
                       onChange={onChange}
                       disabled={submitting}
-                      placeholder="you@example.com"
+                      placeholder="Email"
                     />
                   </div>
                   <div className="form-field full">
