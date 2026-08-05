@@ -31,6 +31,7 @@ import AdminAnalytics from './pages/admin/AdminAnalytics'
 import AdminTraffic from './pages/admin/AdminTraffic'
 import AdminReports from './pages/admin/AdminReports'
 import usePageViewTracking from './hooks/usePageViewTracking'
+import ScrollToTop from './components/ScrollToTop'
 
 function StoreLayout() {
   const { isAuthenticated, token } = useCustomerAuth()
@@ -51,6 +52,7 @@ function StoreLayout() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <CustomerAuthProvider>
           <CartProvider>
