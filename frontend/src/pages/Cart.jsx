@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 
 export default function Cart() {
   const {
@@ -11,14 +13,32 @@ export default function Cart() {
     loading,
     busy,
     error,
+    loadFailed,
     updateQuantity,
     removeItem,
+    retryBootstrap,
   } = useCart()
 
   if (loading) {
     return (
-      <div className="container empty-state">
-        <h2>Loading cart…</h2>
+      <div className="container">
+        <LoadingState message="Loading your cart…" />
+      </div>
+    )
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="container">
+        <ApiErrorState
+          title="Couldn't load your cart"
+          message={error}
+          onRetry={retryBootstrap}
+        >
+          <Link to="/shop" className="btn btn-secondary">
+            Continue shopping
+          </Link>
+        </ApiErrorState>
       </div>
     )
   }
@@ -27,7 +47,7 @@ export default function Cart() {
     return (
       <div className="container empty-state">
         <h2>Your cart is empty</h2>
-        <p>{error || 'Find a bag that fits your day and add it here.'}</p>
+        <p>Find a bag that fits your day and add it here.</p>
         <Link to="/shop" className="btn btn-primary">
           Continue shopping
         </Link>
@@ -43,7 +63,9 @@ export default function Cart() {
           <h1>Your selection</h1>
         </div>
 
-        {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
+        {error ? (
+          <ApiErrorState message={error} onRetry={retryBootstrap} compact className="cart-inline-error" />
+        ) : null}
 
         <div className="cart-layout">
           <div className="cart-list">

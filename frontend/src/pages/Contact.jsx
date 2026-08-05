@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../api/client'
 import { buildContactPayload } from '../utils/payloads'
+import ApiErrorState from '../components/ApiErrorState'
 
 const initialForm = {
   firstName: '',
@@ -16,15 +17,13 @@ export default function Contact() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const errorRef = useRef(null)
 
   const onChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const onSubmit = async (e) => {
-    e.preventDefault()
+  const submitMessage = async () => {
     if (submitting) return
 
     setSubmitting(true)
@@ -38,12 +37,14 @@ export default function Contact() {
       setForm(initialForm)
     } catch (err) {
       setError(err.message || 'Unable to send your message. Please try again.')
-      requestAnimationFrame(() => {
-        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const onSubmit = (e) => {
+    e.preventDefault()
+    submitMessage()
   }
 
   return (
@@ -70,9 +71,13 @@ export default function Contact() {
             ) : (
               <form onSubmit={onSubmit}>
                 {error ? (
-                  <p ref={errorRef} className="form-error-banner" role="alert">
-                    {error}
-                  </p>
+                  <ApiErrorState
+                    title="Couldn't send your message"
+                    message={error}
+                    onRetry={submitMessage}
+                    compact
+                    className="contact-form-error"
+                  />
                 ) : null}
 
                 <div className="form-grid">

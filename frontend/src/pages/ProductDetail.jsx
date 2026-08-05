@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
 import { pulseAddButton } from '../utils/cartAnim'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 
 export default function ProductDetail() {
   const { id } = useParams()
@@ -18,36 +20,28 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setError('')
-      try {
-        const data = await api.getProduct(id)
-        if (cancelled) return
-        setProduct(data)
-        setColor(data.colors?.[0] ?? '')
-        setQty(1)
-        setActiveImage(0)
-        setAdded(false)
-        setLightboxOpen(false)
-      } catch (err) {
-        if (!cancelled) {
-          setProduct(null)
-          setError(err.message || 'Unable to load product.')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await api.getProduct(id)
+      setProduct(data)
+      setColor(data.colors?.[0] ?? '')
+      setQty(1)
+      setActiveImage(0)
+      setAdded(false)
+      setLightboxOpen(false)
+    } catch (err) {
+      setProduct(null)
+      setError(err.message || 'Unable to load product.')
+    } finally {
+      setLoading(false)
     }
   }, [id])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   useEffect(() => {
     if (!product) return
@@ -91,8 +85,24 @@ export default function ProductDetail() {
 
   if (loading) {
     return (
-      <div className="container empty-state">
-        <h2>Loading bag…</h2>
+      <div className="container">
+        <LoadingState message="Loading product…" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container">
+        <ApiErrorState
+          title="Couldn't load this bag"
+          message={error}
+          onRetry={load}
+        >
+          <Link to="/shop" className="btn btn-secondary">
+            Back to shop
+          </Link>
+        </ApiErrorState>
       </div>
     )
   }
@@ -101,7 +111,7 @@ export default function ProductDetail() {
     return (
       <div className="container empty-state">
         <h2>Bag not found</h2>
-        <p>{error || 'This product is no longer available.'}</p>
+        <p>This product is no longer available.</p>
         <Link to="/shop" className="btn btn-primary">
           Back to shop
         </Link>

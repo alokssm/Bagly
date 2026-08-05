@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 
 const STATUS_LABELS = {
   Confirmed: 'Confirmed',
@@ -106,41 +108,44 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async () => {
     setLoading(true)
-    api
-      .getMyOrders()
-      .then((list) => {
-        if (!cancelled) setOrders(list || [])
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message || 'Unable to load your orders.')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+    setError('')
+    try {
+      const list = await api.getMyOrders()
+      setOrders(list || [])
+    } catch (err) {
+      setError(err.message || 'Unable to load your orders.')
+      setOrders([])
+    } finally {
+      setLoading(false)
     }
   }, [])
 
+  useEffect(() => {
+    load()
+  }, [load])
+
   if (loading) {
     return (
-      <div className="container empty-state">
-        <h2>Loading your orders…</h2>
+      <div className="container">
+        <LoadingState message="Loading your orders…" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="container empty-state">
-        <h2>Something went wrong</h2>
-        <p>{error}</p>
-        <Link to="/" className="btn btn-primary">
-          Back home
-        </Link>
+      <div className="container">
+        <ApiErrorState
+          title="Couldn't load your orders"
+          message={error}
+          onRetry={load}
+        >
+          <Link to="/" className="btn btn-secondary">
+            Back home
+          </Link>
+        </ApiErrorState>
       </div>
     )
   }

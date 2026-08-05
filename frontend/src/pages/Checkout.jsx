@@ -4,6 +4,8 @@ import { api } from '../api/client'
 import { formatPrice } from '../utils/format'
 import { buildCreateOrderPayload, buildShippingAddressPayload } from '../utils/payloads'
 import { openRazorpayCheckout } from '../utils/razorpay'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 import { useCart } from '../context/CartContext'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
 
@@ -19,7 +21,7 @@ const initialForm = {
 }
 
 export default function Checkout() {
-  const { cartId, items, subtotal, shipping, total, clearCart, loading, refreshCart } = useCart()
+  const { cartId, items, subtotal, shipping, total, clearCart, loading, refreshCart, loadFailed, retryBootstrap } = useCart()
   const { user, isAuthenticated, loading: authLoading } = useCustomerAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
@@ -28,6 +30,7 @@ export default function Checkout() {
   const [confirmingOrder, setConfirmingOrder] = useState(false)
   const [error, setError] = useState('')
   const errorRef = useRef(null)
+  const formRef = useRef(null)
   const [razorpayConfig, setRazorpayConfig] = useState(null)
 
   const [addresses, setAddresses] = useState([])
@@ -131,8 +134,8 @@ export default function Checkout() {
 
   if (authLoading) {
     return (
-      <div className="container empty-state">
-        <h2>Loading…</h2>
+      <div className="container">
+        <LoadingState message="Loading checkout…" />
       </div>
     )
   }
@@ -149,8 +152,24 @@ export default function Checkout() {
 
   if (loading) {
     return (
-      <div className="container empty-state">
-        <h2>Loading checkout…</h2>
+      <div className="container">
+        <LoadingState message="Loading checkout…" />
+      </div>
+    )
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="container">
+        <ApiErrorState
+          title="Couldn't load checkout"
+          message="We're having trouble reaching Bagly right now. Please try again in a moment."
+          onRetry={retryBootstrap}
+        >
+          <Link to="/cart" className="btn btn-secondary">
+            Back to cart
+          </Link>
+        </ApiErrorState>
       </div>
     )
   }
@@ -314,7 +333,7 @@ export default function Checkout() {
       const order = await api.createOrder(payload)
       await finishSuccess(order)
     } catch (err) {
-      showCheckoutError(err.message || 'Unable to place order. Is the API running?')
+      showCheckoutError(err.message || 'Unable to place order. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -329,26 +348,26 @@ export default function Checkout() {
         </div>
 
         <form
+          ref={formRef}
           className={`checkout-layout${confirmingOrder ? ' checkout-layout--blocked' : ''}`}
           onSubmit={onSubmit}
         >
           <div className="form-card">
             <h2>Shipping details</h2>
             {error ? (
-              <p
-                ref={errorRef}
-                style={{ color: 'var(--danger)', marginBottom: '1rem' }}
-                role="alert"
-              >
-                {error}
-              </p>
+              <ApiErrorState
+                message={error}
+                onRetry={() => formRef.current?.requestSubmit()}
+                compact
+                className="checkout-form-error"
+              />
             ) : null}
 
             {isAuthenticated ? (
               <div className="saved-addresses">
                 <span className="saved-addresses__label">Saved addresses</span>
                 {addressesLoading ? (
-                  <p className="saved-addresses__hint">Loading your addresses…</p>
+                  <LoadingState message="Loading your addresses…" compact />
                 ) : addresses.length === 0 ? (
                   <p className="saved-addresses__hint">
                     You don't have any saved addresses yet. Fill the form below and check "Save

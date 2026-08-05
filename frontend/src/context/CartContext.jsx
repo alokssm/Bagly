@@ -75,6 +75,7 @@ export function CartProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const applyCart = useCallback((apiCart) => {
     const mapped = mapCartFromApi(apiCart)
@@ -85,41 +86,36 @@ export function CartProvider({ children }) {
     return mapped
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function bootstrap() {
-      setLoading(true)
-      setError('')
-      try {
-        const storedId = localStorage.getItem(CART_ID_KEY)
-        if (storedId) {
-          try {
-            const existing = await api.getCart(storedId)
-            if (!cancelled) applyCart(existing)
-            return
-          } catch {
-            localStorage.removeItem(CART_ID_KEY)
-          }
+  const bootstrapCart = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    setLoadFailed(false)
+    try {
+      const storedId = localStorage.getItem(CART_ID_KEY)
+      if (storedId) {
+        try {
+          const existing = await api.getCart(storedId)
+          applyCart(existing)
+          return
+        } catch {
+          localStorage.removeItem(CART_ID_KEY)
         }
-
-        const created = await api.createCart()
-        if (!cancelled) applyCart(created)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err.message || 'Unable to load cart from API.')
-          setCart(emptyCart)
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
       }
-    }
 
-    bootstrap()
-    return () => {
-      cancelled = true
+      const created = await api.createCart()
+      applyCart(created)
+    } catch (err) {
+      setError(err.message || 'Unable to load cart from API.')
+      setCart(emptyCart)
+      setLoadFailed(true)
+    } finally {
+      setLoading(false)
     }
   }, [applyCart])
+
+  useEffect(() => {
+    bootstrapCart()
+  }, [bootstrapCart])
 
   const addItem = useCallback(
     async (product, { color, quantity = 1, sourceRect = null } = {}) => {
@@ -259,22 +255,26 @@ export function CartProvider({ children }) {
       loading,
       busy,
       error,
+      loadFailed,
       addItem,
       removeItem,
       updateQuantity,
       clearCart,
       refreshCart,
+      retryBootstrap: bootstrapCart,
     }),
     [
       cart,
       loading,
       busy,
       error,
+      loadFailed,
       addItem,
       removeItem,
       updateQuantity,
       clearCart,
       refreshCart,
+      bootstrapCart,
     ],
   )
 

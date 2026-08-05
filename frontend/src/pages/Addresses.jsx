@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { buildShippingAddressPayload } from '../utils/payloads'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 
 const EMPTY_FORM = {
   label: '',
@@ -30,7 +32,7 @@ export default function Addresses() {
   const [formError, setFormError] = useState('')
   const [busyId, setBusyId] = useState(null)
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
     setError('')
     return api
@@ -38,12 +40,11 @@ export default function Addresses() {
       .then((list) => setAddresses(list || []))
       .catch((err) => setError(err.message || 'Unable to load your addresses.'))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [load])
 
   const openNewForm = () => {
     setEditingId(null)
@@ -142,7 +143,14 @@ export default function Addresses() {
           ) : null}
         </div>
 
-        {error ? <p className="admin-error">{error}</p> : null}
+        {error ? (
+          <ApiErrorState
+            title="Couldn't load your addresses"
+            message={error}
+            onRetry={load}
+            compact
+          />
+        ) : null}
 
         {showForm ? (
           <form className="form-card address-form" onSubmit={onSubmit}>
@@ -256,8 +264,8 @@ export default function Addresses() {
         ) : null}
 
         {loading ? (
-          <p className="admin-muted">Loading your addresses…</p>
-        ) : addresses.length === 0 && !showForm ? (
+          <LoadingState message="Loading your addresses…" compact />
+        ) : addresses.length === 0 && !showForm && !error ? (
           <div className="empty-state">
             <h2>No saved addresses</h2>
             <p>Add an address so checkout is faster next time.</p>

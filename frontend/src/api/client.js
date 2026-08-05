@@ -36,23 +36,17 @@ function getApiBase() {
   return resolveApiBase()
 }
 
-function isLocalDevHost() {
-  if (typeof window === 'undefined' || !window.location?.hostname) return false
-  const host = window.location.hostname
-  return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === 'bagly.local' ||
-    /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
-  )
+export const NETWORK_ERROR_MESSAGE =
+  "We're having trouble reaching Bagly right now. Please try again in a moment."
+
+export function isNetworkError(err) {
+  return Boolean(err?.network)
 }
 
-function networkErrorMessage(apiBase) {
-  if (isLocalDevHost()) {
-    return `Cannot reach Bagly API at ${apiBase}. Is Bagly.Api running on IIS port 8081?`
-  }
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'this site'
-  return `Cannot reach Bagly API at ${apiBase}. The API may be down or CORS may not allow origin ${origin}.`
+function createNetworkError() {
+  const error = new Error(NETWORK_ERROR_MESSAGE)
+  error.network = true
+  return error
 }
 
 /**
@@ -119,8 +113,9 @@ async function request(path, options = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
       ...rest,
     })
-  } catch {
-    throw new Error(networkErrorMessage(apiBase))
+  } catch (err) {
+    if (err?.network) throw err
+    throw createNetworkError()
   }
 
   if (!response.ok) {
@@ -163,8 +158,9 @@ async function requestUpload(path, file) {
       },
       body: formData,
     })
-  } catch {
-    throw new Error(networkErrorMessage(apiBase))
+  } catch (err) {
+    if (err?.network) throw err
+    throw createNetworkError()
   }
 
   if (!response.ok) {

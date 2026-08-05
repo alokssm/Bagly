@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 import { api } from '../api/client'
 
 export default function Home() {
@@ -8,30 +10,25 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setError('')
-      try {
-        const products = await api.getProducts({ category: 'school-bags' })
-        if (cancelled) return
-        const featured = products.filter((p) => p.badge).slice(0, 3)
-        const rest = products.filter((p) => !p.badge).slice(0, 3)
-        setShowcase([...featured, ...rest].slice(0, 6))
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Unable to load products.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const products = await api.getProducts({ category: 'school-bags' })
+      const featured = products.filter((p) => p.badge).slice(0, 3)
+      const rest = products.filter((p) => !p.badge).slice(0, 3)
+      setShowcase([...featured, ...rest].slice(0, 6))
+    } catch (err) {
+      setError(err.message || 'Unable to load products.')
+      setShowcase([])
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   return (
     <>
@@ -88,14 +85,23 @@ export default function Home() {
             </div>
           </div>
 
-          {loading ? <p>Loading bags from API…</p> : null}
-          {error ? <p style={{ color: 'var(--danger)' }}>{error}</p> : null}
+          {loading ? <LoadingState message="Loading products…" compact /> : null}
+          {!loading && error ? (
+            <ApiErrorState
+              title="Couldn't load products"
+              message={error}
+              onRetry={load}
+              compact
+            />
+          ) : null}
 
-          <div className="product-grid">
-            {showcase.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {!loading && !error ? (
+            <div className="product-grid">
+              {showcase.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : null}
 
           <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
             <Link to="/shop" className="btn btn-primary">

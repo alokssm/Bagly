@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
+import LoadingState from '../components/LoadingState'
+import ApiErrorState from '../components/ApiErrorState'
 import { api } from '../api/client'
 
 export default function Shop() {
@@ -25,8 +27,8 @@ export default function Shop() {
         if (!cancelled && Array.isArray(data) && data.length) {
           setCategories(data)
         }
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Unable to load categories.')
+      } catch {
+        // Category filters fall back to "All bags" — product load shows the error.
       }
     }
 
@@ -36,40 +38,32 @@ export default function Shop() {
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadProducts() {
-      setLoading(true)
-      setError('')
-      try {
-        const data = await api.getProducts({
-          category: activeCategory,
-          subCategory: activeSubCategory,
-          sort,
-        })
-        if (!cancelled) setProducts(data)
-      } catch (err) {
-        if (!cancelled) {
-          setProducts([])
-          setError(err.message || 'Unable to load products from API.')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    loadProducts()
-    return () => {
-      cancelled = true
+  const loadProducts = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await api.getProducts({
+        category: activeCategory,
+        subCategory: activeSubCategory,
+        sort,
+      })
+      setProducts(data)
+    } catch (err) {
+      setProducts([])
+      setError(err.message || 'Unable to load products.')
+    } finally {
+      setLoading(false)
     }
   }, [activeCategory, activeSubCategory, sort])
+
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
 
   const setCategory = (id) => {
     const next = new URLSearchParams(params)
     if (id === 'all') next.delete('category')
     else next.set('category', id)
-    // Switching the top-level category clears any subcategory picked for the previous one.
     next.delete('subCategory')
     setParams(next)
   }
@@ -128,7 +122,9 @@ export default function Shop() {
         <div className="shop-toolbar">
           <p>
             {loading ? (
-              'Loading bags from API…'
+              'Loading products…'
+            ) : error ? (
+              'Unable to load products'
             ) : (
               <>
                 Showing <strong>{products.length}</strong> bag{products.length === 1 ? '' : 's'}
@@ -137,7 +133,7 @@ export default function Shop() {
           </p>
           <label>
             Sort{' '}
-            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} disabled={loading}>
               <option value="featured">Featured</option>
               <option value="price-asc">Price: low to high</option>
               <option value="price-desc">Price: high to low</option>
@@ -146,13 +142,19 @@ export default function Shop() {
           </label>
         </div>
 
-        {error ? <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p> : null}
+        {loading ? <LoadingState message="Loading products…" compact /> : null}
 
-        <div className="product-grid">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        {!loading && error ? (
+          <ApiErrorState title="Couldn't load products" message={error} onRetry={loadProducts} compact />
+        ) : null}
+
+        {!loading && !error ? (
+          <div className="product-grid">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   )
