@@ -10,7 +10,16 @@ public static class IstTime
 {
     public static readonly TimeSpan Offset = TimeSpan.FromHours(5.5);
 
-    public static DateTime ToUtc(DateOnly istDate) => istDate.ToDateTime(TimeOnly.MinValue) - Offset;
+    /// <summary>
+    /// Converts an IST calendar date (midnight IST) to a UTC instant.
+    /// Always returns <see cref="DateTimeKind.Utc"/> — required by Npgsql for
+    /// <c>timestamp with time zone</c> comparisons (Unspecified Kind throws at query time).
+    /// </summary>
+    public static DateTime ToUtc(DateOnly istDate)
+    {
+        var utc = istDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified) - Offset;
+        return DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+    }
 
     public static DateOnly TodayIst() => DateOnly.FromDateTime(DateTime.UtcNow + Offset);
 
