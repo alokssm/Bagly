@@ -47,6 +47,22 @@ public record CustomerAuthResponse(string Token, Guid Id, string Email, string N
 
 public record UpdateCustomerProfileRequest(string Name);
 
+public record SellerRegisterRequest(
+    string Name,
+    string BusinessName,
+    string Email,
+    string? Phone,
+    string Password,
+    string ConfirmPassword);
+
+public record SellerRegisterResponse(
+    Guid Id,
+    string Email,
+    string Name,
+    string BusinessName,
+    string Status,
+    string Message);
+
 public record UpsertCategoryRequest(
     string Id,
     string Label,

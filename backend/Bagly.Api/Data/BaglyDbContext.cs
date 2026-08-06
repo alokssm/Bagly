@@ -13,6 +13,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
+    public DbSet<SellerUser> SellerUsers => Set<SellerUser>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
@@ -150,6 +151,21 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.GoogleSubject).HasMaxLength(100);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.GoogleSubject).IsUnique().HasFilter("\"GoogleSubject\" IS NOT NULL");
+            entity.HasIndex(x => x.IsActive);
+        });
+
+        modelBuilder.Entity<SellerUser>(entity =>
+        {
+            entity.ToTable("SellerUsers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.BusinessName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30);
+            entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.IsActive);
         });
 

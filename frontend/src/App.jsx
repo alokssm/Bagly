@@ -21,6 +21,8 @@ import About from './pages/About'
 import Contact from './pages/Contact'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Business from './pages/Business'
+import BusinessLogin from './pages/BusinessLogin'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
@@ -91,6 +93,8 @@ export default function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/business" element={<Business />} />
+                <Route path="/business/login" element={<BusinessLogin />} />
               </Route>
 
               <Route path="/admin/login" element={<AdminLogin />} />

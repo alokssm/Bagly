@@ -199,6 +199,12 @@ export const api = {
       body: { name, email, password, confirmPassword },
     }),
 
+  sellerRegister: (name, businessName, email, phone, password, confirmPassword) =>
+    request('/auth/seller/register', {
+      method: 'POST',
+      body: { name, businessName, email, phone, password, confirmPassword },
+    }),
+
   customerLogin: (email, password) =>
     request('/auth/customer/login', {
       method: 'POST',

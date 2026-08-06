@@ -14,6 +14,7 @@ const links = [
   { to: '/shop', label: 'Shop' },
   { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },
+  { to: '/business', label: 'Business' },
 ]
 
 export default function Navbar() {
