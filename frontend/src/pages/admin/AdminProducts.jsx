@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { formatPrice } from '../../utils/format'
 
@@ -13,9 +12,7 @@ export default function AdminProducts() {
   const [result, setResult] = useState(emptyResult)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [busyId, setBusyId] = useState('')
 
-  // Debounce the search box ~300ms before it triggers a request and resets to page 1.
   useEffect(() => {
     const handle = setTimeout(() => {
       setSearch(searchInput.trim())
@@ -48,24 +45,6 @@ export default function AdminProducts() {
     load()
   }, [load])
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete product "${name}"? This cannot be undone.`)) return
-    setBusyId(id)
-    try {
-      await api.adminDeleteProduct(id)
-      // If we deleted the last item on a page beyond the first, step back a page; otherwise just refresh.
-      if (result.items.length === 1 && page > 1) {
-        setPage((p) => p - 1)
-      } else {
-        await load()
-      }
-    } catch (err) {
-      setError(err.message || 'Delete failed.')
-    } finally {
-      setBusyId('')
-    }
-  }
-
   const { items: products, totalCount, totalPages } = result
   const from = totalCount === 0 ? 0 : (result.page - 1) * result.pageSize + 1
   const to = Math.min(result.page * result.pageSize, totalCount)
@@ -76,10 +55,10 @@ export default function AdminProducts() {
         <div>
           <p className="eyebrow">Catalog</p>
           <h1>Products</h1>
+          <p className="admin-muted" style={{ marginTop: '0.35rem' }}>
+            Read-only support view. Sellers manage their own listings; admins manage categories.
+          </p>
         </div>
-        <Link to="/admin/products/new" className="btn btn-primary">
-          Add product
-        </Link>
       </div>
 
       <div className="admin-search-bar">
@@ -107,10 +86,10 @@ export default function AdminProducts() {
               <tr>
                 <th>Product</th>
                 <th>Category</th>
+                <th>Owner</th>
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
-                <th />
               </tr>
             </thead>
             <tbody>
@@ -129,6 +108,9 @@ export default function AdminProducts() {
                     {product.category}
                     {product.subCategoryId ? <small> / {product.subCategoryId}</small> : null}
                   </td>
+                  <td>
+                    <small>{product.sellerId ? 'Seller' : 'Platform'}</small>
+                  </td>
                   <td>{formatPrice(product.price)}</td>
                   <td>
                     <span className={`admin-pill ${product.stockQuantity > 0 ? 'on' : 'off'}`}>
@@ -139,19 +121,6 @@ export default function AdminProducts() {
                     <span className={`admin-pill ${product.isActive ? 'on' : 'off'}`}>
                       {product.isActive ? 'Active' : 'Hidden'}
                     </span>
-                  </td>
-                  <td className="admin-row-actions">
-                    <Link to={`/admin/products/${product.id}/edit`} className="btn btn-secondary">
-                      Edit
-                    </Link>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      disabled={busyId === product.id}
-                      onClick={() => handleDelete(product.id, product.name)}
-                    >
-                      {busyId === product.id ? 'Deleting…' : 'Delete'}
-                    </button>
                   </td>
                 </tr>
               ))}

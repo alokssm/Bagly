@@ -47,9 +47,14 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.SeoTitle).HasMaxLength(160);
             entity.Property(x => x.SeoDescription).HasMaxLength(300);
             entity.Property(x => x.SeoKeywords).HasMaxLength(300);
+            entity.HasOne(x => x.Seller)
+                .WithMany()
+                .HasForeignKey(x => x.SellerId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(x => x.Category);
             entity.HasIndex(x => x.SubCategoryId);
             entity.HasIndex(x => x.IsActive);
+            entity.HasIndex(x => x.SellerId);
             entity.HasIndex(x => x.Slug).IsUnique().HasFilter("\"Slug\" IS NOT NULL");
         });
 

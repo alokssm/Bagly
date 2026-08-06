@@ -39,6 +39,14 @@ public class Product
     /// <summary>Optional comma-separated focus keywords for search engines.</summary>
     public string? SeoKeywords { get; set; }
 
+    /// <summary>
+    /// Owning marketplace seller. Null = platform/legacy catalog (seeded Bagly products).
+    /// Seller-created products set this to the logged-in seller's Id.
+    /// </summary>
+    public Guid? SellerId { get; set; }
+
+    public SellerUser? Seller { get; set; }
+
     /// <summary>A product can be bought when it is active and in stock.</summary>
     [NotMapped]
     public bool IsAvailable => IsActive && StockQuantity > 0;

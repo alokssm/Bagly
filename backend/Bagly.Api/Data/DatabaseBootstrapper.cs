@@ -64,6 +64,7 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoTitle" character varying(160);
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoDescription" character varying(300);
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoKeywords" character varying(300);
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SellerId" uuid;
                 UPDATE "Products" SET "Slug" = "Id" WHERE "Slug" IS NULL OR "Slug" = '';
                 """,
                 cancellationToken);

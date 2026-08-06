@@ -11,8 +11,6 @@ export default function AdminDashboard() {
 
     async function load() {
       try {
-        // Lightweight count-only queries — avoids pulling the full (360+) product/category lists
-        // just to display totals on the dashboard.
         const [productStats, categoriesResult] = await Promise.all([
           api.adminGetProductStats(),
           api.adminGetCategories({ page: 1, pageSize: 1 }),
@@ -61,14 +59,14 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-actions-row">
-        <Link to="/admin/products" className="btn btn-primary">
-          Manage products
-        </Link>
-        <Link to="/admin/categories" className="btn btn-secondary">
+        <Link to="/admin/categories" className="btn btn-primary">
           Manage categories
         </Link>
-        <Link to="/admin/products/new" className="btn btn-brass">
-          Add product
+        <Link to="/admin/products" className="btn btn-secondary">
+          View products
+        </Link>
+        <Link to="/admin/sellers" className="btn btn-brass">
+          Review sellers
         </Link>
         <Link to="/admin/reports" className="btn btn-secondary">
           View reports

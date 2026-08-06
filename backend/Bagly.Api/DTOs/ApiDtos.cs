@@ -205,7 +205,8 @@ public record AdminProductDto(
     string? Slug,
     string? SeoTitle,
     string? SeoDescription,
-    string? SeoKeywords
+    string? SeoKeywords,
+    Guid? SellerId = null
 );
 
 /// <summary>Lean row shape for the admin products list/table — avoids shipping gallery/features/colors JSON for every row.</summary>
@@ -219,7 +220,8 @@ public record AdminProductListItemDto(
     string Image,
     bool IsActive,
     bool IsAvailable,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid? SellerId = null
 );
 
 public record ProductStatsDto(int TotalCount, int ActiveCount);

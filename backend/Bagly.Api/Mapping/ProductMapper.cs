@@ -63,7 +63,8 @@ public static class ProductMapper
             product.Slug,
             product.SeoTitle,
             product.SeoDescription,
-            product.SeoKeywords
+            product.SeoKeywords,
+            product.SellerId
         );
 
     public static void ApplyUpsert(Product product, UpsertProductRequest request)

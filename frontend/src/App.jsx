@@ -25,11 +25,12 @@ import Register from './pages/Register'
 import Business from './pages/Business'
 import BusinessLogin from './pages/BusinessLogin'
 import SellerDashboard from './pages/SellerDashboard'
+import SellerProducts from './pages/SellerProducts'
+import SellerProductForm from './pages/SellerProductForm'
 import SellerRoute from './components/SellerRoute'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
-import AdminProductForm from './pages/admin/AdminProductForm'
 import AdminCategories from './pages/admin/AdminCategories'
 import AdminOrders from './pages/admin/AdminOrders'
 import AdminSellers from './pages/admin/AdminSellers'
@@ -108,6 +109,30 @@ export default function App() {
                       </SellerRoute>
                     }
                   />
+                  <Route
+                    path="/seller/products"
+                    element={
+                      <SellerRoute>
+                        <SellerProducts />
+                      </SellerRoute>
+                    }
+                  />
+                  <Route
+                    path="/seller/products/new"
+                    element={
+                      <SellerRoute>
+                        <SellerProductForm />
+                      </SellerRoute>
+                    }
+                  />
+                  <Route
+                    path="/seller/products/:id/edit"
+                    element={
+                      <SellerRoute>
+                        <SellerProductForm />
+                      </SellerRoute>
+                    }
+                  />
                 </Route>
 
                 <Route path="/admin/login" element={<AdminLogin />} />
@@ -121,8 +146,8 @@ export default function App() {
                 >
                   <Route index element={<AdminDashboard />} />
                   <Route path="products" element={<AdminProducts />} />
-                  <Route path="products/new" element={<AdminProductForm />} />
-                  <Route path="products/:id/edit" element={<AdminProductForm />} />
+                  <Route path="products/new" element={<Navigate to="/admin/products" replace />} />
+                  <Route path="products/:id/edit" element={<Navigate to="/admin/products" replace />} />
                   <Route path="categories" element={<AdminCategories />} />
                   <Route path="orders" element={<AdminOrders />} />
                   <Route path="sellers" element={<AdminSellers />} />

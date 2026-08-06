@@ -34,7 +34,7 @@ export default function AdminLogin() {
       <form className="admin-login-card" onSubmit={onSubmit}>
         <p className="eyebrow">Admin</p>
         <h1>Bagly console</h1>
-        <p className="admin-login-copy">Sign in to manage products and categories.</p>
+        <p className="admin-login-copy">Sign in to manage categories, sellers, and orders.</p>
 
         {error ? <p className="admin-error">{error}</p> : null}
 

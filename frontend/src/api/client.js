@@ -153,8 +153,9 @@ export function getGoogleAuthConfig() {
 }
 
 /** Multipart upload — cannot reuse request() since it always JSON-encodes the body. */
-async function requestUpload(path, file) {
-  const token = getAuthToken()
+async function requestUpload(path, file, { auth = true } = {}) {
+  const token =
+    auth === 'customer' ? getCustomerToken() : auth === 'seller' ? getSellerToken() : getAuthToken()
   const apiBase = getApiBase()
   const formData = new FormData()
   formData.append('file', file)
@@ -232,6 +233,28 @@ export const api = {
       body: payload,
       auth: 'seller',
     }),
+
+  sellerGetProducts: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/seller/products${query ? `?${query}` : ''}`, { auth: 'seller' })
+  },
+  sellerGetProduct: (id) =>
+    request(`/seller/products/${encodeURIComponent(id)}`, { auth: 'seller' }),
+  sellerCreateProduct: (payload) =>
+    request('/seller/products', { method: 'POST', body: payload, auth: 'seller' }),
+  sellerUpdateProduct: (id, payload) =>
+    request(`/seller/products/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: payload,
+      auth: 'seller',
+    }),
+  sellerDeleteProduct: (id) =>
+    request(`/seller/products/${encodeURIComponent(id)}`, { method: 'DELETE', auth: 'seller' }),
+  sellerUploadImage: (file) => requestUpload('/seller/uploads/image', file, { auth: 'seller' }),
 
   customerLogin: (email, password) =>
     request('/auth/customer/login', {

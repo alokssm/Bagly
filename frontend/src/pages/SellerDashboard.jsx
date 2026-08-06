@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import SellerHubNav from '../components/SellerHubNav'
 import { useSellerAuth } from '../context/SellerAuthContext'
 
 const emptyForm = {
@@ -20,7 +21,7 @@ const emptyForm = {
 function statusHint(status) {
   switch ((status || '').toLowerCase()) {
     case 'approved':
-      return 'Your account is approved. You can keep your details up to date anytime.'
+      return 'Your account is approved. You can manage products and keep your details up to date anytime.'
     case 'rejected':
       return 'Your application was not approved. Update your details and submit again for review.'
     case 'suspended':
@@ -140,6 +141,8 @@ export default function SellerDashboard() {
             Sign out
           </button>
         </header>
+
+        <SellerHubNav />
 
         <div className={statusClass(status)} role="status">
           <strong>Status: {status || 'Pending'}</strong>
