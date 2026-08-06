@@ -11,12 +11,14 @@ export default function Business() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [registeredEmail, setRegisteredEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
+    setRegisteredEmail('')
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
@@ -25,18 +27,20 @@ export default function Business() {
 
     setSubmitting(true)
     try {
+      const trimmedEmail = email.trim()
       const result = await api.sellerRegister(
         name.trim(),
         businessName.trim(),
-        email.trim(),
+        trimmedEmail,
         phone.trim() || null,
         password,
         confirmPassword,
       )
       setSuccess(
         result?.message ||
-          'Your seller account has been created and is pending approval. You\'ll be able to sign in once approved.',
+          'Your seller account has been created. You can sign in now.',
       )
+      setRegisteredEmail(trimmedEmail)
       setName('')
       setBusinessName('')
       setEmail('')
@@ -56,12 +60,26 @@ export default function Business() {
         <p className="eyebrow">Sell on Bagly</p>
         <h1>Create a business account</h1>
         <p className="auth-copy">
-          Join Bagly as a seller. After you register, our team will review your account —
-          you&apos;ll be able to sign in once approved.
+          Join Bagly as a seller. After you register you can sign in right away —
+          product listing opens once your account is approved.
         </p>
 
         {error ? <p className="admin-error">{error}</p> : null}
-        {success ? <p className="auth-success">{success}</p> : null}
+        {success ? (
+          <div className="auth-success-block">
+            <p className="auth-success">{success}</p>
+            <Link
+              to="/business/login"
+              state={{
+                email: registeredEmail,
+                message: 'Account created — sign in with your email and password.',
+              }}
+              className="btn btn-brass btn-block"
+            >
+              Go to seller login
+            </Link>
+          </div>
+        ) : null}
 
         <div className="form-field">
           <label htmlFor="seller-name">Your name</label>

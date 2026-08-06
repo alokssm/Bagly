@@ -1,5 +1,6 @@
 const TOKEN_KEY = 'bagly-admin-token'
 const CUSTOMER_TOKEN_KEY = 'bagly-customer-token'
+const SELLER_TOKEN_KEY = 'bagly-seller-token'
 
 /**
  * - Cloud (Vercel → Render): use VITE_API_URL as-is (e.g. https://bagly.onrender.com/api)
@@ -80,6 +81,15 @@ export function setCustomerToken(token) {
   else localStorage.removeItem(CUSTOMER_TOKEN_KEY)
 }
 
+export function getSellerToken() {
+  return localStorage.getItem(SELLER_TOKEN_KEY)
+}
+
+export function setSellerToken(token) {
+  if (token) localStorage.setItem(SELLER_TOKEN_KEY, token)
+  else localStorage.removeItem(SELLER_TOKEN_KEY)
+}
+
 function extractErrorMessage(data, status) {
   if (!data || typeof data !== 'object') return `Request failed (${status})`
   if (data.message) return data.message
@@ -98,7 +108,8 @@ function extractErrorMessage(data, status) {
 
 async function request(path, options = {}) {
   const { body, headers, auth = false, ...rest } = options
-  const token = auth === 'customer' ? getCustomerToken() : getAuthToken()
+  const token =
+    auth === 'customer' ? getCustomerToken() : auth === 'seller' ? getSellerToken() : getAuthToken()
   const apiBase = getApiBase()
 
   let response
@@ -204,6 +215,14 @@ export const api = {
       method: 'POST',
       body: { name, businessName, email, phone, password, confirmPassword },
     }),
+
+  sellerLogin: (email, password) =>
+    request('/auth/seller/login', {
+      method: 'POST',
+      body: { email, password },
+    }),
+
+  sellerMe: () => request('/auth/seller/me', { auth: 'seller' }),
 
   customerLogin: (email, password) =>
     request('/auth/customer/login', {

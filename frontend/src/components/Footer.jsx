@@ -40,7 +40,10 @@ export default function Footer() {
                 <Link to="/contact">Contact</Link>
               </li>
               <li>
-                <Link to="/business">Business</Link>
+                <Link to="/business">Sign up as seller</Link>
+              </li>
+              <li>
+                <Link to="/business/login">Seller login</Link>
               </li>
             </ul>
           </div>

@@ -63,6 +63,17 @@ public record SellerRegisterResponse(
     string Status,
     string Message);
 
+public record SellerLoginRequest(string Email, string Password);
+
+public record SellerAuthResponse(
+    string Token,
+    Guid Id,
+    string Email,
+    string Name,
+    string BusinessName,
+    string Status,
+    DateTime ExpiresAt);
+
 public record UpsertCategoryRequest(
     string Id,
     string Label,

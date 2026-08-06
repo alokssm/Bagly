@@ -9,6 +9,7 @@ import CustomerRoute from './components/CustomerRoute'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { CustomerAuthProvider, useCustomerAuth } from './context/CustomerAuthContext'
+import { SellerAuthProvider } from './context/SellerAuthContext'
 import Home from './pages/Home'
 import Shop from './pages/Shop'
 import ProductDetail from './pages/ProductDetail'
@@ -23,6 +24,8 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Business from './pages/Business'
 import BusinessLogin from './pages/BusinessLogin'
+import SellerDashboard from './pages/SellerDashboard'
+import SellerRoute from './components/SellerRoute'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
@@ -57,69 +60,79 @@ export default function App() {
       <ScrollToTop />
       <AuthProvider>
         <CustomerAuthProvider>
-          <CartProvider>
-            <Routes>
-              <Route element={<StoreLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/shop" element={<Shop />} />
-                <Route path="/product/:id" element={<ProductDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route
-                  path="/orders"
-                  element={
-                    <CustomerRoute>
-                      <Orders />
-                    </CustomerRoute>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <CustomerRoute>
-                      <Profile />
-                    </CustomerRoute>
-                  }
-                />
-                <Route
-                  path="/addresses"
-                  element={
-                    <CustomerRoute>
-                      <Addresses />
-                    </CustomerRoute>
-                  }
-                />
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/business" element={<Business />} />
-                <Route path="/business/login" element={<BusinessLogin />} />
-              </Route>
+          <SellerAuthProvider>
+            <CartProvider>
+              <Routes>
+                <Route element={<StoreLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/shop" element={<Shop />} />
+                  <Route path="/product/:id" element={<ProductDetail />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route
+                    path="/orders"
+                    element={
+                      <CustomerRoute>
+                        <Orders />
+                      </CustomerRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <CustomerRoute>
+                        <Profile />
+                      </CustomerRoute>
+                    }
+                  />
+                  <Route
+                    path="/addresses"
+                    element={
+                      <CustomerRoute>
+                        <Addresses />
+                      </CustomerRoute>
+                    }
+                  />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/business" element={<Business />} />
+                  <Route path="/business/login" element={<BusinessLogin />} />
+                  <Route
+                    path="/seller"
+                    element={
+                      <SellerRoute>
+                        <SellerDashboard />
+                      </SellerRoute>
+                    }
+                  />
+                </Route>
 
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <AdminLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<AdminDashboard />} />
-                <Route path="products" element={<AdminProducts />} />
-                <Route path="products/new" element={<AdminProductForm />} />
-                <Route path="products/:id/edit" element={<AdminProductForm />} />
-                <Route path="categories" element={<AdminCategories />} />
-                <Route path="orders" element={<AdminOrders />} />
-                <Route path="analytics" element={<AdminAnalytics />} />
-                <Route path="traffic" element={<AdminTraffic />} />
-                <Route path="reports" element={<AdminReports />} />
-              </Route>
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <AdminLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="products" element={<AdminProducts />} />
+                  <Route path="products/new" element={<AdminProductForm />} />
+                  <Route path="products/:id/edit" element={<AdminProductForm />} />
+                  <Route path="categories" element={<AdminCategories />} />
+                  <Route path="orders" element={<AdminOrders />} />
+                  <Route path="analytics" element={<AdminAnalytics />} />
+                  <Route path="traffic" element={<AdminTraffic />} />
+                  <Route path="reports" element={<AdminReports />} />
+                </Route>
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </CartProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </CartProvider>
+          </SellerAuthProvider>
         </CustomerAuthProvider>
       </AuthProvider>
     </BrowserRouter>

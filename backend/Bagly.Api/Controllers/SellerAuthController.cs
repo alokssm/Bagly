@@ -2,9 +2,12 @@ using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Extensions;
 using Bagly.Api.Models;
+using Bagly.Api.Options;
 using Bagly.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Controllers;
 
@@ -13,6 +16,8 @@ namespace Bagly.Api.Controllers;
 [Route("api/auth/seller")]
 public class SellerAuthController(
     BaglyDbContext db,
+    IOptions<JwtOptions> jwtOptions,
+    TokenService tokenService,
     IAuditLogService auditLog) : ControllerBase
 {
     [HttpPost("register")]
@@ -82,6 +87,91 @@ public class SellerAuthController(
             seller.Name,
             seller.BusinessName,
             seller.Status,
-            "Your seller account has been created and is pending approval. You'll be able to sign in once approved."));
+            "Your seller account has been created. You can sign in now — product listing will be available after approval."));
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<SellerAuthResponse>> Login(
+        [FromBody] SellerLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return BadRequest(new { message = "Email and password are required." });
+        }
+
+        var email = request.Email.Trim().ToLowerInvariant();
+        var seller = await db.SellerUsers
+            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive, cancellationToken);
+
+        if (seller is null || !PasswordHasher.Verify(request.Password, seller.PasswordHash))
+        {
+            await auditLog.LogAsync(
+                category: "SellerAuth",
+                action: "LoginFailed",
+                message: $"Failed seller login attempt for '{email}'.",
+                level: "Warning",
+                actorEmail: email,
+                entityType: "SellerUser",
+                ipAddress: HttpContext.GetClientIp(),
+                requestPath: HttpContext.GetRequestPath(),
+                cancellationToken: cancellationToken);
+
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
+        // Pending sellers may sign in; product CRUD can gate on Status later.
+        seller.LastLoginAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        await auditLog.LogAsync(
+            category: "SellerAuth",
+            action: "LoginSuccess",
+            message: $"Seller '{seller.Email}' logged in (status: {seller.Status}).",
+            actorEmail: seller.Email,
+            entityType: "SellerUser",
+            entityId: seller.Id.ToString(),
+            ipAddress: HttpContext.GetClientIp(),
+            requestPath: HttpContext.GetRequestPath(),
+            cancellationToken: cancellationToken);
+
+        return Ok(BuildResponse(seller));
+    }
+
+    [Authorize(Roles = "Seller")]
+    [HttpGet("me")]
+    public async Task<ActionResult<SellerAuthResponse>> Me(CancellationToken cancellationToken)
+    {
+        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+
+        if (!Guid.TryParse(idClaim, out var sellerId))
+        {
+            return Unauthorized(new { message = "Invalid seller session." });
+        }
+
+        var seller = await db.SellerUsers
+            .FirstOrDefaultAsync(u => u.Id == sellerId && u.IsActive, cancellationToken);
+
+        if (seller is null)
+        {
+            return Unauthorized(new { message = "Seller account not found." });
+        }
+
+        return Ok(BuildResponse(seller));
+    }
+
+    private SellerAuthResponse BuildResponse(SellerUser seller)
+    {
+        var token = tokenService.CreateSellerToken(seller.Id, seller.Email, seller.Name);
+        var expiresAt = DateTime.UtcNow.AddMinutes(jwtOptions.Value.ExpiresMinutes);
+        return new SellerAuthResponse(
+            token,
+            seller.Id,
+            seller.Email,
+            seller.Name,
+            seller.BusinessName,
+            seller.Status,
+            expiresAt);
     }
 }

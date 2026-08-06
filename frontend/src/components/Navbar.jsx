@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
-import { useAuth } from '../context/AuthContext'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
 import { CART_ADD_EVENT } from '../constants/events'
 import { handleCartAddAnimation } from '../utils/cartAnim'
 import CustomerMenu from './CustomerMenu'
+import BusinessNavMenu from './BusinessNavMenu'
 
 const CART_BUMP_MS = 400
 
@@ -14,12 +14,10 @@ const links = [
   { to: '/shop', label: 'Shop' },
   { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },
-  { to: '/business', label: 'Business' },
 ]
 
 export default function Navbar() {
   const { itemCount } = useCart()
-  const { isAdmin } = useAuth()
   const { user, isAuthenticated, logout } = useCustomerAuth()
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
@@ -72,6 +70,7 @@ export default function Navbar() {
                 {link.label}
               </NavLink>
             ))}
+            <BusinessNavMenu />
           </nav>
 
           <div className="nav-actions">
@@ -142,14 +141,12 @@ export default function Navbar() {
               {link.label}
             </NavLink>
           ))}
+          <BusinessNavMenu variant="mobile" onNavigate={() => setOpen(false)} />
           {!isAuthenticated ? (
             <NavLink to="/register" onClick={() => setOpen(false)}>
               Create Account
             </NavLink>
           ) : null}
-          {/* <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={() => setOpen(false)}>
-            {isAdmin ? 'Admin' : 'Admin login'}
-          </NavLink> */}
         </nav>
       </div>
     </header>
