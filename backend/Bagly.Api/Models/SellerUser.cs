@@ -3,7 +3,7 @@ namespace Bagly.Api.Models;
 /// <summary>
 /// Marketplace seller account. Separate from customers and admins.
 /// Status: Pending (registered / awaiting review) | Approved | Rejected | Suspended.
-/// First profile submit keeps/sets Pending for admin approval; Approved sellers stay Approved on later edits.
+/// First profile submit keeps/sets Pending for admin approval; Approved seller profiles are locked from further edits.
 /// </summary>
 public class SellerUser
 {

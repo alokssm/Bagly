@@ -182,6 +182,14 @@ public class SellerAuthController(
             return Unauthorized(new { message = "Seller account not found." });
         }
 
+        if (string.Equals(seller.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "Approved seller profiles cannot be changed. Contact Bagly support if you need an update.",
+            });
+        }
+
         var name = request.Name?.Trim() ?? string.Empty;
         var businessName = request.BusinessName?.Trim() ?? string.Empty;
         var phone = request.Phone?.Trim() ?? string.Empty;
@@ -243,15 +251,12 @@ public class SellerAuthController(
         seller.UpiId = upiId;
         seller.ProfileSubmittedAt = DateTime.UtcNow;
 
-        // First-time / re-submit for review → Pending. Already Approved stays Approved.
-        // Rejected sellers who update details go back to Pending for re-review.
-        if (string.Equals(previousStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+        // Pending / Rejected re-submit → Pending for admin review.
+        // Suspended accounts keep Suspended until an admin changes them.
+        // Approved is blocked above (403).
+        if (string.Equals(previousStatus, "Suspended", StringComparison.OrdinalIgnoreCase))
         {
-            // Keep Approved; do not clear ApprovedAt.
-        }
-        else if (string.Equals(previousStatus, "Suspended", StringComparison.OrdinalIgnoreCase))
-        {
-            // Suspended accounts keep Suspended until an admin changes them.
+            // Keep Suspended.
         }
         else
         {

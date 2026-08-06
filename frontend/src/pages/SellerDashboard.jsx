@@ -21,7 +21,7 @@ const emptyForm = {
 function statusHint(status) {
   switch ((status || '').toLowerCase()) {
     case 'approved':
-      return 'Your account is approved. You can manage products and keep your details up to date anytime.'
+      return 'Your account is approved. Profile details are locked after approval — contact Bagly support if you need a change.'
     case 'rejected':
       return 'Your application was not approved. Update your details and submit again for review.'
     case 'suspended':
@@ -88,12 +88,16 @@ export default function SellerDashboard() {
     }
   }, [])
 
+  const isLocked = (status || '').toLowerCase() === 'approved'
+
   const onChange = (field) => (e) => {
+    if (isLocked) return
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
   const onSubmit = async (e) => {
     e.preventDefault()
+    if (isLocked) return
     setSaving(true)
     setError('')
     setSuccess('')
@@ -114,11 +118,7 @@ export default function SellerDashboard() {
       setStatus(profile.status || 'Pending')
       setRejectionReason(profile.rejectionReason || '')
       setProfileComplete(Boolean(profile.profileComplete))
-      setSuccess(
-        profile.status === 'Approved'
-          ? 'Your business details were updated.'
-          : 'Details submitted. Your account is pending admin review.',
-      )
+      setSuccess('Details submitted. Your account is pending admin review.')
     } catch (err) {
       setError(err.message || 'Unable to save your details.')
     } finally {
@@ -161,11 +161,23 @@ export default function SellerDashboard() {
           <form className="seller-form" onSubmit={onSubmit}>
             {error ? <p className="admin-error">{error}</p> : null}
             {success ? <p className="profile-success">{success}</p> : null}
+            {isLocked ? (
+              <p className="admin-muted" role="note">
+                Details are locked after approval and cannot be edited here.
+              </p>
+            ) : null}
 
             <div className="form-grid">
               <div className="form-field">
                 <label htmlFor="seller-name">Contact name</label>
-                <input id="seller-name" required value={form.name} onChange={onChange('name')} />
+                <input
+                  id="seller-name"
+                  required
+                  value={form.name}
+                  onChange={onChange('name')}
+                  disabled={isLocked}
+                  readOnly={isLocked}
+                />
               </div>
               <div className="form-field">
                 <label htmlFor="seller-business">Business display name</label>
@@ -174,6 +186,8 @@ export default function SellerDashboard() {
                   required
                   value={form.businessName}
                   onChange={onChange('businessName')}
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -190,6 +204,8 @@ export default function SellerDashboard() {
                   onChange={onChange('phone')}
                   placeholder="10-digit mobile"
                   autoComplete="tel"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field full">
@@ -201,6 +217,8 @@ export default function SellerDashboard() {
                   onChange={onChange('addressLine1')}
                   placeholder="Address line 1"
                   autoComplete="address-line1"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field full">
@@ -210,6 +228,8 @@ export default function SellerDashboard() {
                   value={form.addressLine2}
                   onChange={onChange('addressLine2')}
                   autoComplete="address-line2"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -220,6 +240,8 @@ export default function SellerDashboard() {
                   value={form.city}
                   onChange={onChange('city')}
                   autoComplete="address-level2"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -230,6 +252,8 @@ export default function SellerDashboard() {
                   value={form.state}
                   onChange={onChange('state')}
                   autoComplete="address-level1"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -243,6 +267,8 @@ export default function SellerDashboard() {
                   pattern="\d{6}"
                   maxLength={6}
                   autoComplete="postal-code"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -253,6 +279,8 @@ export default function SellerDashboard() {
                   onChange={onChange('gstin')}
                   placeholder="15-character GSTIN"
                   maxLength={15}
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field">
@@ -262,6 +290,8 @@ export default function SellerDashboard() {
                   value={form.upiId}
                   onChange={onChange('upiId')}
                   placeholder="name@upi"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
               <div className="form-field full">
@@ -273,14 +303,18 @@ export default function SellerDashboard() {
                   value={form.description}
                   onChange={onChange('description')}
                   placeholder="What you sell, materials, or your craft story…"
+                  disabled={isLocked}
+                  readOnly={isLocked}
                 />
               </div>
             </div>
 
             <div className="seller-form-actions">
-              <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : profileComplete ? 'Save & submit' : 'Submit for review'}
-              </button>
+              {!isLocked ? (
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Saving…' : profileComplete ? 'Save & submit' : 'Submit for review'}
+                </button>
+              ) : null}
               <Link to="/" className="btn btn-ghost">
                 ← Back to store
               </Link>
