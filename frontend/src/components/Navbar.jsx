@@ -5,7 +5,6 @@ import { useCustomerAuth } from '../context/CustomerAuthContext'
 import { CART_ADD_EVENT } from '../constants/events'
 import { handleCartAddAnimation } from '../utils/cartAnim'
 import CustomerMenu from './CustomerMenu'
-import BusinessNavMenu from './BusinessNavMenu'
 
 const CART_BUMP_MS = 400
 
@@ -70,7 +69,6 @@ export default function Navbar() {
                 {link.label}
               </NavLink>
             ))}
-            <BusinessNavMenu />
           </nav>
 
           <div className="nav-actions">
@@ -141,7 +139,6 @@ export default function Navbar() {
               {link.label}
             </NavLink>
           ))}
-          <BusinessNavMenu variant="mobile" onNavigate={() => setOpen(false)} />
           {!isAuthenticated ? (
             <NavLink to="/register" onClick={() => setOpen(false)}>
               Create Account
