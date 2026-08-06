@@ -3,6 +3,16 @@ import { api, getSellerToken, setSellerToken } from '../api/client'
 
 const SellerAuthContext = createContext(null)
 
+function toUser(result) {
+  return {
+    id: result.id,
+    email: result.email,
+    name: result.name,
+    businessName: result.businessName,
+    status: result.status,
+  }
+}
+
 export function SellerAuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -21,13 +31,7 @@ export function SellerAuthProvider({ children }) {
       try {
         const me = await api.sellerMe()
         if (!cancelled) {
-          setUser({
-            id: me.id,
-            email: me.email,
-            name: me.name,
-            businessName: me.businessName,
-            status: me.status,
-          })
+          setUser(toUser(me))
           setToken(existingToken)
         }
       } catch {
@@ -50,13 +54,7 @@ export function SellerAuthProvider({ children }) {
   const applySession = useCallback((result) => {
     setSellerToken(result.token)
     setToken(result.token)
-    setUser({
-      id: result.id,
-      email: result.email,
-      name: result.name,
-      businessName: result.businessName,
-      status: result.status,
-    })
+    setUser(toUser(result))
     return result
   }, [])
 
@@ -71,6 +69,27 @@ export function SellerAuthProvider({ children }) {
     setUser(null)
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const me = await api.sellerMe()
+    setUser(toUser(me))
+    return me
+  }, [])
+
+  const updateProfile = useCallback(async (payload) => {
+    const profile = await api.sellerUpdateProfile(payload)
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            name: profile.name,
+            businessName: profile.businessName,
+            status: profile.status,
+          }
+        : prev,
+    )
+    return profile
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
@@ -79,8 +98,10 @@ export function SellerAuthProvider({ children }) {
       loading,
       login,
       logout,
+      refreshUser,
+      updateProfile,
     }),
-    [user, token, loading, login, logout],
+    [user, token, loading, login, logout, refreshUser, updateProfile],
   )
 
   return <SellerAuthContext.Provider value={value}>{children}</SellerAuthContext.Provider>

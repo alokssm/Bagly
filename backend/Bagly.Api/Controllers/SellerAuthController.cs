@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Extensions;
@@ -11,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Controllers;
 
-/// <summary>Seller marketplace auth. Distinct from customer and admin auth.</summary>
+/// <summary>Seller marketplace auth and business profile. Distinct from customer and admin auth.</summary>
 [ApiController]
 [Route("api/auth/seller")]
 public class SellerAuthController(
@@ -20,6 +21,11 @@ public class SellerAuthController(
     TokenService tokenService,
     IAuditLogService auditLog) : ControllerBase
 {
+    private static readonly Regex PincodeRegex = new(@"^\d{6}$", RegexOptions.Compiled);
+    private static readonly Regex GstinRegex = new(
+        @"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     [HttpPost("register")]
     public async Task<ActionResult<SellerRegisterResponse>> Register(
         [FromBody] SellerRegisterRequest request,
@@ -87,7 +93,7 @@ public class SellerAuthController(
             seller.Name,
             seller.BusinessName,
             seller.Status,
-            "Your seller account has been created. You can sign in now — product listing will be available after approval."));
+            "Your seller account has been created. Sign in to complete your business details for approval."));
     }
 
     [HttpPost("login")]
@@ -135,33 +141,156 @@ public class SellerAuthController(
             requestPath: HttpContext.GetRequestPath(),
             cancellationToken: cancellationToken);
 
-        return Ok(BuildResponse(seller));
+        return Ok(BuildAuthResponse(seller));
     }
 
     [Authorize(Roles = "Seller")]
     [HttpGet("me")]
     public async Task<ActionResult<SellerAuthResponse>> Me(CancellationToken cancellationToken)
     {
-        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-
-        if (!Guid.TryParse(idClaim, out var sellerId))
-        {
-            return Unauthorized(new { message = "Invalid seller session." });
-        }
-
-        var seller = await db.SellerUsers
-            .FirstOrDefaultAsync(u => u.Id == sellerId && u.IsActive, cancellationToken);
-
+        var seller = await LoadCurrentSellerAsync(cancellationToken);
         if (seller is null)
         {
             return Unauthorized(new { message = "Seller account not found." });
         }
 
-        return Ok(BuildResponse(seller));
+        return Ok(BuildAuthResponse(seller));
     }
 
-    private SellerAuthResponse BuildResponse(SellerUser seller)
+    [Authorize(Roles = "Seller")]
+    [HttpGet("profile")]
+    public async Task<ActionResult<SellerProfileDto>> GetProfile(CancellationToken cancellationToken)
+    {
+        var seller = await LoadCurrentSellerAsync(cancellationToken);
+        if (seller is null)
+        {
+            return Unauthorized(new { message = "Seller account not found." });
+        }
+
+        return Ok(ToProfileDto(seller));
+    }
+
+    [Authorize(Roles = "Seller")]
+    [HttpPut("profile")]
+    public async Task<ActionResult<SellerProfileDto>> UpdateProfile(
+        [FromBody] UpdateSellerProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        var seller = await LoadCurrentSellerAsync(cancellationToken);
+        if (seller is null)
+        {
+            return Unauthorized(new { message = "Seller account not found." });
+        }
+
+        var name = request.Name?.Trim() ?? string.Empty;
+        var businessName = request.BusinessName?.Trim() ?? string.Empty;
+        var phone = request.Phone?.Trim() ?? string.Empty;
+        var addressLine1 = request.AddressLine1?.Trim() ?? string.Empty;
+        var addressLine2 = string.IsNullOrWhiteSpace(request.AddressLine2) ? null : request.AddressLine2.Trim();
+        var city = request.City?.Trim() ?? string.Empty;
+        var state = request.State?.Trim() ?? string.Empty;
+        var pincode = request.Pincode?.Trim() ?? string.Empty;
+        var gstin = string.IsNullOrWhiteSpace(request.Gstin) ? null : request.Gstin.Trim().ToUpperInvariant();
+        var description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        var upiId = string.IsNullOrWhiteSpace(request.UpiId) ? null : request.UpiId.Trim();
+
+        if (string.IsNullOrWhiteSpace(name) ||
+            string.IsNullOrWhiteSpace(businessName) ||
+            string.IsNullOrWhiteSpace(phone) ||
+            string.IsNullOrWhiteSpace(addressLine1) ||
+            string.IsNullOrWhiteSpace(city) ||
+            string.IsNullOrWhiteSpace(state) ||
+            string.IsNullOrWhiteSpace(pincode))
+        {
+            return BadRequest(new
+            {
+                message = "Name, business name, phone, address line 1, city, state, and pincode are required.",
+            });
+        }
+
+        if (phone.Length is < 8 or > 20)
+        {
+            return BadRequest(new { message = "Enter a valid contact phone number." });
+        }
+
+        if (!PincodeRegex.IsMatch(pincode))
+        {
+            return BadRequest(new { message = "Pincode must be a 6-digit Indian postal code." });
+        }
+
+        if (gstin is not null && !GstinRegex.IsMatch(gstin))
+        {
+            return BadRequest(new { message = "GSTIN format looks invalid. Leave it blank or enter a valid 15-character GSTIN." });
+        }
+
+        if (description is { Length: > 500 })
+        {
+            return BadRequest(new { message = "Business description must be 500 characters or fewer." });
+        }
+
+        var previousStatus = seller.Status;
+
+        seller.Name = name;
+        seller.BusinessName = businessName;
+        seller.Phone = phone;
+        seller.AddressLine1 = addressLine1;
+        seller.AddressLine2 = addressLine2;
+        seller.City = city;
+        seller.State = state;
+        seller.Pincode = pincode;
+        seller.Gstin = gstin;
+        seller.Description = description;
+        seller.UpiId = upiId;
+        seller.ProfileSubmittedAt = DateTime.UtcNow;
+
+        // First-time / re-submit for review → Pending. Already Approved stays Approved.
+        // Rejected sellers who update details go back to Pending for re-review.
+        if (string.Equals(previousStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep Approved; do not clear ApprovedAt.
+        }
+        else if (string.Equals(previousStatus, "Suspended", StringComparison.OrdinalIgnoreCase))
+        {
+            // Suspended accounts keep Suspended until an admin changes them.
+        }
+        else
+        {
+            seller.Status = "Pending";
+            seller.RejectionReason = null;
+            seller.ApprovedAt = null;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        await auditLog.LogAsync(
+            category: "SellerAuth",
+            action: "UpdateProfile",
+            message: $"Seller '{seller.Email}' submitted business details (status: {seller.Status}).",
+            actorEmail: seller.Email,
+            entityType: "SellerUser",
+            entityId: seller.Id.ToString(),
+            ipAddress: HttpContext.GetClientIp(),
+            requestPath: HttpContext.GetRequestPath(),
+            cancellationToken: cancellationToken);
+
+        return Ok(ToProfileDto(seller));
+    }
+
+    private async Task<SellerUser?> LoadCurrentSellerAsync(CancellationToken cancellationToken)
+    {
+        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+
+        if (!Guid.TryParse(idClaim, out var sellerId))
+        {
+            return null;
+        }
+
+        return await db.SellerUsers
+            .FirstOrDefaultAsync(u => u.Id == sellerId && u.IsActive, cancellationToken);
+    }
+
+    private SellerAuthResponse BuildAuthResponse(SellerUser seller)
     {
         var token = tokenService.CreateSellerToken(seller.Id, seller.Email, seller.Name);
         var expiresAt = DateTime.UtcNow.AddMinutes(jwtOptions.Value.ExpiresMinutes);
@@ -174,4 +303,33 @@ public class SellerAuthController(
             seller.Status,
             expiresAt);
     }
+
+    private static SellerProfileDto ToProfileDto(SellerUser s) =>
+        new(
+            s.Id,
+            s.Email,
+            s.Name,
+            s.BusinessName,
+            s.Phone,
+            s.AddressLine1,
+            s.AddressLine2,
+            s.City,
+            s.State,
+            s.Pincode,
+            s.Gstin,
+            s.Description,
+            s.UpiId,
+            s.Status,
+            s.RejectionReason,
+            s.ApprovedAt,
+            s.ProfileSubmittedAt,
+            IsProfileComplete(s));
+
+    private static bool IsProfileComplete(SellerUser s) =>
+        s.ProfileSubmittedAt != null &&
+        !string.IsNullOrWhiteSpace(s.Phone) &&
+        !string.IsNullOrWhiteSpace(s.AddressLine1) &&
+        !string.IsNullOrWhiteSpace(s.City) &&
+        !string.IsNullOrWhiteSpace(s.State) &&
+        !string.IsNullOrWhiteSpace(s.Pincode);
 }

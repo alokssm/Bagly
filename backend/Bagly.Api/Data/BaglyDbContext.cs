@@ -163,7 +163,16 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.BusinessName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Phone).HasMaxLength(30);
             entity.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.AddressLine1).HasMaxLength(200);
+            entity.Property(x => x.AddressLine2).HasMaxLength(200);
+            entity.Property(x => x.City).HasMaxLength(100);
+            entity.Property(x => x.State).HasMaxLength(100);
+            entity.Property(x => x.Pincode).HasMaxLength(12);
+            entity.Property(x => x.Gstin).HasMaxLength(20);
+            entity.Property(x => x.Description).HasMaxLength(500);
+            entity.Property(x => x.UpiId).HasMaxLength(100);
             entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.RejectionReason).HasMaxLength(500);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.IsActive);

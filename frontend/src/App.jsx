@@ -32,6 +32,7 @@ import AdminProducts from './pages/admin/AdminProducts'
 import AdminProductForm from './pages/admin/AdminProductForm'
 import AdminCategories from './pages/admin/AdminCategories'
 import AdminOrders from './pages/admin/AdminOrders'
+import AdminSellers from './pages/admin/AdminSellers'
 import AdminAnalytics from './pages/admin/AdminAnalytics'
 import AdminTraffic from './pages/admin/AdminTraffic'
 import AdminReports from './pages/admin/AdminReports'
@@ -124,6 +125,7 @@ export default function App() {
                   <Route path="products/:id/edit" element={<AdminProductForm />} />
                   <Route path="categories" element={<AdminCategories />} />
                   <Route path="orders" element={<AdminOrders />} />
+                  <Route path="sellers" element={<AdminSellers />} />
                   <Route path="analytics" element={<AdminAnalytics />} />
                   <Route path="traffic" element={<AdminTraffic />} />
                   <Route path="reports" element={<AdminReports />} />

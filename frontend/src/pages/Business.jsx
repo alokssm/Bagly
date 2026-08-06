@@ -60,8 +60,8 @@ export default function Business() {
         <p className="eyebrow">Sell on Bagly</p>
         <h1>Create a business account</h1>
         <p className="auth-copy">
-          Join Bagly as a seller. After you register you can sign in right away —
-          product listing opens once your account is approved.
+          Join Bagly as a seller. After you register, sign in to complete your business
+          details — product listing opens once an admin approves your account.
         </p>
 
         {error ? <p className="admin-error">{error}</p> : null}

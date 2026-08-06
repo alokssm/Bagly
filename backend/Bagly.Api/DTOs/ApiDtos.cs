@@ -74,6 +74,80 @@ public record SellerAuthResponse(
     string Status,
     DateTime ExpiresAt);
 
+public record SellerProfileDto(
+    Guid Id,
+    string Email,
+    string Name,
+    string BusinessName,
+    string? Phone,
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? Pincode,
+    string? Gstin,
+    string? Description,
+    string? UpiId,
+    string Status,
+    string? RejectionReason,
+    DateTime? ApprovedAt,
+    DateTime? ProfileSubmittedAt,
+    bool ProfileComplete);
+
+public record UpdateSellerProfileRequest(
+    string Name,
+    string BusinessName,
+    string Phone,
+    string AddressLine1,
+    string? AddressLine2,
+    string City,
+    string State,
+    string Pincode,
+    string? Gstin,
+    string? Description,
+    string? UpiId);
+
+public record AdminSellerListItemDto(
+    Guid Id,
+    string Email,
+    string Name,
+    string BusinessName,
+    string? Phone,
+    string? City,
+    string? State,
+    string? Gstin,
+    string Status,
+    string? RejectionReason,
+    bool ProfileComplete,
+    DateTime CreatedAt,
+    DateTime? ProfileSubmittedAt,
+    DateTime? ApprovedAt);
+
+public record AdminSellerDetailDto(
+    Guid Id,
+    string Email,
+    string Name,
+    string BusinessName,
+    string? Phone,
+    string? AddressLine1,
+    string? AddressLine2,
+    string? City,
+    string? State,
+    string? Pincode,
+    string? Gstin,
+    string? Description,
+    string? UpiId,
+    string Status,
+    string? RejectionReason,
+    bool IsActive,
+    bool ProfileComplete,
+    DateTime CreatedAt,
+    DateTime? LastLoginAt,
+    DateTime? ProfileSubmittedAt,
+    DateTime? ApprovedAt);
+
+public record RejectSellerRequest(string? Reason);
+
 public record UpsertCategoryRequest(
     string Id,
     string Label,

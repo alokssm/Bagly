@@ -93,6 +93,7 @@ try
     builder.Services.AddScoped<IEmailSender, EmailSender>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
     builder.Services.AddScoped<IContactEmailService, ContactEmailService>();
+    builder.Services.AddScoped<ISellerApprovalEmailService, SellerApprovalEmailService>();
     builder.Services.AddSingleton<IContactRateLimiter, ContactRateLimiter>();
     builder.Services.AddSingleton<ISiteHitRateLimiter, SiteHitRateLimiter>();
     builder.Services.Configure<GeoIpOptions>(builder.Configuration.GetSection(GeoIpOptions.SectionName));

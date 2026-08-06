@@ -224,6 +224,15 @@ export const api = {
 
   sellerMe: () => request('/auth/seller/me', { auth: 'seller' }),
 
+  sellerGetProfile: () => request('/auth/seller/profile', { auth: 'seller' }),
+
+  sellerUpdateProfile: (payload) =>
+    request('/auth/seller/profile', {
+      method: 'PUT',
+      body: payload,
+      auth: 'seller',
+    }),
+
   customerLogin: (email, password) =>
     request('/auth/customer/login', {
       method: 'POST',
@@ -414,6 +423,27 @@ export const api = {
   },
 
   adminGetOrder: (id) => request(`/admin/orders/${encodeURIComponent(id)}`, { auth: true }),
+
+  adminGetSellers: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/sellers${query ? `?${query}` : ''}`, { auth: true })
+  },
+
+  adminGetSeller: (id) => request(`/admin/sellers/${encodeURIComponent(id)}`, { auth: true }),
+
+  adminApproveSeller: (id) =>
+    request(`/admin/sellers/${encodeURIComponent(id)}/approve`, { method: 'POST', auth: true }),
+
+  adminRejectSeller: (id, reason) =>
+    request(`/admin/sellers/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: { reason: reason || null },
+      auth: true,
+    }),
 
   submitContactForm: (payload) =>
     request('/contact', { method: 'POST', body: payload }),
