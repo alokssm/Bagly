@@ -15,6 +15,7 @@ public static class DbSeeder
     };
 
     private const string SchoolBagsCategoryId = "school-bags";
+    private const string StationeryCategoryId = "stationery";
     private static readonly string[] LegacyCategoryIds = ["tote", "backpack", "crossbody", "travel", "work"];
 
     public static async Task SeedAsync(BaglyDbContext db, AdminOptions? adminOptions = null)
@@ -43,6 +44,7 @@ public static class DbSeeder
         // Bags + its Boys/Girls/Kids subcategories stay active/populated on every deploy, and so
         // calling POST /api/setup/seed again on a non-empty Azure/Render database still syncs it.
         await EnsureSchoolBagsCatalogAsync(db);
+        await EnsureStationeryCatalogAsync(db);
 
         await SeedAdminUserAsync(db, adminOptions);
 
@@ -264,6 +266,153 @@ public static class DbSeeder
         {
             db.Products.AddRange(newSchoolBagProducts);
             await db.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// Ensures the Stationery top-level category and ~50 school/office supply products exist.
+    /// Safe to call repeatedly — category is upserted and products are added only when their id
+    /// is missing (e.g. via POST /api/setup/seed on a non-empty database).
+    /// </summary>
+    private static async Task EnsureStationeryCatalogAsync(BaglyDbContext db)
+    {
+        var categories = await db.Categories.ToListAsync();
+        var byId = categories.ToDictionary(c => c.Id, c => c, StringComparer.OrdinalIgnoreCase);
+
+        // Sort after School Bags (1) and its Boys/Girls/Kids children (2–4).
+        UpsertCategory(db, byId, StationeryCategoryId, "Stationery", sortOrder: 5, parentId: null);
+        await db.SaveChangesAsync();
+
+        var existingIds = (await db.Products.Select(p => p.Id).ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var newStationeryProducts = CreateStationeryProducts()
+            .Where(p => !existingIds.Contains(p.Id))
+            .ToList();
+
+        if (newStationeryProducts.Count > 0)
+        {
+            db.Products.AddRange(newStationeryProducts);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // Stationery / desk / school-supply Unsplash photos, cycled across products (image + gallery).
+    private static readonly string[] StationeryImagePool =
+    [
+        "photo-1452860606245-08befc0ff44b",
+        "photo-1513542789411-b6a5d4f31634",
+        "photo-1583485088034-697b8b9c3c4a",
+        "photo-1606760227091-3dd870d97f1d",
+        "photo-1586075010923-2dd457ba8392",
+        "photo-1596495577886-d920f1fb7238",
+        "photo-1611532736597-de2d4265fba3",
+        "photo-1531346878377-a5be20888e57",
+        "photo-1517842645767-c639042777db",
+        "photo-1544816155-12df9643f363",
+        "photo-1506784983877-45594efa4cbe",
+        "photo-1434030216411-0b793f4b4173",
+        "photo-1484480974693-6ca0a78fb36b",
+        "photo-1455390582262-044cdead277a",
+        "photo-1586281380349-632531db7ed4",
+    ];
+
+    private static string StationeryImage(int index, int offset) =>
+        $"https://images.unsplash.com/{StationeryImagePool[(index + offset) % StationeryImagePool.Length]}?auto=format&fit=crop&w=900&q=80";
+
+    private static IEnumerable<Product> CreateStationeryProducts()
+    {
+        var colorPool = new[] { "Forest Green", "Brass", "Ink Black", "Navy", "Cream", "Burgundy", "Slate Grey" };
+        var materialPool = new[]
+        {
+            "Recycled Paper", "FSC Paper", "Stainless Steel", "Brass & Resin", "PU Leather",
+            "Cotton Canvas", "ABS Plastic", "Wood & Metal", "Cardstock", "Polyester Blend",
+        };
+        var featurePool = new[]
+        {
+            "School & office ready", "Durable everyday build", "Gift-box friendly packaging",
+            "Smooth write feel", "Compact desk footprint", "Refillable where noted",
+            "Acid-free pages", "Sturdy binding", "Ergonomic grip", "Wipe-clean surfaces",
+        };
+
+        // Stable sequential ids (st-001 … st-050) keep re-seeds idempotent.
+        string[] names =
+        [
+            "Forest Grove Spiral Notebook", "Brass Tip Ballpoint Pen Set", "Scholar Ruled Composition Book",
+            "Inkwell Gel Pen Trio", "Desk Companion Sticky Notes", "Campus Highlighter Pack",
+            "Heritage Leather Pencil Case", "Midnight Index Tabs", "Study Session Planner",
+            "Oak Desk Pencil Cup", "Graph Grid Sketch Pad", "Classic Fountain Pen",
+            "Math Set Compass Kit", "Erasure Soft Rubber Pack", "Color Burst Marker Set",
+            "A4 Clipboard Portfolio", "Weekly Desk Pad Calendar", "Binder Ring Subject Folder",
+            "Calligraphy Nib Starter Kit", "Pastel Sticky Flag Assortment", "Travel Pocket Notebook",
+            "Brass Clip Paper Fasteners", "Recycled Kraft Journal", "Protractor & Ruler Duo",
+            "Whiteboard Marker Four-Pack", "Canvas Roll Pencil Wrap", "Lined Index Card Bundle",
+            "Desk Organizer Tray", "Mechanical Pencil 0.7mm", "Correction Tape Twin Pack",
+            "Watercolor Brush Pen Set", "Hardcover Daily Diary", "Stapler & Staple Kit",
+            "Washi Tape Accent Rolls", "Acrylic Desk Paperweight", "Scientific Calculator Soft Case",
+            "Folder Expanding Accordion File", "Chalk Stick Classroom Pack", "Glitter Glue Stick Duo",
+            "Letter Writing Stationery Set", "Clipboard with Storage Lid", "Fineliner Drawing Pens",
+            "Hardcover Ring Binder", "Push-Pin Corkboard Assortment", "Scissors & Cutter Set",
+            "Magnetic Fridge Memo Pad", "Ballpoint Refill Cartridge Pack", "Student Exam Pad Bundle",
+            "Desk Lamp Bookmark Set", "Office Essentials Starter Kit",
+        ];
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            var seq = i + 1;
+            var name = names[i];
+            var id = $"st-{seq:D3}";
+            var material = materialPool[i % materialPool.Length];
+            var primaryColor = colorPool[i % colorPool.Length];
+            var secondaryColor = colorPool[(i + 3) % colorPool.Length];
+            var price = Math.Round((99m + i * (2499m - 99m) / Math.Max(names.Length - 1, 1)) / 10m) * 10m;
+            var compareAt = i % 5 == 0 ? Math.Round(price * 1.2m / 10m) * 10m : (decimal?)null;
+            var stock = 40 + (i * 17) % 160;
+            var rating = Math.Round(4.1 + (i % 9) * 0.09, 1);
+            var reviews = 12 + (i * 7) % 180;
+            var badge = i % 7 == 0 ? "Bestseller" : i % 7 == 3 ? "New" : null;
+            var image = StationeryImage(i, 0);
+            var gallery = new[] { image, StationeryImage(i + 1, 2) };
+            var features = new[]
+            {
+                featurePool[i % featurePool.Length],
+                featurePool[(i + 1) % featurePool.Length],
+                featurePool[(i + 2) % featurePool.Length],
+                featurePool[(i + 3) % featurePool.Length],
+            };
+            var shortDescription =
+                $"{material} stationery in {primaryColor.ToLowerInvariant()} — ideal for school and desk.";
+            var description =
+                $"{name} brings forest-green & brass desk energy to everyday study and office work. " +
+                $"Crafted with {material.ToLowerInvariant()} accents in {primaryColor.ToLowerInvariant()} " +
+                $"with {secondaryColor.ToLowerInvariant()} details. A practical companion for notes, exams, and tidy desks.";
+
+            yield return new Product
+            {
+                Id = id,
+                Name = name,
+                Category = StationeryCategoryId,
+                SubCategoryId = null,
+                Price = price,
+                CompareAt = compareAt,
+                Material = material,
+                Rating = rating,
+                Reviews = reviews,
+                Badge = badge,
+                ShortDescription = shortDescription,
+                Description = description,
+                Image = image,
+                ColorsJson = JsonSerializer.Serialize(new[] { primaryColor, secondaryColor }, JsonOptions),
+                FeaturesJson = JsonSerializer.Serialize(features, JsonOptions),
+                GalleryJson = JsonSerializer.Serialize(gallery, JsonOptions),
+                IsActive = true,
+                StockQuantity = stock,
+                CreatedAt = DateTime.UtcNow,
+                Slug = id,
+                SeoTitle = $"{name} | Bagly Stationery",
+                SeoDescription = shortDescription.Length <= 300 ? shortDescription : shortDescription[..300],
+                SeoKeywords = "stationery, school supplies, office supplies, notebook, pen, bagly",
+            };
         }
     }
 
