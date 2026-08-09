@@ -213,7 +213,10 @@ export default function ProductReviews({ productId, onSummaryChange }) {
                   </button>
                 </div>
               </div>
-              <StarDisplay rating={myReview?.rating} />
+              <div className="pdp-review-item-top">
+                <StarDisplay rating={myReview?.rating} />
+                <span className="pdp-review-date">{formatReviewDate(myReview?.updatedAt || myReview?.createdAt)}</span>
+              </div>
               {myReview?.comment ? <p className="pdp-review-comment">{myReview.comment}</p> : null}
             </div>
           ) : null}

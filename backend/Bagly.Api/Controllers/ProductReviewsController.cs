@@ -50,7 +50,9 @@ public class ProductReviewsController(BaglyDbContext db) : ControllerBase
             myReview = mine is null ? null : ToDto(mine, isMine: true);
             if (mine is null)
             {
-                canReview = await HasPurchasedAsync(product.Id, customerId.Value, cancellationToken);
+                var email = await GetCustomerEmailAsync(customerId.Value, cancellationToken);
+                canReview = email is not null
+                    && await HasPurchasedAsync(product.Id, customerId.Value, email, cancellationToken);
             }
             else
             {
@@ -104,16 +106,16 @@ public class ProductReviewsController(BaglyDbContext db) : ControllerBase
             return Conflict(new { message = "You have already reviewed this product." });
         }
 
-        if (!await HasPurchasedAsync(product.Id, customerId.Value, cancellationToken))
-        {
-            return BadRequest(new { message = "You can only review products you have purchased." });
-        }
-
         var customer = await db.CustomerUsers.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == customerId.Value && c.IsActive, cancellationToken);
         if (customer is null)
         {
             return Unauthorized();
+        }
+
+        if (!await HasPurchasedAsync(product.Id, customer.Id, customer.Email, cancellationToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only review products you have purchased." });
         }
 
         var now = DateTime.UtcNow;
@@ -128,7 +130,15 @@ public class ProductReviewsController(BaglyDbContext db) : ControllerBase
         };
 
         db.ProductReviews.Add(review);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { message = "You have already reviewed this product." });
+        }
+
         await SyncProductAggregatesAsync(product.Id, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -242,13 +252,34 @@ public class ProductReviewsController(BaglyDbContext db) : ControllerBase
         }
     }
 
-    private async Task<bool> HasPurchasedAsync(string productId, Guid customerId, CancellationToken cancellationToken) =>
-        await db.OrderItems.AsNoTracking()
+    /// <summary>
+    /// Purchase gate matches analytics revenue (Status == Confirmed). Also accepts older guest
+    /// checkouts linked by the account email, same as AccountOrdersController.
+    /// </summary>
+    private async Task<bool> HasPurchasedAsync(
+        string productId,
+        Guid customerId,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        return await db.OrderItems.AsNoTracking()
             .AnyAsync(
                 i => i.ProductId == productId
-                     && i.Order!.CustomerUserId == customerId
-                     && i.Order.Status == ConfirmedStatus,
+                     && i.Order!.Status == ConfirmedStatus
+                     && (i.Order.CustomerUserId == customerId
+                         || i.Order.Email.ToLower() == normalizedEmail),
                 cancellationToken);
+    }
+
+    private async Task<string?> GetCustomerEmailAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var email = await db.CustomerUsers.AsNoTracking()
+            .Where(c => c.Id == customerId && c.IsActive)
+            .Select(c => c.Email)
+            .FirstOrDefaultAsync(cancellationToken);
+        return string.IsNullOrWhiteSpace(email) ? null : email;
+    }
 
     private async Task<Product?> ResolveProductAsync(string idOrSlug, CancellationToken cancellationToken)
     {
