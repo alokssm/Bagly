@@ -290,6 +290,35 @@ export const api = {
 
   getProduct: (id) => request(`/products/${encodeURIComponent(id)}`),
 
+  getProductReviews: (productId) =>
+    request(`/products/${encodeURIComponent(productId)}/reviews`, { auth: 'customer' }),
+
+  createProductReview: (productId, { rating, comment }) =>
+    request(`/products/${encodeURIComponent(productId)}/reviews`, {
+      method: 'POST',
+      body: {
+        rating: Number(rating),
+        comment: comment?.trim() ? String(comment).trim() : null,
+      },
+      auth: 'customer',
+    }),
+
+  updateMyProductReview: (productId, { rating, comment }) =>
+    request(`/products/${encodeURIComponent(productId)}/reviews/me`, {
+      method: 'PUT',
+      body: {
+        rating: Number(rating),
+        comment: comment?.trim() ? String(comment).trim() : null,
+      },
+      auth: 'customer',
+    }),
+
+  deleteMyProductReview: (productId) =>
+    request(`/products/${encodeURIComponent(productId)}/reviews/me`, {
+      method: 'DELETE',
+      auth: 'customer',
+    }),
+
   getCategories: () => request('/categories'),
 
   createCart: () => request('/cart', { method: 'POST' }),

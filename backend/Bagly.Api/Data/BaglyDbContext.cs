@@ -21,6 +21,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<CustomerShippingAddress> ShippingAddresses => Set<CustomerShippingAddress>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<SiteHit> SiteHits => Set<SiteHit>();
+    public DbSet<ProductReview> ProductReviews => Set<ProductReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -316,6 +317,27 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.OccurredAtUtc);
             entity.HasIndex(x => x.Country);
             entity.HasIndex(x => x.SessionId);
+        });
+
+        modelBuilder.Entity<ProductReview>(entity =>
+        {
+            entity.ToTable("ProductReviews");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ProductId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Rating).IsRequired();
+            entity.Property(x => x.Comment).HasMaxLength(2000);
+            entity.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.CustomerUser)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.ProductId, x.CustomerUserId }).IsUnique();
+            entity.HasIndex(x => x.ProductId);
+            entity.HasIndex(x => x.CustomerUserId);
+            entity.HasIndex(x => x.CreatedAt);
         });
     }
 }

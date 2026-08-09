@@ -464,3 +464,29 @@ public record UpsertShippingAddressRequest(
     string Country,
     bool IsDefault = false
 );
+
+public record ProductReviewDto(
+    Guid Id,
+    string ProductId,
+    Guid CustomerUserId,
+    string ReviewerName,
+    int Rating,
+    string? Comment,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    bool IsMine = false
+);
+
+public record CreateProductReviewRequest(int Rating, string? Comment);
+
+public record UpdateProductReviewRequest(int Rating, string? Comment);
+
+public record ProductReviewsResponse(
+    string ProductId,
+    double AverageRating,
+    int ReviewCount,
+    IReadOnlyList<ProductReviewDto> Reviews,
+    bool? CanReview = null,
+    bool? HasReviewed = null,
+    ProductReviewDto? MyReview = null
+);

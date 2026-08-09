@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
 import { pulseAddButton } from '../utils/cartAnim'
+import { CompactRating } from './ProductReviews'
 
 export default function ProductCard({ product }) {
   const { addItem, items } = useCart()
@@ -48,6 +49,7 @@ export default function ProductCard({ product }) {
         <Link to={productHref}>
           <h3>{product.name}</h3>
         </Link>
+        <CompactRating rating={product.rating} reviews={product.reviews} />
         <div className="product-price-row">
           <span className="price">{formatPrice(product.price)}</span>
           {product.compareAt ? (

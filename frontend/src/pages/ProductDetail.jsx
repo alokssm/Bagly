@@ -6,6 +6,7 @@ import { useCart } from '../context/CartContext'
 import { pulseAddButton } from '../utils/cartAnim'
 import LoadingState from '../components/LoadingState'
 import ApiErrorState from '../components/ApiErrorState'
+import ProductReviews from '../components/ProductReviews'
 
 export default function ProductDetail() {
   const { id } = useParams()
@@ -186,9 +187,17 @@ export default function ProductDetail() {
             {product.badge ? <span className="eyebrow">{product.badge}</span> : null}
             <h1>{product.name}</h1>
             <div className="pdp-rating">
-              <span>★ {product.rating}</span>
-              <span>·</span>
-              <span>{product.reviews} reviews</span>
+              {product.reviews > 0 ? (
+                <>
+                  <span>★ {Number(product.rating).toFixed(1)}</span>
+                  <span>·</span>
+                  <span>
+                    {product.reviews} {product.reviews === 1 ? 'review' : 'reviews'}
+                  </span>
+                </>
+              ) : (
+                <span>No reviews yet</span>
+              )}
               <span>·</span>
               <span>{product.material}</span>
             </div>
@@ -281,6 +290,21 @@ export default function ProductDetail() {
             </ul>
           </div>
         </div>
+
+        <ProductReviews
+          productId={product.id}
+          onSummaryChange={({ averageRating, reviewCount }) => {
+            setProduct((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rating: averageRating,
+                    reviews: reviewCount,
+                  }
+                : prev,
+            )
+          }}
+        />
       </div>
 
       {lightboxOpen ? (
