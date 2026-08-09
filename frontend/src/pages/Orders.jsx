@@ -63,24 +63,41 @@ function OrderCard({ order }) {
       {open ? (
         <div className="order-card__details">
           <div className="order-items">
-            {order.items.map((item, idx) => (
-              <div className="order-item-row" key={`${item.productId}-${item.color}-${idx}`}>
-                {item.image ? (
-                  <img src={item.image} alt={item.productName} />
-                ) : (
-                  <div className="order-item-row__placeholder" aria-hidden="true" />
-                )}
-                <div className="order-item-row__info">
-                  <span className="order-item-row__name">{item.productName}</span>
-                  <span className="order-item-row__meta">
-                    {item.color ? `${item.color} · ` : ''}Qty {item.quantity}
+            {order.items.map((item, idx) => {
+              const productHref = item.productId ? `/product/${item.productId}` : null
+              return (
+                <div className="order-item-row" key={`${item.productId}-${item.color}-${idx}`}>
+                  {productHref ? (
+                    <Link to={productHref} className="order-item-row__media" aria-label={item.productName}>
+                      {item.image ? (
+                        <img src={item.image} alt="" />
+                      ) : (
+                        <div className="order-item-row__placeholder" aria-hidden="true" />
+                      )}
+                    </Link>
+                  ) : item.image ? (
+                    <img src={item.image} alt={item.productName} />
+                  ) : (
+                    <div className="order-item-row__placeholder" aria-hidden="true" />
+                  )}
+                  <div className="order-item-row__info">
+                    {productHref ? (
+                      <Link to={productHref} className="order-item-row__name">
+                        {item.productName}
+                      </Link>
+                    ) : (
+                      <span className="order-item-row__name">{item.productName}</span>
+                    )}
+                    <span className="order-item-row__meta">
+                      {item.color ? `${item.color} · ` : ''}Qty {item.quantity}
+                    </span>
+                  </div>
+                  <span className="order-item-row__price">
+                    {formatPrice(item.unitPrice * item.quantity)}
                   </span>
                 </div>
-                <span className="order-item-row__price">
-                  {formatPrice(item.unitPrice * item.quantity)}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="order-card__totals">
