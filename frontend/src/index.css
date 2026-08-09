@@ -1116,6 +1116,46 @@ p {
   margin-bottom: 1.5rem;
 }
 
+.pdp-cart-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.pdp-cart-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.added-to-cart {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--forest);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.added-to-cart svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.product-card-in-cart {
+  padding: 0 0.15rem;
+  font-size: 0.82rem;
+}
+
 .qty-control {
   display: inline-flex;
   align-items: center;

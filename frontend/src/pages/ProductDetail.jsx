@@ -9,7 +9,7 @@ import ApiErrorState from '../components/ApiErrorState'
 
 export default function ProductDetail() {
   const { id } = useParams()
-  const { addItem, busy } = useCart()
+  const { addItem, busy, items } = useCart()
   const addBtnRef = useRef(null)
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -17,7 +17,6 @@ export default function ProductDetail() {
   const [color, setColor] = useState('')
   const [qty, setQty] = useState(1)
   const [activeImage, setActiveImage] = useState(0)
-  const [added, setAdded] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -29,7 +28,6 @@ export default function ProductDetail() {
       setColor(data.colors?.[0] ?? '')
       setQty(1)
       setActiveImage(0)
-      setAdded(false)
       setLightboxOpen(false)
     } catch (err) {
       setProduct(null)
@@ -67,6 +65,10 @@ export default function ProductDetail() {
   const gallery = useMemo(() => product?.gallery ?? [], [product])
   const soldOut = product?.inStock === false
   const mainImageSrc = gallery[activeImage] || product?.image
+  const inCart = useMemo(
+    () => Boolean(product && items.some((item) => item.id === product.id)),
+    [items, product],
+  )
 
   useEffect(() => {
     if (!lightboxOpen) return
@@ -125,8 +127,6 @@ export default function ProductDetail() {
       const sourceRect = addBtnRef.current?.getBoundingClientRect() ?? null
       await addItem(product, { color, quantity: qty, sourceRect })
       pulseAddButton(addBtnRef.current)
-      setAdded(true)
-      window.setTimeout(() => setAdded(false), 1800)
     } catch {
       // error surfaced via cart context
     }
@@ -242,25 +242,36 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-              {soldOut ? (
-                <button type="button" className="btn btn-primary" disabled>
-                  Sold out
-                </button>
-              ) : (
-                <button
-                  ref={addBtnRef}
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleAdd}
-                  disabled={busy}
-                >
-                  {added ? 'Added ✓' : busy ? 'Adding…' : 'Add to cart'}
-                </button>
-              )}
-              <Link to="/cart" className="btn btn-secondary">
-                View cart
-              </Link>
+            <div className="pdp-cart-actions">
+              {inCart && !soldOut ? (
+                <p className="added-to-cart" role="status">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 12.5l2.5 2.5L16 9.5" />
+                  </svg>
+                  Added to cart
+                </p>
+              ) : null}
+              <div className="pdp-cart-buttons">
+                {soldOut ? (
+                  <button type="button" className="btn btn-primary" disabled>
+                    Sold out
+                  </button>
+                ) : (
+                  <button
+                    ref={addBtnRef}
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleAdd}
+                    disabled={busy}
+                  >
+                    {busy ? 'Adding…' : 'Add to cart'}
+                  </button>
+                )}
+                <Link to="/cart" className="btn btn-secondary">
+                  View cart
+                </Link>
+              </div>
             </div>
 
             <ul className="feature-list">

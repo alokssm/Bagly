@@ -1,17 +1,21 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
 import { pulseAddButton } from '../utils/cartAnim'
 
 export default function ProductCard({ product }) {
-  const { addItem } = useCart()
+  const { addItem, items } = useCart()
   const addBtnRef = useRef(null)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
 
   const soldOut = product.inStock === false
   const productHref = `/product/${product.slug || product.id}`
+  const inCart = useMemo(
+    () => items.some((item) => item.id === product.id),
+    [items, product.id],
+  )
 
   const handleAdd = async () => {
     setAdding(true)
@@ -52,6 +56,15 @@ export default function ProductCard({ product }) {
         </div>
       </div>
 
+      {inCart && !soldOut ? (
+        <p className="added-to-cart product-card-in-cart" role="status">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12.5l2.5 2.5L16 9.5" />
+          </svg>
+          Added to cart
+        </p>
+      ) : null}
       <div className="product-actions">
         <Link to={productHref} className="btn btn-secondary">
           View
