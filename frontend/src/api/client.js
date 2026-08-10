@@ -279,11 +279,12 @@ export const api = {
       auth: 'customer',
     }),
 
-  getProducts: ({ category, subCategory, sort } = {}) => {
+  getProducts: ({ category, subCategory, sort, q } = {}) => {
     const query = new URLSearchParams()
     if (category && category !== 'all') query.set('category', category)
     if (subCategory && subCategory !== 'all') query.set('subCategory', subCategory)
     if (sort && sort !== 'featured') query.set('sort', sort)
+    if (q && String(q).trim()) query.set('q', String(q).trim())
     const qs = query.toString()
     return request(`/products${qs ? `?${qs}` : ''}`)
   },

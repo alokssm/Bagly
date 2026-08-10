@@ -16,9 +16,10 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
         [FromQuery] string? category,
         [FromQuery] string? subCategory,
         [FromQuery] string? sort,
+        [FromQuery] string? q,
         CancellationToken cancellationToken)
     {
-        var products = await LoadActiveProductsAsync(category, subCategory, cancellationToken);
+        var products = await LoadActiveProductsAsync(category, subCategory, q, cancellationToken);
 
         var mapped = products.Select(ProductMapper.ToDto).ToList();
 
@@ -59,6 +60,7 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
     private async Task<List<Models.Product>> LoadActiveProductsAsync(
         string? category,
         string? subCategory,
+        string? q,
         CancellationToken cancellationToken)
     {
         Task<List<Models.Product>> Query()
@@ -75,6 +77,17 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
                 !string.Equals(subCategory, "all", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(p => p.SubCategoryId == subCategory);
+            }
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var term = q.Trim().ToLower();
+                query = query.Where(p =>
+                    p.Name.ToLower().Contains(term) ||
+                    p.ShortDescription.ToLower().Contains(term) ||
+                    p.Description.ToLower().Contains(term) ||
+                    p.Category.ToLower().Contains(term) ||
+                    (p.Slug != null && p.Slug.ToLower().Contains(term)));
             }
 
             return query.ToListAsync(cancellationToken);

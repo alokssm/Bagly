@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
+import ProductSearchBar from '../components/ProductSearchBar'
 import LoadingState from '../components/LoadingState'
 import ApiErrorState from '../components/ApiErrorState'
 import { api } from '../api/client'
 
 export default function Home() {
+  const navigate = useNavigate()
   const [showcase, setShowcase] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -29,6 +32,15 @@ export default function Home() {
   useEffect(() => {
     load()
   }, [load])
+
+  const handleSearch = (term) => {
+    const q = (term || searchQuery).trim()
+    if (!q) {
+      navigate('/shop')
+      return
+    }
+    navigate(`/shop?q=${encodeURIComponent(q)}`)
+  }
 
   return (
     <>
@@ -84,6 +96,15 @@ export default function Home() {
               <h2>School Bags for Boys, Girls &amp; Kids</h2>
             </div>
           </div>
+
+          <ProductSearchBar
+            id="home-product-search"
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onSubmit={handleSearch}
+            placeholder="Search the collection…"
+            className="product-search--home"
+          />
 
           {loading ? <LoadingState message="Loading products…" compact /> : null}
           {!loading && error ? (

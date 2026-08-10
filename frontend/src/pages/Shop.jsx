@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
+import ProductSearchBar from '../components/ProductSearchBar'
 import LoadingState from '../components/LoadingState'
 import ApiErrorState from '../components/ApiErrorState'
 import { api } from '../api/client'
@@ -9,11 +10,14 @@ export default function Shop() {
   const [params, setParams] = useSearchParams()
   const activeCategory = params.get('category') || 'all'
   const activeSubCategory = params.get('subCategory') || 'all'
+  const qParam = (params.get('q') || '').trim()
   const [sort, setSort] = useState('featured')
   const [categories, setCategories] = useState([{ id: 'all', label: 'All bags' }])
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchInput, setSearchInput] = useState(qParam)
+  const lastPushedQ = useRef(qParam)
 
   const topLevelCategories = categories.filter((cat) => !cat.parentId)
   const subCategories = categories.filter((cat) => cat.parentId === activeCategory)
@@ -38,6 +42,32 @@ export default function Shop() {
     }
   }, [])
 
+  // Sync input when `q` changes from outside this page (Home search, back/forward).
+  useEffect(() => {
+    if (qParam === lastPushedQ.current) return
+    lastPushedQ.current = qParam
+    setSearchInput(qParam)
+  }, [qParam])
+
+  // Debounced live filter: keep the address bar shareable via `?q=`.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const trimmed = searchInput.trim()
+      if (trimmed === lastPushedQ.current) return
+      lastPushedQ.current = trimmed
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (trimmed) next.set('q', trimmed)
+          else next.delete('q')
+          return next
+        },
+        { replace: true },
+      )
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [searchInput, setParams])
+
   const loadProducts = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -46,6 +76,7 @@ export default function Shop() {
         category: activeCategory,
         subCategory: activeSubCategory,
         sort,
+        q: qParam || undefined,
       })
       setProducts(data)
     } catch (err) {
@@ -54,7 +85,7 @@ export default function Shop() {
     } finally {
       setLoading(false)
     }
-  }, [activeCategory, activeSubCategory, sort])
+  }, [activeCategory, activeSubCategory, sort, qParam])
 
   useEffect(() => {
     loadProducts()
@@ -75,6 +106,17 @@ export default function Shop() {
     setParams(next)
   }
 
+  const handleSearchSubmit = (term) => {
+    const trimmed = term.trim()
+    if (trimmed === lastPushedQ.current) return
+    lastPushedQ.current = trimmed
+    setSearchInput(trimmed)
+    const next = new URLSearchParams(params)
+    if (trimmed) next.set('q', trimmed)
+    else next.delete('q')
+    setParams(next, { replace: true })
+  }
+
   return (
     <section className="section" style={{ paddingTop: 0 }}>
       <div className="container">
@@ -82,6 +124,14 @@ export default function Shop() {
           <span className="eyebrow">Shop</span>
           <h1>The Bagly collection</h1>
           <p>Filter by style and find the bag that fits your day — from soft totes to structured travel.</p>
+          <ProductSearchBar
+            id="shop-product-search"
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={handleSearchSubmit}
+            placeholder="Search by name or style…"
+            className="product-search--shop"
+          />
         </div>
 
         <div className="filters" role="tablist" aria-label="Categories">
@@ -128,6 +178,12 @@ export default function Shop() {
             ) : (
               <>
                 Showing <strong>{products.length}</strong> bag{products.length === 1 ? '' : 's'}
+                {qParam ? (
+                  <>
+                    {' '}
+                    for <strong>&ldquo;{qParam}&rdquo;</strong>
+                  </>
+                ) : null}
               </>
             )}
           </p>
@@ -148,7 +204,13 @@ export default function Shop() {
           <ApiErrorState title="Couldn't load products" message={error} onRetry={loadProducts} compact />
         ) : null}
 
-        {!loading && !error ? (
+        {!loading && !error && products.length === 0 ? (
+          <p className="shop-empty" role="status">
+            {qParam ? `No products match “${qParam}”.` : 'No products found.'}
+          </p>
+        ) : null}
+
+        {!loading && !error && products.length > 0 ? (
           <div className="product-grid">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
