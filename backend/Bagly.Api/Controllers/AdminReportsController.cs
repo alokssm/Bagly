@@ -24,11 +24,16 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
         var warningCount = await db.AuditLogs.CountAsync(x => x.Level == "Warning", cancellationToken)
             + await db.SystemLogs.CountAsync(x => x.Level == "Warning", cancellationToken);
 
-        var byCategory = await db.AuditLogs
+        // Project GroupBy aggregates into an anonymous type and map to the record DTO after
+        // materialization — EF Core cannot reliably translate GroupBy→record constructors on
+        // Npgsql (same class of bug as AdminAnalyticsController).
+        var byCategory = (await db.AuditLogs
             .GroupBy(x => x.Category)
-            .Select(g => new CategoryCountDto(g.Key, g.Count()))
+            .Select(g => new { Category = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Select(x => new CategoryCountDto(x.Category, x.Count))
+            .ToList();
 
         return Ok(new ReportSummaryDto(auditCount, systemCount, errorCount, warningCount, byCategory));
     }
@@ -59,10 +64,16 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
             query = query.Where(x => x.Action == action.Trim());
 
         if (from.HasValue)
-            query = query.Where(x => x.TimestampUtc >= from.Value.ToUniversalTime());
+        {
+            var fromUtc = DateTime.SpecifyKind(from.Value.ToUniversalTime(), DateTimeKind.Utc);
+            query = query.Where(x => x.TimestampUtc >= fromUtc);
+        }
 
         if (to.HasValue)
-            query = query.Where(x => x.TimestampUtc <= to.Value.ToUniversalTime());
+        {
+            var toUtc = DateTime.SpecifyKind(to.Value.ToUniversalTime(), DateTimeKind.Utc);
+            query = query.Where(x => x.TimestampUtc <= toUtc);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -77,11 +88,27 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = await query
+        var items = (await query
             .OrderByDescending(x => x.TimestampUtc)
             .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                x.TimestampUtc,
+                x.Level,
+                x.Category,
+                x.Action,
+                x.ActorEmail,
+                x.EntityType,
+                x.EntityId,
+                x.Message,
+                x.DetailsJson,
+                x.IpAddress,
+                x.RequestPath,
+            })
+            .ToListAsync(cancellationToken))
             .Select(x => new AuditLogDto(
                 x.Id,
                 x.TimestampUtc,
@@ -95,7 +122,7 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
                 x.DetailsJson,
                 x.IpAddress,
                 x.RequestPath))
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return Ok(new PagedResult<AuditLogDto>(items, page, pageSize, totalCount, totalPages));
     }
@@ -118,10 +145,16 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
             query = query.Where(x => x.Level == level.Trim());
 
         if (from.HasValue)
-            query = query.Where(x => x.TimeStamp >= from.Value);
+        {
+            var fromUtc = DateTime.SpecifyKind(from.Value.ToUniversalTime(), DateTimeKind.Utc);
+            query = query.Where(x => x.TimeStamp >= fromUtc);
+        }
 
         if (to.HasValue)
-            query = query.Where(x => x.TimeStamp <= to.Value);
+        {
+            var toUtc = DateTime.SpecifyKind(to.Value.ToUniversalTime(), DateTimeKind.Utc);
+            query = query.Where(x => x.TimeStamp <= toUtc);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -137,11 +170,24 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = await query
+        var items = (await query
             .OrderByDescending(x => x.TimeStamp)
             .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                x.TimeStamp,
+                x.Level,
+                x.Message,
+                x.Exception,
+                x.RequestPath,
+                x.ActorEmail,
+                x.AuditCategory,
+                x.AuditAction,
+            })
+            .ToListAsync(cancellationToken))
             .Select(x => new SystemLogDto(
                 x.Id,
                 x.TimeStamp,
@@ -152,7 +198,7 @@ public class AdminReportsController(BaglyDbContext db) : ControllerBase
                 x.ActorEmail,
                 x.AuditCategory,
                 x.AuditAction))
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return Ok(new PagedResult<SystemLogDto>(items, page, pageSize, totalCount, totalPages));
     }
