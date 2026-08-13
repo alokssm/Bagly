@@ -2765,6 +2765,25 @@ a.order-item-row__name:hover {
   border-left: 3px solid var(--danger);
 }
 
+.admin-banner {
+  padding: 0.9rem 1rem;
+  border-left: 3px solid var(--ink-soft);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 0.35rem;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+.admin-banner.ok {
+  border-left-color: var(--forest);
+  background: rgba(27, 61, 47, 0.06);
+}
+.admin-banner.warn {
+  border-left-color: var(--danger);
+  background: rgba(155, 44, 44, 0.06);
+}
+
 .auth-success {
   color: var(--forest);
   background: rgba(27, 61, 47, 0.08);

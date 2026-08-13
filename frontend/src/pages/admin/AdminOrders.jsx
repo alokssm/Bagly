@@ -31,6 +31,9 @@ export default function AdminOrders() {
   const [expandedId, setExpandedId] = useState(null)
   const [details, setDetails] = useState({})
   const [detailLoading, setDetailLoading] = useState('')
+  const [shiprocketProbe, setShiprocketProbe] = useState(null)
+  const [shiprocketProbeLoading, setShiprocketProbeLoading] = useState(false)
+  const [retryingId, setRetryingId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,6 +100,34 @@ export default function AdminOrders() {
     }
   }
 
+  const probeShiprocket = async () => {
+    setShiprocketProbeLoading(true)
+    try {
+      const data = await api.adminShiprocketConnection()
+      setShiprocketProbe(data)
+    } catch (err) {
+      setShiprocketProbe({ loginOk: false, loginError: err.message || 'Unable to probe Shiprocket.' })
+    } finally {
+      setShiprocketProbeLoading(false)
+    }
+  }
+
+  const retryShiprocket = async (orderId) => {
+    setRetryingId(orderId)
+    try {
+      const data = await api.adminRetryShiprocket(orderId)
+      setDetails((prev) => ({ ...prev, [orderId]: data }))
+      await load()
+    } catch (err) {
+      setDetails((prev) => ({
+        ...prev,
+        [orderId]: { ...(prev[orderId] || {}), error: err.message || 'Shiprocket retry failed.' },
+      }))
+    } finally {
+      setRetryingId('')
+    }
+  }
+
   const { items: orders, totalCount, totalPages, todayCount } = result
   const from = totalCount === 0 ? 0 : (result.page - 1) * result.pageSize + 1
   const to = Math.min(result.page * result.pageSize, totalCount)
@@ -111,9 +142,43 @@ export default function AdminOrders() {
             50 orders per page. "Today" is measured in India Standard Time (Asia/Kolkata, UTC+5:30).
           </p>
         </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={probeShiprocket}
+          disabled={shiprocketProbeLoading}
+        >
+          {shiprocketProbeLoading ? 'Checking Shiprocket…' : 'Test Shiprocket'}
+        </button>
       </div>
 
       {error ? <p className="admin-error">{error}</p> : null}
+
+      {shiprocketProbe ? (
+        <div className={`admin-banner ${shiprocketProbe.loginOk && shiprocketProbe.configuredPickupMatched ? 'ok' : 'warn'}`}>
+          <p>
+            <strong>Shiprocket login:</strong>{' '}
+            {shiprocketProbe.loginOk ? 'OK' : `failed — ${shiprocketProbe.loginError || 'unknown error'}`}
+          </p>
+          <p>
+            <strong>Configured pickup:</strong> {shiprocketProbe.configuredPickup || '(not set)'}{' '}
+            {shiprocketProbe.loginOk
+              ? shiprocketProbe.configuredPickupMatched
+                ? '· matches'
+                : '· does not match (case-sensitive)'
+              : null}
+          </p>
+          {shiprocketProbe.pickupNicknames?.length ? (
+            <p>
+              <strong>Shiprocket nicknames:</strong> {shiprocketProbe.pickupNicknames.join(', ')}
+            </p>
+          ) : null}
+          {shiprocketProbe.hint ? <p className="admin-muted">{shiprocketProbe.hint}</p> : null}
+          {shiprocketProbe.pickupListError ? (
+            <p className="admin-error">Pickup list: {shiprocketProbe.pickupListError}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="admin-stats admin-stats-2">
         <div className="admin-stat">
@@ -261,6 +326,18 @@ export default function AdminOrders() {
                               {details[order.id].shiprocketLastError ? (
                                 <p className="admin-error">
                                   <strong>Shiprocket error:</strong> {details[order.id].shiprocketLastError}
+                                </p>
+                              ) : null}
+                              {!details[order.id].shiprocketOrderId ? (
+                                <p>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    disabled={retryingId === order.id}
+                                    onClick={() => retryShiprocket(order.id)}
+                                  >
+                                    {retryingId === order.id ? 'Retrying Shiprocket…' : 'Retry Shiprocket create'}
+                                  </button>
                                 </p>
                               ) : null}
                               <table className="admin-table">

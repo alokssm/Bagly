@@ -466,6 +466,9 @@ export const api = {
     return request(`/admin/reports/system-logs${query ? `?${query}` : ''}`, { auth: true })
   },
 
+  adminShiprocketConnection: () => request('/admin/shiprocket/connection', { auth: true }),
+  adminRetryShiprocket: (id) =>
+    request(`/admin/orders/${encodeURIComponent(id)}/shiprocket/retry`, { method: 'POST', auth: true }),
   adminGetOrders: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {

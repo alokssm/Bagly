@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Models;
+using Bagly.Api.Options;
 using Bagly.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Controllers;
 
@@ -14,7 +16,9 @@ namespace Bagly.Api.Controllers;
 public class OrdersController(
     BaglyDbContext db,
     IOrderConfirmationEmailDispatcher emailDispatcher,
-    IShiprocketOrderDispatcher shiprocketDispatcher) : ControllerBase
+    IShiprocketOrderDispatcher shiprocketDispatcher,
+    IShiprocketService shiprocketService,
+    IOptions<ShiprocketOptions> shiprocketOptions) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<OrderDto>> CreateOrder(
@@ -37,6 +41,14 @@ public class OrdersController(
             return BadRequest(new
             {
                 message = "Indian customers must complete payment with Razorpay, or select Cash on delivery. Use /api/payments/razorpay/initiate for online payment.",
+            });
+        }
+
+        if (isIndia && string.IsNullOrWhiteSpace(ShiprocketService.NormalizePhone(request.Phone)))
+        {
+            return BadRequest(new
+            {
+                message = "A valid 10-digit Indian mobile number is required for India orders (needed for shipment creation).",
             });
         }
 
@@ -146,8 +158,19 @@ public class OrdersController(
 
         var createdOrder = MapOrder(order);
         emailDispatcher.Enqueue(order.Id, "order-create");
-        shiprocketDispatcher.Enqueue(order.Id);
+        await DispatchShiprocketAsync(order.Id, cancellationToken);
         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, createdOrder);
+    }
+
+    private async Task DispatchShiprocketAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        if (shiprocketOptions.Value.SyncCreateOnCheckout)
+        {
+            await shiprocketService.TryCreateAdhocOrderForConfirmedOrderAsync(orderId, cancellationToken);
+            return;
+        }
+
+        shiprocketDispatcher.Enqueue(orderId);
     }
 
     [HttpGet("{id:guid}")]

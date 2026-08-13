@@ -484,6 +484,8 @@ export default function Checkout() {
                       placeholder="10-digit mobile"
                       inputMode="tel"
                       autoComplete="tel"
+                      pattern={isIndia ? '[6-9][0-9]{9}' : undefined}
+                      title={isIndia ? 'Enter a 10-digit Indian mobile number' : undefined}
                     />
                   </div>
                   <div className="form-field full">

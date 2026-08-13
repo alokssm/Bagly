@@ -11,7 +11,9 @@ namespace Bagly.Api.Controllers;
 [ApiController]
 [Route("api/admin/orders")]
 [Authorize(Roles = "Admin")]
-public class AdminOrdersController(BaglyDbContext db) : ControllerBase
+public class AdminOrdersController(
+    BaglyDbContext db,
+    IShiprocketService shiprocket) : ControllerBase
 {
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 50;
@@ -87,6 +89,29 @@ public class AdminOrdersController(BaglyDbContext db) : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrderDto>> GetOrder(Guid id, CancellationToken cancellationToken)
     {
+        var order = await db.Orders.AsNoTracking()
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+
+        return order is null
+            ? NotFound(new { message = "Order not found." })
+            : Ok(OrdersController.MapOrder(order));
+    }
+
+    /// <summary>
+    /// Re-run Shiprocket adhoc create for a confirmed order (awaits result so admin sees shiprocketLastError immediately).
+    /// </summary>
+    [HttpPost("{id:guid}/shiprocket/retry")]
+    public async Task<ActionResult<OrderDto>> RetryShiprocket(Guid id, CancellationToken cancellationToken)
+    {
+        var exists = await db.Orders.AsNoTracking().AnyAsync(o => o.Id == id, cancellationToken);
+        if (!exists)
+        {
+            return NotFound(new { message = "Order not found." });
+        }
+
+        await shiprocket.TryCreateAdhocOrderForConfirmedOrderAsync(id, cancellationToken);
+
         var order = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);

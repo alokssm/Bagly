@@ -23,12 +23,27 @@ public class ShiprocketOptions
 
     public double DefaultWeightKg { get; set; } = 0.5;
 
+    /// <summary>
+    /// When true, checkout awaits Shiprocket create (slower; useful for debugging).
+    /// Default false uses the background dispatcher.
+    /// </summary>
+    public bool SyncCreateOnCheckout { get; set; }
+
     public bool IsConfigured =>
         Enabled &&
-        !string.IsNullOrWhiteSpace(Email) &&
-        !Email.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(Password) &&
-        !Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(PickupLocation) &&
-        !PickupLocation.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase);
+        !IsMissingCredential(Email) &&
+        !IsMissingCredential(Password) &&
+        !IsPlaceholderPickup(PickupLocation);
+
+    public static bool IsMissingCredential(string? value) =>
+        string.IsNullOrWhiteSpace(value) ||
+        value.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// "test" was a common Render placeholder and never matches a real Shiprocket nickname.
+    /// </summary>
+    public static bool IsPlaceholderPickup(string? pickup) =>
+        string.IsNullOrWhiteSpace(pickup) ||
+        pickup.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(pickup.Trim(), "test", StringComparison.OrdinalIgnoreCase);
 }

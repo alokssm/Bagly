@@ -22,7 +22,18 @@ public interface IShiprocketService
     /// Idempotent when <see cref="Order.ShiprocketOrderId"/> is already set.
     /// </summary>
     Task TryCreateAdhocOrderForConfirmedOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>Admin diagnostic: login to Shiprocket and list pickup nicknames (never returns password).</summary>
+    Task<ShiprocketConnectionProbeResult> ProbeConnectionAsync(CancellationToken cancellationToken = default);
 }
+
+public sealed record ShiprocketConnectionProbeResult(
+    bool LoginOk,
+    string? LoginError,
+    string? ConfiguredPickup,
+    bool ConfiguredPickupMatched,
+    IReadOnlyList<string> PickupNicknames,
+    string? PickupListError);
 
 public sealed class ShiprocketService(
     IHttpClientFactory httpClientFactory,
@@ -32,12 +43,10 @@ public sealed class ShiprocketService(
     ILogger<ShiprocketService> logger) : IShiprocketService
 {
     /// <summary>
-    /// Snake_case for nested POCOs. Dictionary keys in <see cref="BuildCreatePayload"/> are already
-    /// snake_case and are not rewritten (DictionaryKeyPolicy is null by default).
+    /// Explicit JsonPropertyName on payload types — do not rely on ASP.NET camelCase defaults.
     /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
@@ -51,24 +60,6 @@ public sealed class ShiprocketService(
         Guid orderId,
         CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled)
-        {
-            // Information (not Debug): Render/production default min level hides Debug, and operators
-            // need to see why nothing appears on the Shiprocket dashboard.
-            logger.LogInformation(
-                "Shiprocket skipped for order {OrderId}: Shiprocket__Enabled is false. Set Shiprocket__Enabled=true plus Email/Password/PickupLocation on Render.",
-                orderId);
-            return;
-        }
-
-        if (!IsConfigured)
-        {
-            logger.LogWarning(
-                "Shiprocket skipped for order {OrderId}: Enabled but Email/Password/PickupLocation are not configured (or still SET_VIA_ENV placeholders).",
-                orderId);
-            return;
-        }
-
         var order = await db.Orders
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
@@ -76,6 +67,34 @@ public sealed class ShiprocketService(
         if (order is null)
         {
             logger.LogWarning("Shiprocket skipped: order {OrderId} not found.", orderId);
+            return;
+        }
+
+        if (!_options.Enabled)
+        {
+            await MarkSkippedAsync(
+                order,
+                "Shiprocket__Enabled is false. Set Shiprocket__Enabled=true plus Email/Password/PickupLocation on Render.",
+                cancellationToken);
+            return;
+        }
+
+        if (ShiprocketOptions.IsMissingCredential(_options.Email) ||
+            ShiprocketOptions.IsMissingCredential(_options.Password))
+        {
+            await MarkSkippedAsync(
+                order,
+                "Shiprocket Email/Password missing or still SET_VIA_ENV placeholders.",
+                cancellationToken);
+            return;
+        }
+
+        if (ShiprocketOptions.IsPlaceholderPickup(_options.PickupLocation))
+        {
+            await MarkSkippedAsync(
+                order,
+                "Shiprocket__PickupLocation is missing, a SET_VIA_ENV placeholder, or 'test'. Set the exact nickname from Shiprocket → Settings → Pickup Addresses (case-sensitive).",
+                cancellationToken);
             return;
         }
 
@@ -122,9 +141,20 @@ public sealed class ShiprocketService(
             return;
         }
 
+        var pickup = _options.PickupLocation.Trim();
+
         try
         {
-            var payload = BuildCreatePayload(order, phone);
+            var payload = BuildCreatePayload(order, phone, pickup);
+            logger.LogInformation(
+                "Shiprocket create starting for {OrderNumber}: pickup_location={Pickup}, payment_method={PaymentMethod}, phone=***{PhoneLast4}, items={ItemCount}, sub_total={SubTotal}.",
+                order.OrderNumber,
+                pickup,
+                payload.PaymentMethod,
+                phone.Length >= 4 ? phone[^4..] : phone,
+                order.Items.Count,
+                payload.SubTotal);
+
             var result = await CreateAdhocOrderWithAuthRetryAsync(payload, cancellationToken);
 
             order.ShiprocketOrderId = result.OrderId;
@@ -142,7 +172,9 @@ public sealed class ShiprocketService(
         }
         catch (Exception ex)
         {
-            var detail = Truncate(ex.Message, 480);
+            var detail = Truncate(
+                $"{ex.Message} (pickup_location='{pickup}')",
+                480);
             order.ShiprocketStatus = "Error";
             order.ShiprocketLastError = detail;
             try
@@ -159,9 +191,81 @@ public sealed class ShiprocketService(
 
             logger.LogError(
                 ex,
-                "Shiprocket create failed for {OrderNumber} (orderId={OrderId}). Customer order remains confirmed. Error persisted on order for admin.",
+                "Shiprocket create failed for {OrderNumber} (orderId={OrderId}, pickup={Pickup}). Customer order remains confirmed. Error persisted on order for admin.",
                 order.OrderNumber,
-                order.Id);
+                order.Id,
+                pickup);
+        }
+    }
+
+    public async Task<ShiprocketConnectionProbeResult> ProbeConnectionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var configuredPickup = ShiprocketOptions.IsPlaceholderPickup(_options.PickupLocation)
+            ? null
+            : _options.PickupLocation.Trim();
+
+        if (!_options.Enabled)
+        {
+            return new ShiprocketConnectionProbeResult(
+                false,
+                "Shiprocket__Enabled is false.",
+                configuredPickup,
+                false,
+                [],
+                null);
+        }
+
+        if (ShiprocketOptions.IsMissingCredential(_options.Email) ||
+            ShiprocketOptions.IsMissingCredential(_options.Password))
+        {
+            return new ShiprocketConnectionProbeResult(
+                false,
+                "Shiprocket Email/Password missing or still SET_VIA_ENV placeholders.",
+                configuredPickup,
+                false,
+                [],
+                null);
+        }
+
+        try
+        {
+            tokenStore.Invalidate();
+            await LoginAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new ShiprocketConnectionProbeResult(
+                false,
+                Truncate(ex.Message, 300),
+                configuredPickup,
+                false,
+                [],
+                null);
+        }
+
+        try
+        {
+            var nicknames = await ListPickupNicknamesAsync(cancellationToken);
+            var matched = !string.IsNullOrWhiteSpace(configuredPickup) &&
+                          nicknames.Any(n => string.Equals(n, configuredPickup, StringComparison.Ordinal));
+            return new ShiprocketConnectionProbeResult(
+                true,
+                null,
+                configuredPickup,
+                matched,
+                nicknames,
+                null);
+        }
+        catch (Exception ex)
+        {
+            return new ShiprocketConnectionProbeResult(
+                true,
+                null,
+                configuredPickup,
+                false,
+                [],
+                Truncate(ex.Message, 300));
         }
     }
 
@@ -197,53 +301,59 @@ public sealed class ShiprocketService(
                string.Equals(value, "IND", StringComparison.OrdinalIgnoreCase);
     }
 
-    private object BuildCreatePayload(Order order, string phone)
+    private ShiprocketCreatePayload BuildCreatePayload(Order order, string phone, string pickup)
     {
-        var paymentMethod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase)
-            ? "COD"
-            : "Prepaid";
+        var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
+        var paymentMethod = isCod ? "COD" : "Prepaid";
 
-        // Explicit snake_case property names — do not rely on ASP.NET camelCase defaults.
+        // Shiprocket expects rupee integers for money fields.
         var orderItems = order.Items.Select(i => new ShiprocketOrderItemPayload
         {
-            Name = string.IsNullOrWhiteSpace(i.Color) || string.Equals(i.Color, "Default", StringComparison.OrdinalIgnoreCase)
-                ? i.ProductName
-                : $"{i.ProductName} ({i.Color})",
-            Sku = i.ProductId,
+            Name = Truncate(
+                string.IsNullOrWhiteSpace(i.Color) || string.Equals(i.Color, "Default", StringComparison.OrdinalIgnoreCase)
+                    ? i.ProductName
+                    : $"{i.ProductName} ({i.Color})",
+                200),
+            Sku = Truncate(string.IsNullOrWhiteSpace(i.ProductId) ? i.ProductName : i.ProductId, 50),
             Units = i.Quantity,
-            SellingPrice = i.UnitPrice.ToString("0.##", CultureInfo.InvariantCulture),
+            SellingPrice = ToRupeeInt(i.UnitPrice),
         }).ToList();
 
-        // Product has no weight/dimensions yet — use configured package defaults for the whole order.
-        // Follow-up: multi-seller pickup locations (v1 uses a single platform warehouse nickname).
-        var payload = new Dictionary<string, object?>
-        {
-            ["order_id"] = order.OrderNumber,
-            ["order_date"] = FormatOrderDateIst(order.CreatedAt),
-            ["pickup_location"] = _options.PickupLocation.Trim(),
-            ["billing_customer_name"] = order.FirstName.Trim(),
-            ["billing_last_name"] = order.LastName.Trim(),
-            ["billing_address"] = order.Address.Trim(),
-            ["billing_address_2"] = "",
-            ["billing_city"] = order.City.Trim(),
-            ["billing_pincode"] = order.Zip.Trim(),
-            ["billing_state"] = order.State.Trim(),
-            ["billing_country"] = "India",
-            ["billing_email"] = order.Email.Trim(),
-            ["billing_phone"] = phone,
-            ["shipping_is_billing"] = true,
-            ["order_items"] = orderItems,
-            ["payment_method"] = paymentMethod,
-            ["shipping_charges"] = order.Shipping,
-            ["sub_total"] = order.Subtotal,
-            ["length"] = _options.DefaultLength,
-            ["breadth"] = _options.DefaultBreadth,
-            ["height"] = _options.DefaultHeight,
-            ["weight"] = _options.DefaultWeightKg,
-        };
+        var subTotal = ToRupeeInt(order.Subtotal);
+        var shippingCharges = ToRupeeInt(order.Shipping);
+        var codAmount = ToRupeeInt(order.Total);
 
-        return payload;
+        return new ShiprocketCreatePayload
+        {
+            OrderId = Truncate(order.OrderNumber, 50),
+            OrderDate = FormatOrderDateIst(order.CreatedAt),
+            PickupLocation = pickup,
+            BillingCustomerName = Truncate(order.FirstName.Trim(), 50),
+            BillingLastName = Truncate(order.LastName.Trim(), 50),
+            BillingAddress = Truncate(order.Address.Trim(), 190),
+            BillingAddress2 = "",
+            BillingCity = Truncate(order.City.Trim(), 30),
+            BillingPincode = order.Zip.Trim(),
+            BillingState = Truncate(order.State.Trim(), 50),
+            BillingCountry = "India",
+            BillingEmail = Truncate(order.Email.Trim(), 100),
+            BillingPhone = phone,
+            ShippingIsBilling = true,
+            OrderItems = orderItems,
+            PaymentMethod = paymentMethod,
+            // COD collectable amount — required by many Shiprocket account validations for COD.
+            Cod = isCod ? codAmount : null,
+            ShippingCharges = shippingCharges,
+            SubTotal = subTotal,
+            Length = _options.DefaultLength,
+            Breadth = _options.DefaultBreadth,
+            Height = _options.DefaultHeight,
+            Weight = _options.DefaultWeightKg,
+        };
     }
+
+    private static int ToRupeeInt(decimal value) =>
+        (int)Math.Round(value, MidpointRounding.AwayFromZero);
 
     private static string FormatOrderDateIst(DateTime createdAtUtc)
     {
@@ -270,7 +380,7 @@ public sealed class ShiprocketService(
     }
 
     private async Task<ShiprocketCreateResult> CreateAdhocOrderWithAuthRetryAsync(
-        object payload,
+        ShiprocketCreatePayload payload,
         CancellationToken cancellationToken)
     {
         try
@@ -285,7 +395,7 @@ public sealed class ShiprocketService(
     }
 
     private async Task<ShiprocketCreateResult> CreateAdhocOrderAsync(
-        object payload,
+        ShiprocketCreatePayload payload,
         bool forceLogin,
         CancellationToken cancellationToken)
     {
@@ -317,6 +427,14 @@ public sealed class ShiprocketService(
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
         var root = doc.RootElement;
 
+        // Shiprocket sometimes returns HTTP 200 with status_code >= 400 and no order_id.
+        if (TryReadStatusCode(root, out var apiStatus) && apiStatus >= 400)
+        {
+            var apiMessage = TryReadMessage(root) ?? Truncate(raw);
+            throw new InvalidOperationException(
+                $"Shiprocket create rejected status_code={apiStatus}: {apiMessage}");
+        }
+
         var orderId = ReadId(root, "order_id");
         var shipmentId = ReadId(root, "shipment_id");
         var status = root.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.String
@@ -325,8 +443,11 @@ public sealed class ShiprocketService(
 
         if (string.IsNullOrWhiteSpace(orderId))
         {
+            var apiMessage = TryReadMessage(root);
             throw new InvalidOperationException(
-                $"Shiprocket create succeeded but order_id was missing. Body: {Truncate(raw)}");
+                string.IsNullOrWhiteSpace(apiMessage)
+                    ? $"Shiprocket create succeeded but order_id was missing. Body: {Truncate(raw)}"
+                    : $"Shiprocket create returned no order_id: {apiMessage}. Body: {Truncate(raw)}");
         }
 
         return new ShiprocketCreateResult(orderId, shipmentId, status);
@@ -365,6 +486,61 @@ public sealed class ShiprocketService(
         return token;
     }
 
+    private async Task<IReadOnlyList<string>> ListPickupNicknamesAsync(CancellationToken cancellationToken)
+    {
+        var token = tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
+        var client = httpClientFactory.CreateClient("Shiprocket");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "v1/external/settings/company/pickup");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket pickup list failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw)}");
+        }
+
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
+        var nicknames = new List<string>();
+        CollectPickupNicknames(doc.RootElement, nicknames);
+        return nicknames
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void CollectPickupNicknames(JsonElement el, List<string> nicknames)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (el.TryGetProperty("pickup_location", out var pl) &&
+                    pl.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(pl.GetString()))
+                {
+                    nicknames.Add(pl.GetString()!);
+                }
+
+                foreach (var prop in el.EnumerateObject())
+                {
+                    CollectPickupNicknames(prop.Value, nicknames);
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in el.EnumerateArray())
+                {
+                    CollectPickupNicknames(item, nicknames);
+                }
+
+                break;
+        }
+    }
+
     /// <summary>Normalize to digits; require 10-digit Indian mobile (strip leading 91 when present).</summary>
     internal static string? NormalizePhone(string? phone)
     {
@@ -392,6 +568,47 @@ public sealed class ShiprocketService(
         return digits.Length == 10 ? digits : null;
     }
 
+    private static bool TryReadStatusCode(JsonElement root, out int statusCode)
+    {
+        statusCode = 0;
+        if (!root.TryGetProperty("status_code", out var el))
+        {
+            return false;
+        }
+
+        return el.ValueKind switch
+        {
+            JsonValueKind.Number => el.TryGetInt32(out statusCode),
+            JsonValueKind.String => int.TryParse(el.GetString(), out statusCode),
+            _ => false,
+        };
+    }
+
+    private static string? TryReadMessage(JsonElement root)
+    {
+        if (root.TryGetProperty("message", out var msg) && msg.ValueKind == JsonValueKind.String)
+        {
+            return msg.GetString();
+        }
+
+        if (root.TryGetProperty("error", out var err))
+        {
+            return err.ValueKind switch
+            {
+                JsonValueKind.String => err.GetString(),
+                JsonValueKind.Object or JsonValueKind.Array => Truncate(err.GetRawText(), 300),
+                _ => null,
+            };
+        }
+
+        if (root.TryGetProperty("errors", out var errors))
+        {
+            return Truncate(errors.GetRawText(), 300);
+        }
+
+        return null;
+    }
+
     private static string? ReadId(JsonElement root, string name)
     {
         if (!root.TryGetProperty(name, out var el))
@@ -414,6 +631,78 @@ public sealed class ShiprocketService(
 
     private sealed class ShiprocketAuthException(string message) : Exception(message);
 
+    private sealed class ShiprocketCreatePayload
+    {
+        [JsonPropertyName("order_id")]
+        public string OrderId { get; set; } = string.Empty;
+
+        [JsonPropertyName("order_date")]
+        public string OrderDate { get; set; } = string.Empty;
+
+        [JsonPropertyName("pickup_location")]
+        public string PickupLocation { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_customer_name")]
+        public string BillingCustomerName { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_last_name")]
+        public string BillingLastName { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_address")]
+        public string BillingAddress { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_address_2")]
+        public string BillingAddress2 { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_city")]
+        public string BillingCity { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_pincode")]
+        public string BillingPincode { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_state")]
+        public string BillingState { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_country")]
+        public string BillingCountry { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_email")]
+        public string BillingEmail { get; set; } = string.Empty;
+
+        [JsonPropertyName("billing_phone")]
+        public string BillingPhone { get; set; } = string.Empty;
+
+        [JsonPropertyName("shipping_is_billing")]
+        public bool ShippingIsBilling { get; set; }
+
+        [JsonPropertyName("order_items")]
+        public List<ShiprocketOrderItemPayload> OrderItems { get; set; } = [];
+
+        [JsonPropertyName("payment_method")]
+        public string PaymentMethod { get; set; } = string.Empty;
+
+        [JsonPropertyName("cod")]
+        public int? Cod { get; set; }
+
+        [JsonPropertyName("shipping_charges")]
+        public int ShippingCharges { get; set; }
+
+        [JsonPropertyName("sub_total")]
+        public int SubTotal { get; set; }
+
+        [JsonPropertyName("length")]
+        public double Length { get; set; }
+
+        [JsonPropertyName("breadth")]
+        public double Breadth { get; set; }
+
+        [JsonPropertyName("height")]
+        public double Height { get; set; }
+
+        [JsonPropertyName("weight")]
+        public double Weight { get; set; }
+    }
+
     private sealed class ShiprocketOrderItemPayload
     {
         [JsonPropertyName("name")]
@@ -426,6 +715,6 @@ public sealed class ShiprocketService(
         public int Units { get; set; }
 
         [JsonPropertyName("selling_price")]
-        public string SellingPrice { get; set; } = string.Empty;
+        public int SellingPrice { get; set; }
     }
 }

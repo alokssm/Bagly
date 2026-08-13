@@ -392,9 +392,9 @@ try
         var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
         var shiprocket = config.GetSection(ShiprocketOptions.SectionName).Get<ShiprocketOptions>() ?? new ShiprocketOptions();
         var lastEmailFailure = emailDiagnostics.GetLastFailure();
-        var pickupNickname = shiprocket.IsConfigured ? shiprocket.PickupLocation.Trim() : null;
-        var pickupLooksPlaceholder = !string.IsNullOrWhiteSpace(pickupNickname) &&
-            string.Equals(pickupNickname, "test", StringComparison.OrdinalIgnoreCase);
+        var pickupRaw = shiprocket.PickupLocation?.Trim();
+        var pickupLooksPlaceholder = ShiprocketOptions.IsPlaceholderPickup(pickupRaw);
+        var pickupNickname = pickupLooksPlaceholder ? pickupRaw : (string.IsNullOrWhiteSpace(pickupRaw) ? null : pickupRaw);
         var openAi = config.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>() ?? new OpenAiOptions();
         var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
         var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
@@ -525,19 +525,19 @@ try
                            !shiprocket.Email.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
                 passwordSet = !string.IsNullOrWhiteSpace(shiprocket.Password) &&
                               !shiprocket.Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
-                pickupLocationSet = !string.IsNullOrWhiteSpace(shiprocket.PickupLocation) &&
-                                    !shiprocket.PickupLocation.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+                pickupLocationSet = !ShiprocketOptions.IsPlaceholderPickup(shiprocket.PickupLocation),
                 pickupLocation = pickupNickname,
+                syncCreateOnCheckout = shiprocket.SyncCreateOnCheckout,
                 baseUrl = string.IsNullOrWhiteSpace(shiprocket.BaseUrl)
                     ? "https://apiv2.shiprocket.in"
                     : shiprocket.BaseUrl.Trim().TrimEnd('/'),
                 hint = !shiprocket.Enabled
                     ? "Shiprocket__Enabled is false — set Shiprocket__Enabled=true, Shiprocket__Email, Shiprocket__Password, and Shiprocket__PickupLocation (exact nickname from Shiprocket → Settings → Pickup Addresses)."
                     : !shiprocket.IsConfigured
-                        ? "Shiprocket enabled but credentials/pickup incomplete. Set Shiprocket__Email (API user), Shiprocket__Password, Shiprocket__PickupLocation."
-                        : pickupLooksPlaceholder
-                            ? "Shiprocket__PickupLocation is 'test' — that almost never matches a real Shiprocket pickup nickname. Set it to the exact nickname from Shiprocket → Settings → Pickup Addresses, then place a new order. Admin → Orders shows shiprocketLastError when create fails."
-                            : "After checkout, Admin → Orders should show shiprocketOrderId (or shiprocketLastError). Check Render logs for 'Shiprocket create failed' + response body.",
+                        ? pickupLooksPlaceholder
+                            ? "Shiprocket__PickupLocation is missing/placeholder/'test'. Set the exact nickname from Shiprocket → Settings → Pickup Addresses (case-sensitive). Admin can call GET /api/admin/shiprocket/connection to list valid nicknames."
+                            : "Shiprocket enabled but credentials/pickup incomplete. Set Shiprocket__Email (API user), Shiprocket__Password, Shiprocket__PickupLocation."
+                        : "After checkout, Admin → Orders should show shiprocketOrderId (or shiprocketLastError). Use GET /api/admin/shiprocket/connection to verify login + pickup nickname match. Retry via POST /api/admin/orders/{id}/shiprocket/retry.",
             },
             chat = new
             {
