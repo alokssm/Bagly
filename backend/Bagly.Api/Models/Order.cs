@@ -34,6 +34,8 @@ public class Order
     public string? ShiprocketLastError { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<OrderItem> Items { get; set; } = [];
+    /// <summary>Per-pickup Shiprocket adhoc creates (one row per pickup nickname group).</summary>
+    public List<OrderShiprocketShipment> ShiprocketShipments { get; set; } = [];
 }
 
 public class OrderItem

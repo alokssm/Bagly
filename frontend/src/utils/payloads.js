@@ -156,6 +156,7 @@ export function buildUpsertProductPayload(form, { includeId = false } = {}) {
     seoTitle: String(form.seoTitle || '').trim() || null,
     seoDescription: String(form.seoDescription || '').trim() || null,
     seoKeywords: String(form.seoKeywords || '').trim() || null,
+    shiprocketPickupLocation: String(form.shiprocketPickupLocation || '').trim() || null,
   }
 
   if (includeId && form.id) {

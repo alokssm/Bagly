@@ -12,6 +12,9 @@ export default function AdminProducts() {
   const [result, setResult] = useState(emptyResult)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pickupChoices, setPickupChoices] = useState(['home', 'work'])
+  const [pickupDrafts, setPickupDrafts] = useState({})
+  const [savingPickupId, setSavingPickupId] = useState('')
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -20,6 +23,21 @@ export default function AdminProducts() {
     }, 300)
     return () => clearTimeout(handle)
   }, [searchInput])
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .adminGetShiprocketPickupLocations()
+      .then((data) => {
+        if (cancelled) return
+        const locations = (data?.locations || []).filter(Boolean)
+        if (locations.length) setPickupChoices(locations)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -33,6 +51,11 @@ export default function AdminProducts() {
         page: data.page || page,
         pageSize: data.pageSize || PAGE_SIZE,
       })
+      const drafts = {}
+      for (const p of data.items || []) {
+        drafts[p.id] = p.shiprocketPickupLocation || ''
+      }
+      setPickupDrafts(drafts)
     } catch (err) {
       setError(err.message || 'Unable to load products.')
       setResult(emptyResult)
@@ -45,6 +68,31 @@ export default function AdminProducts() {
     load()
   }, [load])
 
+  const savePickup = async (productId) => {
+    setSavingPickupId(productId)
+    setError('')
+    try {
+      const value = String(pickupDrafts[productId] || '').trim() || null
+      const updated = await api.adminPatchProductPickupLocation(productId, value)
+      setResult((prev) => ({
+        ...prev,
+        items: prev.items.map((p) =>
+          p.id === productId
+            ? { ...p, shiprocketPickupLocation: updated.shiprocketPickupLocation || null }
+            : p,
+        ),
+      }))
+      setPickupDrafts((prev) => ({
+        ...prev,
+        [productId]: updated.shiprocketPickupLocation || '',
+      }))
+    } catch (err) {
+      setError(err.message || 'Unable to update pickup location.')
+    } finally {
+      setSavingPickupId('')
+    }
+  }
+
   const { items: products, totalCount, totalPages } = result
   const from = totalCount === 0 ? 0 : (result.page - 1) * result.pageSize + 1
   const to = Math.min(result.page * result.pageSize, totalCount)
@@ -56,7 +104,8 @@ export default function AdminProducts() {
           <p className="eyebrow">Catalog</p>
           <h1>Products</h1>
           <p className="admin-muted" style={{ marginTop: '0.35rem' }}>
-            Read-only support view. Sellers manage their own listings; admins manage categories.
+            Sellers manage listings. Admins can assign Shiprocket pickup nicknames (home / work) for platform
+            or seller products.
           </p>
         </div>
       </div>
@@ -90,40 +139,88 @@ export default function AdminProducts() {
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
+                <th>Shiprocket pickup</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
-                <tr key={product.id}>
-                  <td>
-                    <div className="admin-product-cell">
-                      <img src={product.image} alt="" />
-                      <div>
-                        <strong>{product.name}</strong>
-                        <small>{product.id}</small>
+              {products.map((product) => {
+                const draft = pickupDrafts[product.id] ?? ''
+                const saved = product.shiprocketPickupLocation || ''
+                const dirty = draft !== saved
+                return (
+                  <tr key={product.id}>
+                    <td>
+                      <div className="admin-product-cell">
+                        <img src={product.image} alt="" />
+                        <div>
+                          <strong>{product.name}</strong>
+                          <small>{product.id}</small>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    {product.category}
-                    {product.subCategoryId ? <small> / {product.subCategoryId}</small> : null}
-                  </td>
-                  <td>
-                    <small>{product.sellerId ? 'Seller' : 'Platform'}</small>
-                  </td>
-                  <td>{formatPrice(product.price)}</td>
-                  <td>
-                    <span className={`admin-pill ${product.stockQuantity > 0 ? 'on' : 'off'}`}>
-                      {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : 'Out of stock'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`admin-pill ${product.isActive ? 'on' : 'off'}`}>
-                      {product.isActive ? 'Active' : 'Hidden'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      {product.category}
+                      {product.subCategoryId ? <small> / {product.subCategoryId}</small> : null}
+                    </td>
+                    <td>
+                      <small>{product.sellerId ? 'Seller' : 'Platform'}</small>
+                    </td>
+                    <td>{formatPrice(product.price)}</td>
+                    <td>
+                      <span className={`admin-pill ${product.stockQuantity > 0 ? 'on' : 'off'}`}>
+                        {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : 'Out of stock'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`admin-pill ${product.isActive ? 'on' : 'off'}`}>
+                        {product.isActive ? 'Active' : 'Hidden'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select
+                          value={pickupChoices.includes(draft) || draft === '' ? draft : '__custom__'}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            if (v === '__custom__') {
+                              setPickupDrafts((prev) => ({ ...prev, [product.id]: draft || '' }))
+                              return
+                            }
+                            setPickupDrafts((prev) => ({ ...prev, [product.id]: v }))
+                          }}
+                          aria-label={`Pickup for ${product.name}`}
+                        >
+                          <option value="">Default</option>
+                          {pickupChoices.map((nick) => (
+                            <option key={nick} value={nick}>
+                              {nick}
+                            </option>
+                          ))}
+                          <option value="__custom__">Custom…</option>
+                        </select>
+                        {!pickupChoices.includes(draft) && draft !== '' ? (
+                          <input
+                            style={{ width: '6.5rem' }}
+                            value={draft}
+                            onChange={(e) =>
+                              setPickupDrafts((prev) => ({ ...prev, [product.id]: e.target.value }))
+                            }
+                            placeholder="nickname"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={!dirty || savingPickupId === product.id}
+                          onClick={() => savePickup(product.id)}
+                        >
+                          {savingPickupId === product.id ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

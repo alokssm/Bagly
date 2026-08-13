@@ -254,11 +254,8 @@ public class PaymentsController(
             logger.LogDebug(
                 "Razorpay verify idempotent for {OrderNumber}: already confirmed and paid; confirmation email is not resent.",
                 order.OrderNumber);
-            // Idempotent Shiprocket create (skips if ShiprocketOrderId already stored).
-            if (string.IsNullOrWhiteSpace(order.ShiprocketOrderId))
-            {
-                await DispatchShiprocketAsync(order.Id, cancellationToken);
-            }
+            // Idempotent multi-pickup Shiprocket create (skips groups that already succeeded).
+            await DispatchShiprocketAsync(order.Id, cancellationToken);
 
             return Ok(OrdersController.MapOrder(order));
         }

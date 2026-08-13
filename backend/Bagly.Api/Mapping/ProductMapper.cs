@@ -64,7 +64,8 @@ public static class ProductMapper
             product.SeoTitle,
             product.SeoDescription,
             product.SeoKeywords,
-            product.SellerId
+            product.SellerId,
+            product.ShiprocketPickupLocation
         );
 
     public static void ApplyUpsert(Product product, UpsertProductRequest request)
@@ -93,6 +94,19 @@ public static class ProductMapper
         product.SeoTitle = string.IsNullOrWhiteSpace(request.SeoTitle) ? null : request.SeoTitle.Trim();
         product.SeoDescription = string.IsNullOrWhiteSpace(request.SeoDescription) ? null : request.SeoDescription.Trim();
         product.SeoKeywords = string.IsNullOrWhiteSpace(request.SeoKeywords) ? null : request.SeoKeywords.Trim();
+        product.ShiprocketPickupLocation = NormalizePickupNickname(request.ShiprocketPickupLocation);
+    }
+
+    /// <summary>Trim; empty → null. Does not rewrite case (Shiprocket nicknames are case-sensitive).</summary>
+    public static string? NormalizePickupNickname(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length > 100 ? trimmed[..100] : trimmed;
     }
 
     public static string Slugify(string value)

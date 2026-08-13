@@ -188,6 +188,7 @@ public class OrdersController(
     {
         var order = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
+            .Include(o => o.ShiprocketShipments)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
 
         return order is null
@@ -202,6 +203,7 @@ public class OrdersController(
     {
         var orders = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
+            .Include(o => o.ShiprocketShipments)
             .OrderByDescending(o => o.CreatedAt)
             .Take(50)
             .ToListAsync(cancellationToken);
@@ -239,7 +241,19 @@ public class OrdersController(
             order.ShiprocketOrderId,
             order.ShiprocketShipmentId,
             order.ShiprocketStatus,
-            order.ShiprocketLastError
+            order.ShiprocketLastError,
+            order.ShiprocketShipments?
+                .OrderBy(s => s.PickupLocation, StringComparer.Ordinal)
+                .Select(s => new OrderShiprocketShipmentDto(
+                    s.Id,
+                    s.PickupLocation,
+                    s.ShiprocketOrderId,
+                    s.ShiprocketShipmentId,
+                    s.Status,
+                    s.LastError,
+                    s.CreatedAt,
+                    s.UpdatedAt))
+                .ToList()
         );
 
     /// <summary>

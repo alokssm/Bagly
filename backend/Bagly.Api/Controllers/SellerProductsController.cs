@@ -71,7 +71,8 @@ public class SellerProductsController(
                 p.IsActive,
                 p.IsActive && p.StockQuantity > 0,
                 p.CreatedAt,
-                p.SellerId))
+                p.SellerId,
+                p.ShiprocketPickupLocation))
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResult<AdminProductListItemDto>(items, page, pageSize, totalCount, totalPages));

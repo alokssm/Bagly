@@ -75,4 +75,24 @@ public class ShiprocketPincodeTests
         Assert.Contains("\"shipping_pincode\":400001", json);
         Assert.DoesNotContain("\"shipping_pincode\":\"400001\"", json);
     }
+
+    [Theory]
+    [InlineData("home", "home")]
+    [InlineData("work", "work")]
+    [InlineData("Home Base", "Home-Base")]
+    public void ToPickupSlug_sanitizes_nickname(string pickup, string expectedSlug)
+    {
+        Assert.Equal(expectedSlug, ShiprocketService.ToPickupSlug(pickup));
+    }
+
+    [Fact]
+    public void BuildClientOrderId_appends_pickup_slug()
+    {
+        Assert.Equal(
+            "BG-20260813-5101-home",
+            ShiprocketService.BuildClientOrderId("BG-20260813-5101", "home"));
+        Assert.Equal(
+            "BG-20260813-5101-work",
+            ShiprocketService.BuildClientOrderId("BG-20260813-5101", "work"));
+    }
 }

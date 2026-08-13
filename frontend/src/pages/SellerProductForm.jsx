@@ -28,6 +28,7 @@ const emptyForm = {
   seoTitle: '',
   seoDescription: '',
   seoKeywords: '',
+  shiprocketPickupLocation: '',
 }
 
 function toForm(product) {
@@ -54,6 +55,7 @@ function toForm(product) {
     seoTitle: product.seoTitle || '',
     seoDescription: product.seoDescription || '',
     seoKeywords: product.seoKeywords || '',
+    shiprocketPickupLocation: product.shiprocketPickupLocation || '',
   }
 }
 
@@ -66,6 +68,8 @@ export default function SellerProductForm() {
 
   const [form, setForm] = useState(emptyForm)
   const [categories, setCategories] = useState([])
+  const [pickupChoices, setPickupChoices] = useState(['home', 'work'])
+  const [pickupCustom, setPickupCustom] = useState(false)
   const [loading, setLoading] = useState(isEdit && approved)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -78,14 +82,26 @@ export default function SellerProductForm() {
 
     async function load() {
       try {
-        const cats = await api.getCategories()
+        const [cats, pickupRes] = await Promise.all([
+          api.getCategories(),
+          api.sellerGetShiprocketPickupLocations().catch(() => ({ locations: ['home', 'work'] })),
+        ])
         if (cancelled) return
         const usable = (cats || []).filter((c) => c.id !== 'all')
         setCategories(usable)
+        const locations = (pickupRes?.locations || []).filter(Boolean)
+        const choices = locations.length ? locations : ['home', 'work']
+        setPickupChoices(choices)
 
         if (isEdit) {
           const product = await api.sellerGetProduct(id)
-          if (!cancelled) setForm(toForm(product))
+          if (!cancelled) {
+            const next = toForm(product)
+            setForm(next)
+            if (next.shiprocketPickupLocation && !choices.includes(next.shiprocketPickupLocation)) {
+              setPickupCustom(true)
+            }
+          }
         } else {
           const defaultCategory = usable.find((c) => !c.parentId)
           if (defaultCategory && !cancelled) {
@@ -270,6 +286,58 @@ export default function SellerProductForm() {
                 <input type="checkbox" name="isActive" checked={form.isActive} onChange={onChange} />
                 Active (visible in store)
               </label>
+
+              <div className="form-field">
+                <label htmlFor="shiprocketPickupLocation">Shiprocket pickup</label>
+                {pickupCustom ? (
+                  <input
+                    id="shiprocketPickupLocation"
+                    name="shiprocketPickupLocation"
+                    value={form.shiprocketPickupLocation}
+                    onChange={onChange}
+                    placeholder="Exact Shiprocket nickname"
+                  />
+                ) : (
+                  <select
+                    id="shiprocketPickupLocation"
+                    name="shiprocketPickupLocation"
+                    value={form.shiprocketPickupLocation}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setPickupCustom(true)
+                        setForm((prev) => ({ ...prev, shiprocketPickupLocation: '' }))
+                        return
+                      }
+                      onChange(e)
+                    }}
+                  >
+                    <option value="">Platform default</option>
+                    {pickupChoices.map((nick) => (
+                      <option key={nick} value={nick}>
+                        {nick}
+                      </option>
+                    ))}
+                    <option value="__custom__">Other nickname…</option>
+                  </select>
+                )}
+                <small>
+                  Exact nickname from Shiprocket → Settings → Pickup Addresses (e.g. home, work). Empty uses the
+                  platform default.
+                </small>
+                {pickupCustom ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ marginTop: '0.35rem' }}
+                    onClick={() => {
+                      setPickupCustom(false)
+                      setForm((prev) => ({ ...prev, shiprocketPickupLocation: '' }))
+                    }}
+                  >
+                    Use list instead
+                  </button>
+                ) : null}
+              </div>
 
               <div className="form-field full">
                 <label htmlFor="image">Image URL</label>

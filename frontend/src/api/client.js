@@ -255,6 +255,8 @@ export const api = {
   sellerDeleteProduct: (id) =>
     request(`/seller/products/${encodeURIComponent(id)}`, { method: 'DELETE', auth: 'seller' }),
   sellerUploadImage: (file) => requestUpload('/seller/uploads/image', file, { auth: 'seller' }),
+  sellerGetShiprocketPickupLocations: () =>
+    request('/seller/shiprocket/pickup-locations', { auth: 'seller' }),
 
   customerLogin: (email, password) =>
     request('/auth/customer/login', {
@@ -467,6 +469,14 @@ export const api = {
   },
 
   adminShiprocketConnection: () => request('/admin/shiprocket/connection', { auth: true }),
+  adminGetShiprocketPickupLocations: () =>
+    request('/admin/shiprocket/pickup-locations', { auth: true }),
+  adminPatchProductPickupLocation: (id, shiprocketPickupLocation) =>
+    request(`/admin/products/${encodeURIComponent(id)}/pickup-location`, {
+      method: 'PATCH',
+      body: { shiprocketPickupLocation },
+      auth: true,
+    }),
   adminRetryShiprocket: (id) =>
     request(`/admin/orders/${encodeURIComponent(id)}/shiprocket/retry`, { method: 'POST', auth: true }),
   adminGetOrders: (params = {}) => {

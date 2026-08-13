@@ -67,7 +67,8 @@ public class AdminProductsController(BaglyDbContext db) : ControllerBase
                 p.IsActive,
                 p.IsActive && p.StockQuantity > 0,
                 p.CreatedAt,
-                p.SellerId))
+                p.SellerId,
+                p.ShiprocketPickupLocation))
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResult<AdminProductListItemDto>(items, page, pageSize, totalCount, totalPages));
@@ -90,6 +91,27 @@ public class AdminProductsController(BaglyDbContext db) : ControllerBase
         return product is null
             ? NotFound(new { message = "Product not found." })
             : Ok(ProductMapper.ToAdminDto(product));
+    }
+
+    /// <summary>
+    /// Admin-only: set Shiprocket pickup nickname on a product (platform or seller catalog)
+    /// without reopening full product CRUD.
+    /// </summary>
+    [HttpPatch("{id}/pickup-location")]
+    public async Task<ActionResult<AdminProductDto>> PatchPickupLocation(
+        string id,
+        [FromBody] PatchProductPickupLocationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (product is null)
+        {
+            return NotFound(new { message = "Product not found." });
+        }
+
+        product.ShiprocketPickupLocation = ProductMapper.NormalizePickupNickname(request.ShiprocketPickupLocation);
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(ProductMapper.ToAdminDto(product));
     }
 
     /// <summary>Product catalog writes are seller-owned. Admins manage categories only.</summary>

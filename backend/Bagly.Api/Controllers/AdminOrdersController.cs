@@ -75,7 +75,9 @@ public class AdminOrdersController(
                 o.Phone,
                 o.ShiprocketOrderId,
                 o.ShiprocketStatus,
-                o.ShiprocketLastError))
+                o.ShiprocketLastError,
+                o.ShiprocketShipments.Count,
+                o.ShiprocketShipments.Count(s => s.ShiprocketOrderId != null && s.ShiprocketOrderId != "")))
             .ToListAsync(cancellationToken);
 
         var (todayStartUtc, todayEndUtc) = IstTime.TodayRangeUtc();
@@ -91,6 +93,7 @@ public class AdminOrdersController(
     {
         var order = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
+            .Include(o => o.ShiprocketShipments)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
 
         return order is null
@@ -100,6 +103,7 @@ public class AdminOrdersController(
 
     /// <summary>
     /// Re-run Shiprocket adhoc create for a confirmed order (awaits result so admin sees shiprocketLastError immediately).
+    /// Retries only pickup groups that have not yet succeeded.
     /// </summary>
     [HttpPost("{id:guid}/shiprocket/retry")]
     public async Task<ActionResult<OrderDto>> RetryShiprocket(Guid id, CancellationToken cancellationToken)
@@ -114,6 +118,7 @@ public class AdminOrdersController(
 
         var order = await db.Orders.AsNoTracking()
             .Include(o => o.Items)
+            .Include(o => o.ShiprocketShipments)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
 
         return order is null

@@ -1,6 +1,8 @@
+using Bagly.Api.Options;
 using Bagly.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Controllers;
 
@@ -8,7 +10,9 @@ namespace Bagly.Api.Controllers;
 [ApiController]
 [Route("api/admin/shiprocket")]
 [Authorize(Roles = "Admin")]
-public class AdminShiprocketController(IShiprocketService shiprocket) : ControllerBase
+public class AdminShiprocketController(
+    IShiprocketService shiprocket,
+    IOptions<ShiprocketOptions> options) : ControllerBase
 {
     /// <summary>
     /// Login to Shiprocket and list pickup nicknames so ops can verify
@@ -27,6 +31,7 @@ public class AdminShiprocketController(IShiprocketService shiprocket) : Controll
             configuredPickupMatched = result.ConfiguredPickupMatched,
             pickupNicknames = result.PickupNicknames,
             pickupListError = result.PickupListError,
+            configPickupChoices = options.Value.GetPickupLocationChoices(),
             hint = !result.LoginOk
                 ? "Fix Shiprocket__Email / Shiprocket__Password (API user from Shiprocket → Settings → API)."
                 : result.ConfiguredPickupMatched
@@ -36,4 +41,9 @@ public class AdminShiprocketController(IShiprocketService shiprocket) : Controll
                         : $"Configured pickup '{result.ConfiguredPickup}' was not found in Shiprocket (case-sensitive). Copy one of pickupNicknames into Shiprocket__PickupLocation on Render.",
         });
     }
+
+    /// <summary>Configured UI nicknames from <c>Shiprocket:PickupLocations</c> (no Shiprocket API call).</summary>
+    [HttpGet("pickup-locations")]
+    public ActionResult<object> GetConfiguredPickupLocations() =>
+        Ok(new { locations = options.Value.GetPickupLocationChoices() });
 }

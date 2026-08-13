@@ -178,7 +178,9 @@ public record UpsertProductRequest(
     string? Slug = null,
     string? SeoTitle = null,
     string? SeoDescription = null,
-    string? SeoKeywords = null
+    string? SeoKeywords = null,
+    /// <summary>Shiprocket pickup nickname (e.g. home/work). Null/empty → platform default.</summary>
+    string? ShiprocketPickupLocation = null
 );
 
 public record AdminProductDto(
@@ -206,7 +208,8 @@ public record AdminProductDto(
     string? SeoTitle,
     string? SeoDescription,
     string? SeoKeywords,
-    Guid? SellerId = null
+    Guid? SellerId = null,
+    string? ShiprocketPickupLocation = null
 );
 
 /// <summary>Lean row shape for the admin products list/table — avoids shipping gallery/features/colors JSON for every row.</summary>
@@ -221,8 +224,12 @@ public record AdminProductListItemDto(
     bool IsActive,
     bool IsAvailable,
     DateTime CreatedAt,
-    Guid? SellerId = null
+    Guid? SellerId = null,
+    string? ShiprocketPickupLocation = null
 );
+
+/// <summary>Admin-only: set Shiprocket pickup nickname without full product CRUD.</summary>
+public record PatchProductPickupLocationRequest(string? ShiprocketPickupLocation);
 
 public record ProductStatsDto(int TotalCount, int ActiveCount);
 
@@ -286,6 +293,17 @@ public record OrderItemDto(
     int Quantity
 );
 
+public record OrderShiprocketShipmentDto(
+    Guid Id,
+    string PickupLocation,
+    string? ShiprocketOrderId,
+    string? ShiprocketShipmentId,
+    string? Status,
+    string? LastError,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);
+
 public record OrderDto(
     Guid Id,
     string OrderNumber,
@@ -309,7 +327,8 @@ public record OrderDto(
     string? ShiprocketOrderId = null,
     string? ShiprocketShipmentId = null,
     string? ShiprocketStatus = null,
-    string? ShiprocketLastError = null
+    string? ShiprocketLastError = null,
+    IReadOnlyList<OrderShiprocketShipmentDto>? ShiprocketShipments = null
 );
 
 public record CustomerOrderItemDto(
@@ -350,7 +369,9 @@ public record AdminOrderListItemDto(
     string? Phone = null,
     string? ShiprocketOrderId = null,
     string? ShiprocketStatus = null,
-    string? ShiprocketLastError = null);
+    string? ShiprocketLastError = null,
+    int ShiprocketShipmentCount = 0,
+    int ShiprocketShipmentSuccessCount = 0);
 
 /// <summary>Response shape for <c>GET /api/admin/orders</c>. <c>TodayCount</c> is always "today in
 /// Asia/Kolkata (IST)" regardless of the from/to filter applied to <c>Items</c>.</summary>

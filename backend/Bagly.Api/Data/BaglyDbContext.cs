@@ -11,6 +11,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OrderShiprocketShipment> OrderShiprocketShipments => Set<OrderShiprocketShipment>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<SellerUser> SellerUsers => Set<SellerUser>();
@@ -48,6 +49,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.SeoTitle).HasMaxLength(160);
             entity.Property(x => x.SeoDescription).HasMaxLength(300);
             entity.Property(x => x.SeoKeywords).HasMaxLength(300);
+            entity.Property(x => x.ShiprocketPickupLocation).HasMaxLength(100);
             entity.HasOne(x => x.Seller)
                 .WithMany()
                 .HasForeignKey(x => x.SellerId)
@@ -57,6 +59,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.IsActive);
             entity.HasIndex(x => x.SellerId);
             entity.HasIndex(x => x.Slug).IsUnique().HasFilter("\"Slug\" IS NOT NULL");
+            entity.HasIndex(x => x.ShiprocketPickupLocation);
         });
 
         modelBuilder.Entity<Category>(entity =>
@@ -130,6 +133,10 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
                 .WithOne(x => x.Order!)
                 .HasForeignKey(x => x.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.ShiprocketShipments)
+                .WithOne(x => x.Order!)
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<OrderItem>(entity =>
@@ -139,6 +146,20 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Color).HasMaxLength(50).IsRequired();
             entity.Property(x => x.UnitPrice).HasColumnType("decimal(18,2)");
+        });
+
+        modelBuilder.Entity<OrderShiprocketShipment>(entity =>
+        {
+            entity.ToTable("OrderShiprocketShipments");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.PickupLocation).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ShiprocketOrderId).HasMaxLength(50);
+            entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
+            entity.Property(x => x.Status).HasMaxLength(50);
+            entity.Property(x => x.LastError).HasMaxLength(500);
+            entity.HasIndex(x => x.OrderId);
+            entity.HasIndex(x => new { x.OrderId, x.PickupLocation }).IsUnique();
+            entity.HasIndex(x => x.ShiprocketOrderId);
         });
 
         modelBuilder.Entity<AdminUser>(entity =>

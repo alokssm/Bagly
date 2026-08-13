@@ -47,6 +47,13 @@ public class Product
 
     public SellerUser? Seller { get; set; }
 
+    /// <summary>
+    /// Shiprocket pickup address nickname (e.g. <c>home</c>, <c>work</c>).
+    /// Null/empty → platform default <c>Shiprocket__PickupLocation</c>.
+    /// Must match Shiprocket exactly (case-sensitive); never a street address.
+    /// </summary>
+    public string? ShiprocketPickupLocation { get; set; }
+
     /// <summary>A product can be bought when it is active and in stock.</summary>
     [NotMapped]
     public bool IsAvailable => IsActive && StockQuantity > 0;

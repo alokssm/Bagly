@@ -10,10 +10,36 @@ public class ShiprocketOptions
 
     public string Password { get; set; } = string.Empty;
 
-    /// <summary>Pickup location nickname as configured in the Shiprocket panel (single warehouse for v1).</summary>
+    /// <summary>Default pickup nickname when a product has no <c>ShiprocketPickupLocation</c>.</summary>
     public string PickupLocation { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optional comma-separated nicknames for seller/admin UI (e.g. <c>home,work</c>).
+    /// Does not auto-create addresses in Shiprocket.
+    /// </summary>
+    public string PickupLocations { get; set; } = "home,work";
+
     public string BaseUrl { get; set; } = "https://apiv2.shiprocket.in";
+
+    /// <summary>Configured UI nicknames (trimmed, non-empty), plus default <see cref="PickupLocation"/> when set.</summary>
+    public IReadOnlyList<string> GetPickupLocationChoices()
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var part in (PickupLocations ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!IsPlaceholderPickup(part))
+            {
+                set.Add(part);
+            }
+        }
+
+        if (!IsPlaceholderPickup(PickupLocation))
+        {
+            set.Add(PickupLocation.Trim());
+        }
+
+        return set.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     public double DefaultLength { get; set; } = 10;
 

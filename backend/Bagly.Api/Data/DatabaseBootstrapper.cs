@@ -31,6 +31,8 @@ public static class DatabaseBootstrapper
         }
 
         await EnsureOrdersShiprocketSchemaAsync(db, cancellationToken);
+        await EnsureProductsSchemaAsync(db, cancellationToken);
+        await EnsureOrderShiprocketShipmentsSchemaAsync(db, cancellationToken);
         await DbSeeder.SeedAsync(db, adminOptions);
     }
 
@@ -57,6 +59,46 @@ public static class DatabaseBootstrapper
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Database bootstrap step 'OrdersShiprocketSchemaSelfHeal' failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Self-heal multi-pickup shipment table if MigrateAsync was skipped or partially applied.
+    /// </summary>
+    public static async Task EnsureOrderShiprocketShipmentsSchemaAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE IF NOT EXISTS "OrderShiprocketShipments" (
+                    "Id" uuid NOT NULL,
+                    "OrderId" uuid NOT NULL,
+                    "PickupLocation" character varying(100) NOT NULL,
+                    "ShiprocketOrderId" character varying(50),
+                    "ShiprocketShipmentId" character varying(50),
+                    "Status" character varying(50),
+                    "LastError" character varying(500),
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    "UpdatedAt" timestamp with time zone,
+                    CONSTRAINT "PK_OrderShiprocketShipments" PRIMARY KEY ("Id"),
+                    CONSTRAINT "FK_OrderShiprocketShipments_Orders_OrderId"
+                        FOREIGN KEY ("OrderId") REFERENCES "Orders" ("Id") ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_OrderId"
+                    ON "OrderShiprocketShipments" ("OrderId");
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_OrderId_PickupLocation"
+                    ON "OrderShiprocketShipments" ("OrderId", "PickupLocation");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_ShiprocketOrderId"
+                    ON "OrderShiprocketShipments" ("ShiprocketOrderId");
+                """,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step 'OrderShiprocketShipmentsSchemaSelfHeal' failed: {ex.Message}");
         }
     }
 
@@ -92,6 +134,7 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoDescription" character varying(300);
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoKeywords" character varying(300);
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SellerId" uuid;
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "ShiprocketPickupLocation" character varying(100);
                 UPDATE "Products" SET "Slug" = "Id" WHERE "Slug" IS NULL OR "Slug" = '';
                 """,
                 cancellationToken);

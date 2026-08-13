@@ -265,7 +265,16 @@ export default function AdminOrders() {
                       {order.paymentProvider ? <small> / {order.paymentProvider}</small> : null}
                     </td>
                     <td className="nowrap">
-                      {order.shiprocketOrderId ? (
+                      {order.shiprocketShipmentCount > 0 ? (
+                        <span
+                          className={`admin-pill ${
+                            order.shiprocketShipmentSuccessCount >= order.shiprocketShipmentCount ? 'on' : 'off'
+                          }`}
+                          title={order.shiprocketLastError || order.shiprocketStatus || ''}
+                        >
+                          {order.shiprocketShipmentSuccessCount}/{order.shiprocketShipmentCount} pickups
+                        </span>
+                      ) : order.shiprocketOrderId ? (
                         <span className="admin-pill on" title={order.shiprocketStatus || ''}>
                           {order.shiprocketOrderId}
                         </span>
@@ -312,7 +321,7 @@ export default function AdminOrders() {
                                 )}
                               </p>
                               <p>
-                                <strong>Shiprocket:</strong>{' '}
+                                <strong>Shiprocket (primary):</strong>{' '}
                                 {details[order.id].shiprocketOrderId
                                   ? `#${details[order.id].shiprocketOrderId}`
                                   : 'not created'}
@@ -323,23 +332,55 @@ export default function AdminOrders() {
                                   ? ` · ${details[order.id].shiprocketStatus}`
                                   : null}
                               </p>
+                              {details[order.id].shiprocketShipments?.length ? (
+                                <div style={{ marginBottom: '0.75rem' }}>
+                                  <strong>Pickups / shipments:</strong>
+                                  <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.2rem' }}>
+                                    {details[order.id].shiprocketShipments.map((s) => (
+                                      <li key={s.id}>
+                                        <code>{s.pickupLocation}</code>
+                                        {s.shiprocketOrderId
+                                          ? ` · SR #${s.shiprocketOrderId}`
+                                          : ' · not created'}
+                                        {s.shiprocketShipmentId ? ` · shipment ${s.shiprocketShipmentId}` : null}
+                                        {s.status ? ` · ${s.status}` : null}
+                                        {s.lastError ? (
+                                          <span className="admin-error"> — {s.lastError}</span>
+                                        ) : null}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
                               {details[order.id].shiprocketLastError ? (
                                 <p className="admin-error">
                                   <strong>Shiprocket error:</strong> {details[order.id].shiprocketLastError}
                                 </p>
                               ) : null}
-                              {!details[order.id].shiprocketOrderId ? (
-                                <p>
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary btn-sm"
-                                    disabled={retryingId === order.id}
-                                    onClick={() => retryShiprocket(order.id)}
-                                  >
-                                    {retryingId === order.id ? 'Retrying Shiprocket…' : 'Retry Shiprocket create'}
-                                  </button>
-                                </p>
-                              ) : null}
+                              {(() => {
+                                const shipments = details[order.id].shiprocketShipments || []
+                                const allOk =
+                                  shipments.length > 0 &&
+                                  shipments.every((s) => s.shiprocketOrderId) &&
+                                  !details[order.id].shiprocketLastError
+                                const legacyOk =
+                                  !shipments.length && Boolean(details[order.id].shiprocketOrderId)
+                                if (allOk || legacyOk) return null
+                                return (
+                                  <p>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary btn-sm"
+                                      disabled={retryingId === order.id}
+                                      onClick={() => retryShiprocket(order.id)}
+                                    >
+                                      {retryingId === order.id
+                                        ? 'Retrying Shiprocket…'
+                                        : 'Retry failed Shiprocket pickups'}
+                                    </button>
+                                  </p>
+                                )
+                              })()}
                               <table className="admin-table">
                                 <thead>
                                   <tr>

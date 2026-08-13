@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Bagly.Api.Data;
 using Bagly.Api.Models;
 using Bagly.Api.Options;
@@ -17,9 +18,9 @@ public interface IShiprocketService
     bool IsConfigured { get; }
 
     /// <summary>
-    /// Best-effort Shiprocket adhoc create for a confirmed Bagly order.
-    /// Never throws to callers that only log — failures are logged and order checkout is unaffected.
-    /// Idempotent when <see cref="Order.ShiprocketOrderId"/> is already set.
+    /// Best-effort Shiprocket adhoc create(s) for a confirmed Bagly order.
+    /// Groups line items by product pickup nickname and creates one adhoc order per group.
+    /// Idempotent per pickup group; retries only failed groups.
     /// </summary>
     Task TryCreateAdhocOrderForConfirmedOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
 
@@ -51,6 +52,7 @@ public sealed class ShiprocketService(
     };
 
     private static readonly TimeZoneInfo IstTimeZone = ResolveIst();
+    private static readonly Regex PickupSlugUnsafe = new(@"[^a-zA-Z0-9_-]+", RegexOptions.Compiled);
 
     private readonly ShiprocketOptions _options = options.Value;
 
@@ -62,6 +64,7 @@ public sealed class ShiprocketService(
     {
         var order = await db.Orders
             .Include(o => o.Items)
+            .Include(o => o.ShiprocketShipments)
             .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
 
         if (order is null)
@@ -107,10 +110,11 @@ public sealed class ShiprocketService(
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(order.ShiprocketOrderId))
+        // Legacy: single Order.ShiprocketOrderId with no child rows = already fully created under one pickup.
+        if (!string.IsNullOrWhiteSpace(order.ShiprocketOrderId) && order.ShiprocketShipments.Count == 0)
         {
             logger.LogDebug(
-                "Shiprocket skipped for {OrderNumber}: already created (ShiprocketOrderId={ShiprocketOrderId}).",
+                "Shiprocket skipped for {OrderNumber}: legacy ShiprocketOrderId={ShiprocketOrderId} (no multi-pickup rows).",
                 order.OrderNumber,
                 order.ShiprocketOrderId);
             return;
@@ -146,7 +150,6 @@ public sealed class ShiprocketService(
             return;
         }
 
-        // Persist a clean PIN so later retries / admin views see the normalized value.
         var normalizedZip = pincode.Value.ToString(CultureInfo.InvariantCulture);
         if (!string.Equals(order.Zip, normalizedZip, StringComparison.Ordinal))
         {
@@ -159,73 +162,203 @@ public sealed class ShiprocketService(
             return;
         }
 
-        var pickup = _options.PickupLocation.Trim();
+        var defaultPickup = _options.PickupLocation.Trim();
+        var productIds = order.Items
+            .Select(i => i.ProductId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
-        try
-        {
-            var payload = BuildCreatePayload(order, phone, pincode.Value, pickup);
-            var requestJson = SerializeCreatePayload(payload);
-            var pincodeJsonToken = ExtractBillingPincodeJsonToken(requestJson);
-            if (!IsSixDigitJsonNumberToken(pincodeJsonToken))
+        var productPickups = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.ShiprocketPickupLocation })
+            .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+
+        // Case-sensitive group key = exact Shiprocket nickname.
+        var groups = order.Items
+            .GroupBy(item =>
             {
-                throw new InvalidOperationException(
-                    $"Shiprocket billing_pincode serialization invalid (expected 6-digit JSON number). rawZip='{rawZip}', normalized={pincode.Value}, jsonToken={pincodeJsonToken ?? "(missing)"}");
+                productPickups.TryGetValue(item.ProductId, out var productPickup);
+                return string.IsNullOrWhiteSpace(productPickup) ? defaultPickup : productPickup.Trim();
+            }, StringComparer.Ordinal)
+            .Select(g => new PickupGroup(g.Key, g.ToList()))
+            .OrderBy(g => g.Pickup, StringComparer.Ordinal)
+            .ToList();
+
+        if (groups.Count == 0)
+        {
+            await MarkSkippedAsync(order, "order has no line items after grouping", cancellationToken);
+            return;
+        }
+
+        var existingByPickup = order.ShiprocketShipments
+            .ToDictionary(s => s.PickupLocation, StringComparer.Ordinal);
+
+        var anyFailure = false;
+        string? lastError = null;
+        OrderShiprocketShipment? firstSuccess = null;
+
+        for (var groupIndex = 0; groupIndex < groups.Count; groupIndex++)
+        {
+            var group = groups[groupIndex];
+            if (existingByPickup.TryGetValue(group.Pickup, out var existing) &&
+                !string.IsNullOrWhiteSpace(existing.ShiprocketOrderId))
+            {
+                firstSuccess ??= existing;
+                logger.LogDebug(
+                    "Shiprocket skip group {Pickup} for {OrderNumber}: already created ({ShiprocketOrderId}).",
+                    group.Pickup,
+                    order.OrderNumber,
+                    existing.ShiprocketOrderId);
+                continue;
             }
 
-            logger.LogInformation(
-                "Shiprocket create starting for {OrderNumber}: pickup_location={Pickup}, payment_method={PaymentMethod}, phone=***{PhoneLast4}, rawZip={RawZip}, billing_pincode_json={PincodeJson}, shipping_is_billing={ShippingIsBilling}, items={ItemCount}, sub_total={SubTotal}, shipping_charges={Shipping}, request={RequestJson}.",
-                order.OrderNumber,
-                pickup,
-                payload.PaymentMethod,
-                phone.Length >= 4 ? phone[^4..] : phone,
-                rawZip,
-                pincodeJsonToken,
-                payload.ShippingIsBilling,
-                order.Items.Count,
-                payload.SubTotal,
-                payload.ShippingCharges,
-                Truncate(requestJson, 900));
+            var shipment = existing ?? new OrderShiprocketShipment
+            {
+                OrderId = order.Id,
+                PickupLocation = group.Pickup,
+                CreatedAt = DateTime.UtcNow,
+            };
 
-            var result = await CreateAdhocOrderWithAuthRetryAsync(payload, cancellationToken);
+            if (existing is null)
+            {
+                db.OrderShiprocketShipments.Add(shipment);
+                order.ShiprocketShipments.Add(shipment);
+                existingByPickup[group.Pickup] = shipment;
+            }
 
-            order.ShiprocketOrderId = result.OrderId;
-            order.ShiprocketShipmentId = result.ShipmentId;
-            order.ShiprocketStatus = result.Status ?? "NEW";
-            order.ShiprocketLastError = null;
-            await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogInformation(
-                "Shiprocket order created for {OrderNumber}: shiprocketOrderId={ShiprocketOrderId}, shipmentId={ShipmentId}, status={Status}.",
-                order.OrderNumber,
-                order.ShiprocketOrderId,
-                order.ShiprocketShipmentId,
-                order.ShiprocketStatus);
-        }
-        catch (Exception ex)
-        {
-            var detail = Truncate(
-                $"{ex.Message} (pickup_location='{pickup}')",
-                480);
-            order.ShiprocketStatus = "Error";
-            order.ShiprocketLastError = detail;
+            // Full shipping + full COD on first group only (collect once); 0 on others.
+            var chargeShippingAndCod = groupIndex == 0;
             try
             {
+                var payload = BuildCreatePayload(
+                    order,
+                    group.Items,
+                    phone,
+                    pincode.Value,
+                    group.Pickup,
+                    chargeShippingAndCod,
+                    chargeShippingAndCod);
+                var requestJson = SerializeCreatePayload(payload);
+                var pincodeJsonToken = ExtractBillingPincodeJsonToken(requestJson);
+                if (!IsSixDigitJsonNumberToken(pincodeJsonToken))
+                {
+                    throw new InvalidOperationException(
+                        $"Shiprocket billing_pincode serialization invalid (expected 6-digit JSON number). rawZip='{rawZip}', normalized={pincode.Value}, jsonToken={pincodeJsonToken ?? "(missing)"}");
+                }
+
+                logger.LogInformation(
+                    "Shiprocket create starting for {OrderNumber}/{Pickup}: order_id={ShiprocketClientOrderId}, payment_method={PaymentMethod}, phone=***{PhoneLast4}, rawZip={RawZip}, billing_pincode_json={PincodeJson}, items={ItemCount}, sub_total={SubTotal}, shipping_charges={Shipping}, cod={Cod}, request={RequestJson}.",
+                    order.OrderNumber,
+                    group.Pickup,
+                    payload.OrderId,
+                    payload.PaymentMethod,
+                    phone.Length >= 4 ? phone[^4..] : phone,
+                    rawZip,
+                    pincodeJsonToken,
+                    group.Items.Count,
+                    payload.SubTotal,
+                    payload.ShippingCharges,
+                    payload.Cod,
+                    Truncate(requestJson, 900));
+
+                var result = await CreateAdhocOrderWithAuthRetryAsync(payload, cancellationToken);
+
+                shipment.ShiprocketOrderId = result.OrderId;
+                shipment.ShiprocketShipmentId = result.ShipmentId;
+                shipment.Status = result.Status ?? "NEW";
+                shipment.LastError = null;
+                shipment.UpdatedAt = DateTime.UtcNow;
+                firstSuccess ??= shipment;
+
+                logger.LogInformation(
+                    "Shiprocket order created for {OrderNumber}/{Pickup}: shiprocketOrderId={ShiprocketOrderId}, shipmentId={ShipmentId}, status={Status}.",
+                    order.OrderNumber,
+                    group.Pickup,
+                    shipment.ShiprocketOrderId,
+                    shipment.ShiprocketShipmentId,
+                    shipment.Status);
+            }
+            catch (Exception ex)
+            {
+                anyFailure = true;
+                var detail = Truncate(
+                    $"{ex.Message} (pickup_location='{group.Pickup}')",
+                    480);
+                lastError = detail;
+                shipment.Status = "Error";
+                shipment.LastError = detail;
+                shipment.UpdatedAt = DateTime.UtcNow;
+
+                logger.LogError(
+                    ex,
+                    "Shiprocket create failed for {OrderNumber}/{Pickup} (orderId={OrderId}). Customer order remains confirmed.",
+                    order.OrderNumber,
+                    group.Pickup,
+                    order.Id);
+            }
+
+            // Persist per group so a crash mid-run does not re-create a successful adhoc order.
+            try
+            {
+                SyncOrderPrimaryShiprocketFields(order, firstSuccess, anyFailure, lastError);
                 await db.SaveChangesAsync(cancellationToken);
             }
             catch (Exception saveEx)
             {
                 logger.LogError(
                     saveEx,
-                    "Shiprocket failed for {OrderNumber} and could not persist ShiprocketLastError.",
-                    order.OrderNumber);
+                    "Shiprocket could not persist shipment result for {OrderNumber}/{Pickup}.",
+                    order.OrderNumber,
+                    group.Pickup);
             }
+        }
 
+        SyncOrderPrimaryShiprocketFields(order, firstSuccess, anyFailure, lastError);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception saveEx)
+        {
             logger.LogError(
-                ex,
-                "Shiprocket create failed for {OrderNumber} (orderId={OrderId}, pickup={Pickup}). Customer order remains confirmed. Error persisted on order for admin.",
-                order.OrderNumber,
-                order.Id,
-                pickup);
+                saveEx,
+                "Shiprocket could not persist final shipment summary for {OrderNumber}.",
+                order.OrderNumber);
+        }
+    }
+
+    private static void SyncOrderPrimaryShiprocketFields(
+        Order order,
+        OrderShiprocketShipment? firstSuccessHint,
+        bool anyFailure,
+        string? lastError)
+    {
+        var firstSuccess = firstSuccessHint ??
+            order.ShiprocketShipments
+                .Where(s => !string.IsNullOrWhiteSpace(s.ShiprocketOrderId))
+                .OrderBy(s => s.CreatedAt)
+                .FirstOrDefault();
+
+        if (firstSuccess is not null)
+        {
+            order.ShiprocketOrderId = firstSuccess.ShiprocketOrderId;
+            order.ShiprocketShipmentId = firstSuccess.ShiprocketShipmentId;
+            order.ShiprocketStatus = firstSuccess.Status ?? "NEW";
+        }
+
+        if (anyFailure)
+        {
+            order.ShiprocketStatus = "Error";
+            order.ShiprocketLastError = lastError;
+        }
+        else
+        {
+            order.ShiprocketLastError = null;
+            if (firstSuccess is not null)
+            {
+                order.ShiprocketStatus = firstSuccess.Status ?? "NEW";
+            }
         }
     }
 
@@ -307,8 +440,6 @@ public sealed class ShiprocketService(
             order.OrderNumber,
             reason);
 
-        // Always refresh status/error so admin Retry surfaces the latest validation failure
-        // (e.g. invalid zip) instead of a stale HTTP 422 from a prior deploy.
         order.ShiprocketStatus = "Skipped";
         order.ShiprocketLastError = Truncate(reason, 480);
         await db.SaveChangesAsync(cancellationToken);
@@ -327,13 +458,19 @@ public sealed class ShiprocketService(
                string.Equals(value, "IND", StringComparison.OrdinalIgnoreCase);
     }
 
-    private ShiprocketCreatePayload BuildCreatePayload(Order order, string phone, int pincode, string pickup)
+    private ShiprocketCreatePayload BuildCreatePayload(
+        Order order,
+        IReadOnlyList<OrderItem> items,
+        string phone,
+        int pincode,
+        string pickup,
+        bool includeShippingCharges,
+        bool includeCodAmount)
     {
         var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
         var paymentMethod = isCod ? "COD" : "Prepaid";
 
-        // Match Shiprocket adhoc sample: selling_price as string; money totals as integers.
-        var orderItems = order.Items.Select(i => new ShiprocketOrderItemPayload
+        var orderItems = items.Select(i => new ShiprocketOrderItemPayload
         {
             Name = Truncate(
                 string.IsNullOrWhiteSpace(i.Color) || string.Equals(i.Color, "Default", StringComparison.OrdinalIgnoreCase)
@@ -345,34 +482,34 @@ public sealed class ShiprocketService(
             SellingPrice = ToRupeeInt(i.UnitPrice).ToString(CultureInfo.InvariantCulture),
         }).ToList();
 
-        var subTotal = ToRupeeInt(order.Subtotal);
-        var shippingCharges = ToRupeeInt(order.Shipping);
-        var codAmount = ToRupeeInt(order.Total);
+        var lineSubtotal = items.Sum(i => i.UnitPrice * i.Quantity);
+        var subTotal = ToRupeeInt(lineSubtotal);
+        var shippingCharges = includeShippingCharges ? ToRupeeInt(order.Shipping) : 0;
+        // COD collect once on first shipment: full Bagly order total (incl. shipping).
+        var codAmount = includeCodAmount ? ToRupeeInt(order.Total) : 0;
+
+        var clientOrderId = BuildClientOrderId(order.OrderNumber, pickup);
 
         return new ShiprocketCreatePayload
         {
-            OrderId = Truncate(order.OrderNumber, 50),
+            OrderId = Truncate(clientOrderId, 50),
             OrderDate = FormatOrderDateIst(order.CreatedAt),
             PickupLocation = pickup,
-            // Empty string => default Custom channel (official sample).
             ChannelId = "",
             BillingCustomerName = Truncate(order.FirstName.Trim(), 50),
             BillingLastName = Truncate(order.LastName.Trim(), 50),
             BillingAddress = Truncate(order.Address.Trim(), 190),
             BillingAddress2 = "",
             BillingCity = Truncate(order.City.Trim(), 30),
-            // Official adhoc docs: billing_pincode is integer (JSON number, not "110001").
             BillingPincode = pincode,
             BillingState = Truncate(order.State.Trim(), 50),
             BillingCountry = "India",
             BillingEmail = Truncate(order.Email.Trim(), 100),
             BillingPhone = phone,
             ShippingIsBilling = true,
-            // Only sent when shipping_is_billing is false (omitted while true via WhenWritingNull).
             ShippingPincode = null,
             OrderItems = orderItems,
             PaymentMethod = paymentMethod,
-            // COD collectable amount (order total incl. shipping).
             Cod = isCod ? codAmount : null,
             ShippingCharges = shippingCharges,
             GiftwrapCharges = 0,
@@ -384,6 +521,21 @@ public sealed class ShiprocketService(
             Height = _options.DefaultHeight,
             Weight = _options.DefaultWeightKg,
         };
+    }
+
+    /// <summary>Shiprocket requires unique order_id per adhoc create: {BaglyOrderNumber}-{pickupSlug}.</summary>
+    internal static string BuildClientOrderId(string orderNumber, string pickup)
+    {
+        var slug = ToPickupSlug(pickup);
+        var baseId = string.IsNullOrWhiteSpace(orderNumber) ? "BG" : orderNumber.Trim();
+        return $"{baseId}-{slug}";
+    }
+
+    internal static string ToPickupSlug(string pickup)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(pickup) ? "pickup" : pickup.Trim();
+        var slug = PickupSlugUnsafe.Replace(trimmed, "-").Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? "pickup" : slug;
     }
 
     private static int ToRupeeInt(decimal value) =>
@@ -461,7 +613,6 @@ public sealed class ShiprocketService(
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
         var root = doc.RootElement;
 
-        // Shiprocket sometimes returns HTTP 200 with status_code >= 400 and no order_id.
         if (TryReadStatusCode(root, out var apiStatus) && apiStatus >= 400)
         {
             var apiMessage = TryReadMessage(root) ?? Truncate(raw);
@@ -491,7 +642,6 @@ public sealed class ShiprocketService(
     {
         var client = httpClientFactory.CreateClient("Shiprocket");
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/external/auth/login");
-        // Auth body uses camelCase email/password (Shiprocket login accepts these).
         var body = new { email = _options.Email.Trim(), password = _options.Password };
         request.Content = new StringContent(
             JsonSerializer.Serialize(body),
@@ -598,7 +748,6 @@ public sealed class ShiprocketService(
             digits = digits[^10..];
         }
 
-        // Shiprocket requires a 10-digit billing_phone; shorter values cause create failures.
         return digits.Length == 10 ? digits : null;
     }
 
@@ -629,7 +778,6 @@ public sealed class ShiprocketService(
             return null;
         }
 
-        // Indian PINs are 100000–999999 (first digit 1–9).
         if (digits[0] == '0')
         {
             return null;
@@ -721,6 +869,8 @@ public sealed class ShiprocketService(
     private static string Truncate(string value, int max = 500) =>
         value.Length <= max ? value : value[..max] + "…";
 
+    private sealed record PickupGroup(string Pickup, List<OrderItem> Items);
+
     private sealed record ShiprocketCreateResult(string OrderId, string? ShipmentId, string? Status);
 
     private sealed class ShiprocketAuthException(string message) : Exception(message);
@@ -773,10 +923,6 @@ public sealed class ShiprocketService(
         [JsonPropertyName("shipping_is_billing")]
         public bool ShippingIsBilling { get; set; }
 
-        /// <summary>
-        /// Required by Shiprocket when <see cref="ShippingIsBilling"/> is false.
-        /// Keep null while shipping_is_billing is true so it is omitted from JSON.
-        /// </summary>
         [JsonPropertyName("shipping_pincode")]
         public int? ShippingPincode { get; set; }
 
