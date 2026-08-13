@@ -201,7 +201,11 @@ public class OrdersController(
                 i.Color,
                 i.UnitPrice,
                 i.Quantity
-            )).ToList()
+            )).ToList(),
+            order.Phone,
+            order.ShiprocketOrderId,
+            order.ShiprocketShipmentId,
+            order.ShiprocketStatus
         );
 
     /// <summary>

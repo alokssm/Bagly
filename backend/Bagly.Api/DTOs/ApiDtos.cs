@@ -304,7 +304,11 @@ public record OrderDto(
     decimal Shipping,
     decimal Total,
     DateTime CreatedAt,
-    IReadOnlyList<OrderItemDto> Items
+    IReadOnlyList<OrderItemDto> Items,
+    string? Phone = null,
+    string? ShiprocketOrderId = null,
+    string? ShiprocketShipmentId = null,
+    string? ShiprocketStatus = null
 );
 
 public record CustomerOrderItemDto(
@@ -341,7 +345,10 @@ public record AdminOrderListItemDto(
     string Currency,
     decimal Total,
     int ItemCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Phone = null,
+    string? ShiprocketOrderId = null,
+    string? ShiprocketStatus = null);
 
 /// <summary>Response shape for <c>GET /api/admin/orders</c>. <c>TodayCount</c> is always "today in
 /// Asia/Kolkata (IST)" regardless of the from/to filter applied to <c>Items</c>.</summary>

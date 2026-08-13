@@ -28,7 +28,7 @@ public class EmailOptions
     /// <summary>Resend REST API key (re_xxx).</summary>
     public string? ResendApiKey { get; set; }
 
-    public string FromAddress { get; set; } = "noreply@bagly.store";
+    public string FromAddress { get; set; } = "noreply@bagly.co.in";
     public string FromName { get; set; } = "Bagly";
     public bool UseSsl { get; set; } = true;
 

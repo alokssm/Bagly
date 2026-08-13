@@ -95,6 +95,10 @@ Set these **before** or right after first deploy:
 | `Email__FromName` | `Bagly` |
 | `Email__UseSsl` | `true` |
 | `Email__AdminOrderNotify` | Mailbox that gets a copy of every successfully placed order (order number, customer, shipping address, items, totals, payment status). Defaults to `alok73772@gmail.com` in `appsettings.json` if unset. `Admin__OrderNotifyEmail` is also read as a fallback if `Email__AdminOrderNotify` is not set. Sending this copy never fails the customer's order — a failure is only logged. |
+| `Shiprocket__Enabled` | `true` to push confirmed India orders to Shiprocket after checkout (default in appsettings is `false`) |
+| `Shiprocket__Email` | Shiprocket **API user** email (Settings → API → API User) — not necessarily your panel login email |
+| `Shiprocket__Password` | Shiprocket API user password — **mark Secret** |
+| `Shiprocket__PickupLocation` | Exact **pickup nickname** from Shiprocket → Settings → Pickup Addresses (must match character-for-character) |
 | `GoogleAuth__ClientId` | Google OAuth Web Client ID for "Continue with Google" (optional — leave unset to hide the button). See `iis/README.md` → "Google sign-in setup" for how to create one. Must match frontend `VITE_GOOGLE_CLIENT_ID`. |
 | `Cloudinary__CloudName` | Your Cloudinary cloud name (optional — leave unset to hide admin image uploads; URL-paste still works). See "Cloudinary setup" below. |
 | `Cloudinary__ApiKey` | Cloudinary API Key |
@@ -122,14 +126,31 @@ Order confirmation emails are sent after Razorpay payment verify succeeds (India
    Email__Provider=Resend
    Email__ResendApiKey=re_xxxx
    Email__FromName=Bagly
+   Email__AdminOrderNotify=alok73772@gmail.com
    ```
 4. **From address — pick one:**
    - **Quick test (no domain):** `Email__FromAddress=onboarding@resend.dev`  
-     Resend only delivers to the email address you signed up with. Place a test order using that same email as the customer.
-   - **Production:** **Domains** → add your domain (e.g. `bagly.store`) → add DNS records → use `noreply@yourdomain.com` as `Email__FromAddress`.
-5. Save env vars → **Manual Deploy** → check `/api/health` shows `"provider":"Resend"`, `"resendApiKeySet":true`, `"willSend":true`.
+     Resend only delivers to the email address you signed up with (typically `alok73772@gmail.com`). A test order as that customer correctly yields **two** emails (customer "Bagly order confirmed" + admin "New Bagly order"). Any other customer address is rejected until a domain is verified.
+   - **Production (required for real customers):** Resend → **Domains** → add `bagly.co.in` → add DNS records → wait until **Verified** → set `Email__FromAddress=noreply@bagly.co.in`. Do **not** remove the admin notify email — both templates are intentional.
+5. Save env vars → **Manual Deploy** → check `/api/health` shows `"provider":"Resend"`, `"resendApiKeySet":true`, `"willSend":true`, and `fromAddress` is your verified sender.
 
-If email is not configured, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped`.
+If email is not configured, checkout still succeeds but no email is sent — check Render logs for `Order confirmation email skipped` / Resend HTTP errors.
+
+### Shiprocket setup (India fulfilment)
+
+1. In Shiprocket: create/enable an **API user** and note the email + password.
+2. Add a pickup address and copy its **nickname** exactly (e.g. `Primary` or `Warehouse`).
+3. In Render → **Environment**, set:
+   ```
+   Shiprocket__Enabled=true
+   Shiprocket__Email=your-api-user@email.com
+   Shiprocket__Password=your-api-password
+   Shiprocket__PickupLocation=ExactNicknameFromPanel
+   ```
+4. Save → **Manual Deploy** → `/api/health` should show `"shiprocket": { "enabled": true, "configured": true, ... }`.
+5. Place a confirmed India order with a 10-digit phone → Admin → Orders should show a Shiprocket id, and the order should appear in the Shiprocket panel. If not, Render logs include `Shiprocket create failed` plus the API response body (wrong pickup nickname, auth failure, etc.).
+
+Without `Shiprocket__Enabled=true` (and credentials), **no Shiprocket API call is made** — checkout still succeeds.
 
 ### Cloudinary setup (admin product image uploads)
 

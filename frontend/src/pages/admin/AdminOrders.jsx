@@ -178,6 +178,7 @@ export default function AdminOrders() {
                 <th>Total</th>
                 <th>Status</th>
                 <th>Payment</th>
+                <th>Shiprocket</th>
                 <th>Created</th>
                 <th />
               </tr>
@@ -198,6 +199,15 @@ export default function AdminOrders() {
                       {order.paymentStatus}
                       {order.paymentProvider ? <small> / {order.paymentProvider}</small> : null}
                     </td>
+                    <td className="nowrap">
+                      {order.shiprocketOrderId ? (
+                        <span className="admin-pill on" title={order.shiprocketStatus || ''}>
+                          {order.shiprocketOrderId}
+                        </span>
+                      ) : (
+                        <span className="admin-muted">—</span>
+                      )}
+                    </td>
                     <td className="nowrap">{formatDateTime(order.createdAt)}</td>
                     <td>
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggleExpand(order)}>
@@ -207,7 +217,7 @@ export default function AdminOrders() {
                   </tr>
                   {expandedId === order.id ? (
                     <tr className="log-detail-row">
-                      <td colSpan={9}>
+                      <td colSpan={10}>
                         <div className="log-detail">
                           {detailLoading === order.id ? (
                             <p className="admin-muted">Loading order details…</p>
@@ -217,6 +227,29 @@ export default function AdminOrders() {
                             <>
                               <p>
                                 <strong>Ship to:</strong> {details[order.id].firstName} {details[order.id].lastName}
+                                {details[order.id].phone ? (
+                                  <>
+                                    {' '}
+                                    · <strong>Phone:</strong> {details[order.id].phone}
+                                  </>
+                                ) : (
+                                  <>
+                                    {' '}
+                                    · <span className="admin-muted">Phone missing (Shiprocket skipped)</span>
+                                  </>
+                                )}
+                              </p>
+                              <p>
+                                <strong>Shiprocket:</strong>{' '}
+                                {details[order.id].shiprocketOrderId
+                                  ? `#${details[order.id].shiprocketOrderId}`
+                                  : 'not created'}
+                                {details[order.id].shiprocketShipmentId
+                                  ? ` · shipment ${details[order.id].shiprocketShipmentId}`
+                                  : null}
+                                {details[order.id].shiprocketStatus
+                                  ? ` · ${details[order.id].shiprocketStatus}`
+                                  : null}
                               </p>
                               <table className="admin-table">
                                 <thead>

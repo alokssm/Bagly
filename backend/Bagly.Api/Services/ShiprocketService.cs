@@ -46,14 +46,18 @@ public sealed class ShiprocketService(
     {
         if (!_options.Enabled)
         {
-            logger.LogDebug("Shiprocket skipped for order {OrderId}: integration disabled.", orderId);
+            // Information (not Debug): Render/production default min level hides Debug, and operators
+            // need to see why nothing appears on the Shiprocket dashboard.
+            logger.LogInformation(
+                "Shiprocket skipped for order {OrderId}: Shiprocket__Enabled is false. Set Shiprocket__Enabled=true plus Email/Password/PickupLocation on Render.",
+                orderId);
             return;
         }
 
         if (!IsConfigured)
         {
             logger.LogWarning(
-                "Shiprocket skipped for order {OrderId}: Enabled but Email/Password/PickupLocation are not configured.",
+                "Shiprocket skipped for order {OrderId}: Enabled but Email/Password/PickupLocation are not configured (or still SET_VIA_ENV placeholders).",
                 orderId);
             return;
         }
@@ -99,8 +103,9 @@ public sealed class ShiprocketService(
         if (string.IsNullOrWhiteSpace(phone))
         {
             logger.LogWarning(
-                "Shiprocket skipped for {OrderNumber}: phone is missing. Collect phone on checkout to enable shipment creation.",
-                order.OrderNumber);
+                "Shiprocket skipped for {OrderNumber}: phone is missing or not a valid 10-digit Indian mobile (raw={RawPhone}).",
+                order.OrderNumber,
+                string.IsNullOrWhiteSpace(order.Phone) ? "(null)" : order.Phone.Trim());
             return;
         }
 
@@ -180,12 +185,6 @@ public sealed class ShiprocketService(
             ["height"] = _options.DefaultHeight,
             ["weight"] = _options.DefaultWeightKg,
         };
-
-        if (paymentMethod == "COD")
-        {
-            // Amount to collect on delivery (order total including shipping).
-            payload["cod"] = order.Total;
-        }
 
         return payload;
     }
@@ -287,7 +286,7 @@ public sealed class ShiprocketService(
         return token;
     }
 
-    /// <summary>Normalize to digits; prefer last 10 for Indian mobiles.</summary>
+    /// <summary>Normalize to digits; require 10-digit Indian mobile (strip leading 91 when present).</summary>
     internal static string? NormalizePhone(string? phone)
     {
         if (string.IsNullOrWhiteSpace(phone))
@@ -310,7 +309,8 @@ public sealed class ShiprocketService(
             digits = digits[^10..];
         }
 
-        return digits.Length >= 10 ? digits : digits;
+        // Shiprocket requires a 10-digit billing_phone; shorter values cause create failures.
+        return digits.Length == 10 ? digits : null;
     }
 
     private static string? ReadId(JsonElement root, string name)

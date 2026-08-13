@@ -192,12 +192,19 @@ public class EmailSender(
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            var sandboxHint = responseBody.Contains("testing emails", StringComparison.OrdinalIgnoreCase)
+                || responseBody.Contains("only send", StringComparison.OrdinalIgnoreCase)
+                || ((int)response.StatusCode == 403 &&
+                    responseBody.Contains("domain", StringComparison.OrdinalIgnoreCase))
+                ? " Resend is likely in test mode: verify bagly.co.in in Resend Domains and set Email__FromAddress=noreply@bagly.co.in (until then Resend only delivers to the account signup email)."
+                : string.Empty;
             logger.LogError(
-                "Failed to send email '{Subject}' to {Email} via Resend: HTTP {StatusCode}. {ResponseBody}. Verify Email__FromAddress is verified in Resend (or use onboarding@resend.dev for testing).",
+                "Failed to send email '{Subject}' to {Email} via Resend: HTTP {StatusCode}. {ResponseBody}.{SandboxHint} Verify Email__FromAddress is verified in Resend (or use onboarding@resend.dev for testing).",
                 subject,
                 to,
                 (int)response.StatusCode,
-                Truncate(responseBody, 500));
+                Truncate(responseBody, 500),
+                sandboxHint);
             return false;
         }
         catch (Exception ex)

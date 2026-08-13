@@ -69,7 +69,10 @@ public class AdminOrdersController(BaglyDbContext db) : ControllerBase
                 o.Currency ?? "INR",
                 o.Total,
                 o.Items.Count,
-                o.CreatedAt))
+                o.CreatedAt,
+                o.Phone,
+                o.ShiprocketOrderId,
+                o.ShiprocketStatus))
             .ToListAsync(cancellationToken);
 
         var (todayStartUtc, todayEndUtc) = IstTime.TodayRangeUtc();

@@ -313,6 +313,25 @@ try
             "Email uses SMTP on Render. Free tier blocks outbound ports 25/465/587 — emails will time out. Set Email__Provider=Resend and Email__ResendApiKey (HTTPS), or upgrade Render to a paid instance.");
     }
 
+    var shiprocketOptions = app.Configuration.GetSection(ShiprocketOptions.SectionName).Get<ShiprocketOptions>() ?? new ShiprocketOptions();
+    Log.Information(
+        "Shiprocket startup: Enabled={Enabled}, Configured={Configured}, EmailSet={EmailSet}, PasswordSet={PasswordSet}, PickupLocationSet={PickupLocationSet}",
+        shiprocketOptions.Enabled,
+        shiprocketOptions.IsConfigured,
+        !string.IsNullOrWhiteSpace(shiprocketOptions.Email) && !shiprocketOptions.Email.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+        !string.IsNullOrWhiteSpace(shiprocketOptions.Password) && !shiprocketOptions.Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+        !string.IsNullOrWhiteSpace(shiprocketOptions.PickupLocation) && !shiprocketOptions.PickupLocation.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase));
+    if (!shiprocketOptions.Enabled)
+    {
+        Log.Warning(
+            "Shiprocket is disabled (Shiprocket__Enabled=false). Confirmed India orders will not be pushed to Shiprocket until Enabled=true and API credentials + pickup nickname are set.");
+    }
+    else if (!shiprocketOptions.IsConfigured)
+    {
+        Log.Warning(
+            "Shiprocket__Enabled=true but Email/Password/PickupLocation are missing or still SET_VIA_ENV placeholders — shipment create will be skipped.");
+    }
+
     try
     {
         await DatabaseBootstrapper.InitializeAsync(app.Services);
@@ -370,6 +389,7 @@ try
     {
         var cs = config.GetConnectionString("DefaultConnection") ?? "";
         var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
+        var shiprocket = config.GetSection(ShiprocketOptions.SectionName).Get<ShiprocketOptions>() ?? new ShiprocketOptions();
         var openAi = config.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>() ?? new OpenAiOptions();
         var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
         var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
@@ -453,8 +473,10 @@ try
                 willSend = email.WillSend,
                 hostSet = email.HasSmtpHost,
                 fromAddressSet = email.HasFromAddress,
+                fromAddress = email.HasFromAddress ? email.FromAddress.Trim() : null,
                 sendGridApiKeySet = email.HasSendGridApiKey,
                 resendApiKeySet = email.HasResendApiKey,
+                adminOrderNotifySet = !EmailOptions.IsPlaceholder(email.AdminOrderNotify),
                 port = email.Port,
                 useSsl = email.UseSsl,
                 usernameSet = !string.IsNullOrWhiteSpace(email.Username) &&
@@ -463,19 +485,41 @@ try
                               !EmailOptions.IsPlaceholder(email.Password),
                 hint = email.WillSend && email.UsesSmtpOnRenderFreeTier
                     ? "Render free tier blocks SMTP ports 25/465/587. Set Email__Provider=Resend and Email__ResendApiKey (HTTPS), or upgrade to a paid Render instance."
-                    : email.WillSend
-                        ? null
-                        : !email.IsConfigured
-                            ? email.ResolvedProvider switch
-                            {
-                                EmailProvider.SendGrid =>
-                                    "Set Email__Provider=SendGrid, Email__SendGridApiKey, and Email__FromAddress (verified sender in SendGrid).",
-                                EmailProvider.Resend =>
-                                    "Set Email__Provider=Resend, Email__ResendApiKey, and Email__FromAddress (verified domain in Resend, or onboarding@resend.dev for testing).",
-                                _ =>
-                                    "Set Email__Host and Email__FromAddress on Render, then redeploy. Gmail: smtp.gmail.com, app password. HTTPS API (Render free): Email__Provider=Resend.",
-                            }
-                            : "Email__Enabled is false — set Email__Enabled=true to send order confirmation emails.",
+                    : email.WillSend && email.ResolvedProvider == EmailProvider.Resend
+                        ? "If customers never receive order emails but Email__AdminOrderNotify does: verify bagly.co.in in Resend Domains and set Email__FromAddress=noreply@bagly.co.in. Until a domain is verified, Resend only delivers to the account signup email."
+                        : email.WillSend
+                            ? null
+                            : !email.IsConfigured
+                                ? email.ResolvedProvider switch
+                                {
+                                    EmailProvider.SendGrid =>
+                                        "Set Email__Provider=SendGrid, Email__SendGridApiKey, and Email__FromAddress (verified sender in SendGrid).",
+                                    EmailProvider.Resend =>
+                                        "Set Email__Provider=Resend, Email__ResendApiKey, and Email__FromAddress (verified domain in Resend, or onboarding@resend.dev for testing).",
+                                    _ =>
+                                        "Set Email__Host and Email__FromAddress on Render, then redeploy. Gmail: smtp.gmail.com, app password. HTTPS API (Render free): Email__Provider=Resend.",
+                                }
+                                : "Email__Enabled is false — set Email__Enabled=true to send order confirmation emails.",
+            },
+            shiprocket = new
+            {
+                enabled = shiprocket.Enabled,
+                configured = shiprocket.IsConfigured,
+                emailSet = !string.IsNullOrWhiteSpace(shiprocket.Email) &&
+                           !shiprocket.Email.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+                passwordSet = !string.IsNullOrWhiteSpace(shiprocket.Password) &&
+                              !shiprocket.Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+                pickupLocationSet = !string.IsNullOrWhiteSpace(shiprocket.PickupLocation) &&
+                                    !shiprocket.PickupLocation.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
+                pickupLocation = shiprocket.IsConfigured ? shiprocket.PickupLocation.Trim() : null,
+                baseUrl = string.IsNullOrWhiteSpace(shiprocket.BaseUrl)
+                    ? "https://apiv2.shiprocket.in"
+                    : shiprocket.BaseUrl.Trim().TrimEnd('/'),
+                hint = !shiprocket.Enabled
+                    ? "Shiprocket__Enabled is false — set Shiprocket__Enabled=true, Shiprocket__Email, Shiprocket__Password, and Shiprocket__PickupLocation (exact nickname from Shiprocket → Settings → Pickup Addresses)."
+                    : !shiprocket.IsConfigured
+                        ? "Shiprocket enabled but credentials/pickup incomplete. Set Shiprocket__Email (API user), Shiprocket__Password, Shiprocket__PickupLocation."
+                        : "After checkout, admin order detail should show shiprocketOrderId when create/adhoc succeeds. Check Render logs for 'Shiprocket create failed' + response body.",
             },
             chat = new
             {
