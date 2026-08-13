@@ -5,12 +5,19 @@ namespace Bagly.Api.Services;
 
 public static class Pricing
 {
-    // Amounts are INR. Free shipping above ₹12,999, otherwise a flat ₹199 shipping fee.
-    public const decimal FreeShippingThreshold = 12999m;
-    public const decimal StandardShipping = 199m;
+    // Amounts are INR. Tiered shipping by cart subtotal:
+    //   ₹0–₹499 → ₹79 | ₹500–₹999 → ₹49 | ₹1,000–₹2,499 → ₹29 | ₹2,500+ → free.
+    // Empty cart / subtotal ≤ 0 → ₹0.
+    public const decimal FreeShippingThreshold = 2500m;
 
-    public static decimal CalculateShipping(decimal subtotal) =>
-        subtotal <= 0 || subtotal >= FreeShippingThreshold ? 0 : StandardShipping;
+    public static decimal CalculateShipping(decimal subtotal)
+    {
+        if (subtotal <= 0) return 0m;
+        if (subtotal < 500m) return 79m;
+        if (subtotal < 1000m) return 49m;
+        if (subtotal < FreeShippingThreshold) return 29m;
+        return 0m;
+    }
 
     public static CartDto ToCartDto(Cart cart)
     {

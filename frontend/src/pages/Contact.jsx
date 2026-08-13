@@ -178,7 +178,7 @@ export default function Contact() {
             </div>
             <div className="contact-info__item">
               <strong>Shipping</strong>
-              Free shipping over ₹10000 · 10-day returns
+              Free shipping over ₹2,500 · 10-day returns
             </div>
           </aside>
         </div>

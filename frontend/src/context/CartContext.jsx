@@ -8,8 +8,9 @@ const CART_ID_KEY = 'bagly-cart-id'
 
 // Mirrors backend/Bagly.Api/Services/Pricing.cs so the optimistic total shown
 // before the API responds matches what the server will confirm.
-const FREE_SHIPPING_THRESHOLD = 12999
-const STANDARD_SHIPPING = 199
+// Tiered: ₹0–₹499 → ₹79 | ₹500–₹999 → ₹49 | ₹1,000–₹2,499 → ₹29 | ₹2,500+ → free.
+// Empty cart / subtotal ≤ 0 → ₹0.
+const FREE_SHIPPING_THRESHOLD = 2500
 
 const emptyCart = {
   cartId: null,
@@ -21,7 +22,11 @@ const emptyCart = {
 }
 
 function calculateShipping(subtotal) {
-  return subtotal <= 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING
+  if (subtotal <= 0) return 0
+  if (subtotal < 500) return 79
+  if (subtotal < 1000) return 49
+  if (subtotal < FREE_SHIPPING_THRESHOLD) return 29
+  return 0
 }
 
 /** Merges a product add into the current cart client-side, without waiting on the API. */

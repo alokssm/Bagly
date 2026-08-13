@@ -51,7 +51,7 @@ export default function Footer() {
           <div>
             <h4>Support</h4>
             <ul>
-              <li>Free shipping over ₹10000</li>
+              <li>Free shipping over ₹2,500</li>
               <li>10-day returns</li>
             </ul>
           </div>
