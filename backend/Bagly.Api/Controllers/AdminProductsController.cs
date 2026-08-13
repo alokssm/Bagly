@@ -96,20 +96,28 @@ public class AdminProductsController(BaglyDbContext db) : ControllerBase
     /// <summary>
     /// Admin-only: set Shiprocket pickup nickname on a product (platform or seller catalog)
     /// without reopening full product CRUD.
+    /// Product ids are string catalog keys (e.g. st-001), not GUIDs.
+    /// Accepts PATCH and PUT (some proxies are picky about PATCH alone).
     /// </summary>
-    [HttpPatch("{id}/pickup-location")]
+    [AcceptVerbs("PATCH", "PUT")]
+    [Route("{id}/pickup-location")]
     public async Task<ActionResult<AdminProductDto>> PatchPickupLocation(
         string id,
-        [FromBody] PatchProductPickupLocationRequest request,
+        [FromBody] PatchProductPickupLocationRequest? request,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return BadRequest(new { message = "Product id is required." });
+        }
+
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound(new { message = "Product not found." });
         }
 
-        product.ShiprocketPickupLocation = ProductMapper.NormalizePickupNickname(request.ShiprocketPickupLocation);
+        product.ShiprocketPickupLocation = ProductMapper.NormalizePickupNickname(request?.ShiprocketPickupLocation);
         await db.SaveChangesAsync(cancellationToken);
         return Ok(ProductMapper.ToAdminDto(product));
     }

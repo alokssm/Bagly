@@ -87,7 +87,16 @@ export default function AdminProducts() {
         [productId]: updated.shiprocketPickupLocation || '',
       }))
     } catch (err) {
-      setError(err.message || 'Unable to update pickup location.')
+      const status = err?.status
+      if (status === 404) {
+        setError(
+          'Pickup save API not found (404). Confirm Render is on the latest main deploy (/api/health → shiprocket.multiPickupApi=true), then retry.',
+        )
+      } else if (status === 401) {
+        setError('Admin session expired. Sign in again, then save pickup.')
+      } else {
+        setError(err.message || 'Unable to update pickup location.')
+      }
     } finally {
       setSavingPickupId('')
     }

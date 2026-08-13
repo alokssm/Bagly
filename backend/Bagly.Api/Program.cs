@@ -533,6 +533,8 @@ try
                               !shiprocket.Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
                 pickupLocationSet = !ShiprocketOptions.IsPlaceholderPickup(shiprocket.PickupLocation),
                 pickupLocation = pickupNickname,
+                // Deploy marker: Admin → Products pickup Save needs this build on Render.
+                multiPickupApi = true,
                 syncCreateOnCheckout = shiprocket.SyncCreateOnCheckout,
                 baseUrl = string.IsNullOrWhiteSpace(shiprocket.BaseUrl)
                     ? "https://apiv2.shiprocket.in"
