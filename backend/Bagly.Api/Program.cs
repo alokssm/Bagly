@@ -91,6 +91,7 @@ try
     builder.Services.AddSingleton<ICloudinaryImageService, CloudinaryImageService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     builder.Services.AddScoped<IPaymentLogService, PaymentLogService>();
+    builder.Services.AddSingleton<EmailDeliveryDiagnostics>();
     builder.Services.AddScoped<IEmailSender, EmailSender>();
     builder.Services.AddScoped<IOrderConfirmationEmailService, OrderConfirmationEmailService>();
     builder.Services.AddScoped<IContactEmailService, ContactEmailService>();
@@ -385,11 +386,15 @@ try
         });
     });
 
-    app.MapGet("/api/health", async (IConfiguration config, BaglyDbContext db) =>
+    app.MapGet("/api/health", async (IConfiguration config, BaglyDbContext db, EmailDeliveryDiagnostics emailDiagnostics) =>
     {
         var cs = config.GetConnectionString("DefaultConnection") ?? "";
         var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
         var shiprocket = config.GetSection(ShiprocketOptions.SectionName).Get<ShiprocketOptions>() ?? new ShiprocketOptions();
+        var lastEmailFailure = emailDiagnostics.GetLastFailure();
+        var pickupNickname = shiprocket.IsConfigured ? shiprocket.PickupLocation.Trim() : null;
+        var pickupLooksPlaceholder = !string.IsNullOrWhiteSpace(pickupNickname) &&
+            string.Equals(pickupNickname, "test", StringComparison.OrdinalIgnoreCase);
         var openAi = config.GetSection(OpenAiOptions.SectionName).Get<OpenAiOptions>() ?? new OpenAiOptions();
         var chat = config.GetSection(ChatOptions.SectionName).Get<ChatOptions>() ?? new ChatOptions();
         var googleAuth = config.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
@@ -483,10 +488,21 @@ try
                               !EmailOptions.IsPlaceholder(email.Username),
                 passwordSet = !string.IsNullOrWhiteSpace(email.Password) &&
                               !EmailOptions.IsPlaceholder(email.Password),
+                lastFailure = lastEmailFailure is null
+                    ? null
+                    : new
+                    {
+                        atUtc = lastEmailFailure.AtUtc,
+                        provider = lastEmailFailure.Provider,
+                        to = lastEmailFailure.ToMasked,
+                        subject = lastEmailFailure.Subject,
+                        statusCode = lastEmailFailure.StatusCode,
+                        responseBody = lastEmailFailure.ResponseBody,
+                    },
                 hint = email.WillSend && email.UsesSmtpOnRenderFreeTier
                     ? "Render free tier blocks SMTP ports 25/465/587. Set Email__Provider=Resend and Email__ResendApiKey (HTTPS), or upgrade to a paid Render instance."
                     : email.WillSend && email.ResolvedProvider == EmailProvider.Resend
-                        ? "If customers never receive order emails but Email__AdminOrderNotify does: verify bagly.co.in in Resend Domains and set Email__FromAddress=noreply@bagly.co.in. Until a domain is verified, Resend only delivers to the account signup email."
+                        ? "If only alok73772@gmail.com (or your Resend signup email) receives order mail: bagly.co.in is not verified in Resend yet. Resend Domains → verify DNS → keep Email__FromAddress=noreply@bagly.co.in. Until Verified, Resend rejects every other recipient (admin notify to the signup email still works)."
                         : email.WillSend
                             ? null
                             : !email.IsConfigured
@@ -511,7 +527,7 @@ try
                               !shiprocket.Password.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
                 pickupLocationSet = !string.IsNullOrWhiteSpace(shiprocket.PickupLocation) &&
                                     !shiprocket.PickupLocation.Contains("SET_VIA_ENV", StringComparison.OrdinalIgnoreCase),
-                pickupLocation = shiprocket.IsConfigured ? shiprocket.PickupLocation.Trim() : null,
+                pickupLocation = pickupNickname,
                 baseUrl = string.IsNullOrWhiteSpace(shiprocket.BaseUrl)
                     ? "https://apiv2.shiprocket.in"
                     : shiprocket.BaseUrl.Trim().TrimEnd('/'),
@@ -519,7 +535,9 @@ try
                     ? "Shiprocket__Enabled is false — set Shiprocket__Enabled=true, Shiprocket__Email, Shiprocket__Password, and Shiprocket__PickupLocation (exact nickname from Shiprocket → Settings → Pickup Addresses)."
                     : !shiprocket.IsConfigured
                         ? "Shiprocket enabled but credentials/pickup incomplete. Set Shiprocket__Email (API user), Shiprocket__Password, Shiprocket__PickupLocation."
-                        : "After checkout, admin order detail should show shiprocketOrderId when create/adhoc succeeds. Check Render logs for 'Shiprocket create failed' + response body.",
+                        : pickupLooksPlaceholder
+                            ? "Shiprocket__PickupLocation is 'test' — that almost never matches a real Shiprocket pickup nickname. Set it to the exact nickname from Shiprocket → Settings → Pickup Addresses, then place a new order. Admin → Orders shows shiprocketLastError when create fails."
+                            : "After checkout, Admin → Orders should show shiprocketOrderId (or shiprocketLastError). Check Render logs for 'Shiprocket create failed' + response body.",
             },
             chat = new
             {

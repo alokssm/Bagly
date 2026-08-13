@@ -308,7 +308,8 @@ public record OrderDto(
     string? Phone = null,
     string? ShiprocketOrderId = null,
     string? ShiprocketShipmentId = null,
-    string? ShiprocketStatus = null
+    string? ShiprocketStatus = null,
+    string? ShiprocketLastError = null
 );
 
 public record CustomerOrderItemDto(
@@ -348,7 +349,8 @@ public record AdminOrderListItemDto(
     DateTime CreatedAt,
     string? Phone = null,
     string? ShiprocketOrderId = null,
-    string? ShiprocketStatus = null);
+    string? ShiprocketStatus = null,
+    string? ShiprocketLastError = null);
 
 /// <summary>Response shape for <c>GET /api/admin/orders</c>. <c>TodayCount</c> is always "today in
 /// Asia/Kolkata (IST)" regardless of the from/to filter applied to <c>Items</c>.</summary>

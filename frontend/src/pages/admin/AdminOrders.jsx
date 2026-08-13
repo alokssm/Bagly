@@ -204,6 +204,13 @@ export default function AdminOrders() {
                         <span className="admin-pill on" title={order.shiprocketStatus || ''}>
                           {order.shiprocketOrderId}
                         </span>
+                      ) : order.shiprocketLastError ? (
+                        <span
+                          className="admin-pill off"
+                          title={order.shiprocketLastError}
+                        >
+                          {order.shiprocketStatus || 'Error'}
+                        </span>
                       ) : (
                         <span className="admin-muted">—</span>
                       )}
@@ -251,6 +258,11 @@ export default function AdminOrders() {
                                   ? ` · ${details[order.id].shiprocketStatus}`
                                   : null}
                               </p>
+                              {details[order.id].shiprocketLastError ? (
+                                <p className="admin-error">
+                                  <strong>Shiprocket error:</strong> {details[order.id].shiprocketLastError}
+                                </p>
+                              ) : null}
                               <table className="admin-table">
                                 <thead>
                                   <tr>

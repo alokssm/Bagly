@@ -148,7 +148,9 @@ If email is not configured, checkout still succeeds but no email is sent — che
    Shiprocket__PickupLocation=ExactNicknameFromPanel
    ```
 4. Save → **Manual Deploy** → `/api/health` should show `"shiprocket": { "enabled": true, "configured": true, ... }`.
-5. Place a confirmed India order with a 10-digit phone → Admin → Orders should show a Shiprocket id, and the order should appear in the Shiprocket panel. If not, Render logs include `Shiprocket create failed` plus the API response body (wrong pickup nickname, auth failure, etc.).
+5. Place a confirmed India order with a 10-digit phone → Admin → Orders should show a Shiprocket id, and the order should appear in the Shiprocket panel. If not, Admin → Orders shows `shiprocketLastError` (also in `/api/health` hint when pickup is literally `test`), and Render logs include `Shiprocket create failed` plus the API response body (wrong pickup nickname, auth failure, etc.).
+
+**Do not** set `Shiprocket__PickupLocation=test` unless that is literally the nickname in the Shiprocket panel — a mismatch causes every create to fail with no orders on the dashboard.
 
 Without `Shiprocket__Enabled=true` (and credentials), **no Shiprocket API call is made** — checkout still succeeds.
 

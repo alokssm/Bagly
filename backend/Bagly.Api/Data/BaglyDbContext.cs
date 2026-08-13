@@ -115,6 +115,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.ShiprocketOrderId).HasMaxLength(50);
             entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
             entity.Property(x => x.ShiprocketStatus).HasMaxLength(50);
+            entity.Property(x => x.ShiprocketLastError).HasMaxLength(500);
             entity.Property(x => x.Subtotal).HasColumnType("decimal(18,2)");
             entity.Property(x => x.Shipping).HasColumnType("decimal(18,2)");
             entity.Property(x => x.Total).HasColumnType("decimal(18,2)");

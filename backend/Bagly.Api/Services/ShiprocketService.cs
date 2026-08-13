@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -30,11 +31,17 @@ public sealed class ShiprocketService(
     IOptions<ShiprocketOptions> options,
     ILogger<ShiprocketService> logger) : IShiprocketService
 {
+    /// <summary>
+    /// Snake_case for nested POCOs. Dictionary keys in <see cref="BuildCreatePayload"/> are already
+    /// snake_case and are not rewritten (DictionaryKeyPolicy is null by default).
+    /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
+
+    private static readonly TimeZoneInfo IstTimeZone = ResolveIst();
 
     private readonly ShiprocketOptions _options = options.Value;
 
@@ -74,10 +81,10 @@ public sealed class ShiprocketService(
 
         if (!string.Equals(order.Status, "Confirmed", StringComparison.OrdinalIgnoreCase))
         {
-            logger.LogInformation(
-                "Shiprocket skipped for {OrderNumber}: status is {Status}, not Confirmed.",
-                order.OrderNumber,
-                order.Status);
+            await MarkSkippedAsync(
+                order,
+                $"status is {order.Status}, not Confirmed",
+                cancellationToken);
             return;
         }
 
@@ -90,28 +97,28 @@ public sealed class ShiprocketService(
             return;
         }
 
-        if (!string.Equals(order.Country?.Trim(), "India", StringComparison.OrdinalIgnoreCase))
+        if (!IsIndiaCountry(order.Country))
         {
-            logger.LogInformation(
-                "Shiprocket skipped for {OrderNumber}: country is {Country} (India only in v1).",
-                order.OrderNumber,
-                order.Country);
+            await MarkSkippedAsync(
+                order,
+                $"country is '{order.Country}' (India/IN only in v1)",
+                cancellationToken);
             return;
         }
 
         var phone = NormalizePhone(order.Phone);
         if (string.IsNullOrWhiteSpace(phone))
         {
-            logger.LogWarning(
-                "Shiprocket skipped for {OrderNumber}: phone is missing or not a valid 10-digit Indian mobile (raw={RawPhone}).",
-                order.OrderNumber,
-                string.IsNullOrWhiteSpace(order.Phone) ? "(null)" : order.Phone.Trim());
+            await MarkSkippedAsync(
+                order,
+                $"phone missing or not a valid 10-digit Indian mobile (raw={(string.IsNullOrWhiteSpace(order.Phone) ? "(null)" : order.Phone.Trim())})",
+                cancellationToken);
             return;
         }
 
         if (order.Items.Count == 0)
         {
-            logger.LogWarning("Shiprocket skipped for {OrderNumber}: order has no line items.", order.OrderNumber);
+            await MarkSkippedAsync(order, "order has no line items", cancellationToken);
             return;
         }
 
@@ -122,7 +129,8 @@ public sealed class ShiprocketService(
 
             order.ShiprocketOrderId = result.OrderId;
             order.ShiprocketShipmentId = result.ShipmentId;
-            order.ShiprocketStatus = result.Status;
+            order.ShiprocketStatus = result.Status ?? "NEW";
+            order.ShiprocketLastError = null;
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
@@ -134,12 +142,59 @@ public sealed class ShiprocketService(
         }
         catch (Exception ex)
         {
+            var detail = Truncate(ex.Message, 480);
+            order.ShiprocketStatus = "Error";
+            order.ShiprocketLastError = detail;
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception saveEx)
+            {
+                logger.LogError(
+                    saveEx,
+                    "Shiprocket failed for {OrderNumber} and could not persist ShiprocketLastError.",
+                    order.OrderNumber);
+            }
+
             logger.LogError(
                 ex,
-                "Shiprocket create failed for {OrderNumber} (orderId={OrderId}). Customer order remains confirmed.",
+                "Shiprocket create failed for {OrderNumber} (orderId={OrderId}). Customer order remains confirmed. Error persisted on order for admin.",
                 order.OrderNumber,
                 order.Id);
         }
+    }
+
+    private async Task MarkSkippedAsync(Order order, string reason, CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Shiprocket skipped for {OrderNumber}: {Reason}.",
+            order.OrderNumber,
+            reason);
+
+        // Don't overwrite a prior API error if we somehow re-enter after a failed create.
+        if (string.Equals(order.ShiprocketStatus, "Error", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(order.ShiprocketLastError))
+        {
+            return;
+        }
+
+        order.ShiprocketStatus = "Skipped";
+        order.ShiprocketLastError = Truncate(reason, 480);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static bool IsIndiaCountry(string? country)
+    {
+        if (string.IsNullOrWhiteSpace(country))
+        {
+            return false;
+        }
+
+        var value = country.Trim();
+        return string.Equals(value, "India", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "IN", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "IND", StringComparison.OrdinalIgnoreCase);
     }
 
     private object BuildCreatePayload(Order order, string phone)
@@ -148,14 +203,15 @@ public sealed class ShiprocketService(
             ? "COD"
             : "Prepaid";
 
-        var orderItems = order.Items.Select(i => new
+        // Explicit snake_case property names — do not rely on ASP.NET camelCase defaults.
+        var orderItems = order.Items.Select(i => new ShiprocketOrderItemPayload
         {
-            name = string.IsNullOrWhiteSpace(i.Color) || string.Equals(i.Color, "Default", StringComparison.OrdinalIgnoreCase)
+            Name = string.IsNullOrWhiteSpace(i.Color) || string.Equals(i.Color, "Default", StringComparison.OrdinalIgnoreCase)
                 ? i.ProductName
                 : $"{i.ProductName} ({i.Color})",
-            sku = i.ProductId,
-            units = i.Quantity,
-            selling_price = i.UnitPrice.ToString("0.##"),
+            Sku = i.ProductId,
+            Units = i.Quantity,
+            SellingPrice = i.UnitPrice.ToString("0.##", CultureInfo.InvariantCulture),
         }).ToList();
 
         // Product has no weight/dimensions yet — use configured package defaults for the whole order.
@@ -163,7 +219,7 @@ public sealed class ShiprocketService(
         var payload = new Dictionary<string, object?>
         {
             ["order_id"] = order.OrderNumber,
-            ["order_date"] = order.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+            ["order_date"] = FormatOrderDateIst(order.CreatedAt),
             ["pickup_location"] = _options.PickupLocation.Trim(),
             ["billing_customer_name"] = order.FirstName.Trim(),
             ["billing_last_name"] = order.LastName.Trim(),
@@ -187,6 +243,30 @@ public sealed class ShiprocketService(
         };
 
         return payload;
+    }
+
+    private static string FormatOrderDateIst(DateTime createdAtUtc)
+    {
+        var utc = createdAtUtc.Kind switch
+        {
+            DateTimeKind.Utc => createdAtUtc,
+            DateTimeKind.Local => createdAtUtc.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(createdAtUtc, DateTimeKind.Utc),
+        };
+        var ist = TimeZoneInfo.ConvertTimeFromUtc(utc, IstTimeZone);
+        return ist.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static TimeZoneInfo ResolveIst()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
     }
 
     private async Task<ShiprocketCreateResult> CreateAdhocOrderWithAuthRetryAsync(
@@ -216,10 +296,8 @@ public sealed class ShiprocketService(
         var client = httpClientFactory.CreateClient("Shiprocket");
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/external/orders/create/adhoc");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(payload, JsonOptions),
-            Encoding.UTF8,
-            "application/json");
+        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var response = await client.SendAsync(request, cancellationToken);
         var raw = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -258,6 +336,7 @@ public sealed class ShiprocketService(
     {
         var client = httpClientFactory.CreateClient("Shiprocket");
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/external/auth/login");
+        // Auth body uses camelCase email/password (Shiprocket login accepts these).
         var body = new { email = _options.Email.Trim(), password = _options.Password };
         request.Content = new StringContent(
             JsonSerializer.Serialize(body),
@@ -334,4 +413,19 @@ public sealed class ShiprocketService(
     private sealed record ShiprocketCreateResult(string OrderId, string? ShipmentId, string? Status);
 
     private sealed class ShiprocketAuthException(string message) : Exception(message);
+
+    private sealed class ShiprocketOrderItemPayload
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("sku")]
+        public string Sku { get; set; } = string.Empty;
+
+        [JsonPropertyName("units")]
+        public int Units { get; set; }
+
+        [JsonPropertyName("selling_price")]
+        public string SellingPrice { get; set; } = string.Empty;
+    }
 }

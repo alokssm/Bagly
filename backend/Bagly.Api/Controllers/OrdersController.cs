@@ -205,7 +205,8 @@ public class OrdersController(
             order.Phone,
             order.ShiprocketOrderId,
             order.ShiprocketShipmentId,
-            order.ShiprocketStatus
+            order.ShiprocketStatus,
+            order.ShiprocketLastError
         );
 
     /// <summary>

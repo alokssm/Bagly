@@ -72,7 +72,8 @@ public class AdminOrdersController(BaglyDbContext db) : ControllerBase
                 o.CreatedAt,
                 o.Phone,
                 o.ShiprocketOrderId,
-                o.ShiprocketStatus))
+                o.ShiprocketStatus,
+                o.ShiprocketLastError))
             .ToListAsync(cancellationToken);
 
         var (todayStartUtc, todayEndUtc) = IstTime.TodayRangeUtc();

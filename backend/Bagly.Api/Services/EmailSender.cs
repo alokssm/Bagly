@@ -28,6 +28,7 @@ public interface IEmailSender
 public class EmailSender(
     IOptions<EmailOptions> options,
     IHttpClientFactory httpClientFactory,
+    EmailDeliveryDiagnostics deliveryDiagnostics,
     ILogger<EmailSender> logger) : IEmailSender
 {
     private readonly EmailOptions _options = options.Value;
@@ -129,6 +130,12 @@ public class EmailSender(
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            deliveryDiagnostics.RecordFailure(
+                "SendGrid",
+                to,
+                subject,
+                (int)response.StatusCode,
+                responseBody);
             logger.LogError(
                 "Failed to send email '{Subject}' to {Email} via SendGrid: HTTP {StatusCode}. {ResponseBody}. Verify Email__FromAddress is a verified sender in SendGrid.",
                 subject,
@@ -139,6 +146,7 @@ public class EmailSender(
         }
         catch (Exception ex)
         {
+            deliveryDiagnostics.RecordFailure("SendGrid", to, subject, null, ex.Message);
             logger.LogError(ex, "Failed to send email '{Subject}' to {Email} via SendGrid HTTPS API.", subject, to);
             return false;
         }
@@ -192,6 +200,12 @@ public class EmailSender(
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            deliveryDiagnostics.RecordFailure(
+                "Resend",
+                to,
+                subject,
+                (int)response.StatusCode,
+                responseBody);
             var sandboxHint = responseBody.Contains("testing emails", StringComparison.OrdinalIgnoreCase)
                 || responseBody.Contains("only send", StringComparison.OrdinalIgnoreCase)
                 || ((int)response.StatusCode == 403 &&
@@ -209,6 +223,7 @@ public class EmailSender(
         }
         catch (Exception ex)
         {
+            deliveryDiagnostics.RecordFailure("Resend", to, subject, null, ex.Message);
             logger.LogError(ex, "Failed to send email '{Subject}' to {Email} via Resend HTTPS API.", subject, to);
             return false;
         }
@@ -260,6 +275,7 @@ public class EmailSender(
         }
         catch (Exception ex) when (IsLikelyRenderSmtpBlock(ex))
         {
+            deliveryDiagnostics.RecordFailure("Smtp", to, subject, null, ex.Message);
             logger.LogError(
                 ex,
                 "Failed to send email '{Subject}' to {Email} via SMTP {Host}:{Port}. " +
@@ -272,6 +288,7 @@ public class EmailSender(
         }
         catch (Exception ex)
         {
+            deliveryDiagnostics.RecordFailure("Smtp", to, subject, null, ex.Message);
             logger.LogError(
                 ex,
                 "Failed to send email '{Subject}' to {Email} via SMTP {Host}:{Port}. " +

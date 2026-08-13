@@ -30,6 +30,8 @@ public class Order
     public string? ShiprocketOrderId { get; set; }
     public string? ShiprocketShipmentId { get; set; }
     public string? ShiprocketStatus { get; set; }
+    /// <summary>Last Shiprocket skip/API error (admin-visible; never contains credentials).</summary>
+    public string? ShiprocketLastError { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<OrderItem> Items { get; set; } = [];
 }
