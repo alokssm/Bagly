@@ -50,11 +50,11 @@ export function buildCreateOrderPayload({
     payload.phone = String(phone).trim()
   }
 
-  if (payload.country === 'India' && payload.zip) {
-    const pin = String(payload.zip).replace(/\D/g, '')
-    if (pin.length === 6) {
-      payload.zip = pin
-    }
+  if (payload.country === 'India') {
+    let pin = String(payload.zip || '').replace(/\D/g, '')
+    if (pin.length > 6) pin = pin.slice(-6)
+    // Digits-only; backend rejects anything that is not a valid 6-digit Indian PIN.
+    payload.zip = pin
   }
 
   if (paymentMethod) {

@@ -239,7 +239,13 @@ export default function Checkout() {
   const onChange = (e) => {
     const { name, value } = e.target
     setSelectedAddressId(null)
-    setForm((prev) => ({ ...prev, [name]: value }))
+    let next = value
+    if (name === 'zip' && form.country === 'India') {
+      next = String(value || '')
+        .replace(/\D/g, '')
+        .slice(0, 6)
+    }
+    setForm((prev) => ({ ...prev, [name]: next }))
   }
 
   const selectSavedAddress = (addr) => {
@@ -283,6 +289,16 @@ export default function Checkout() {
     setError('')
 
     if (step === 'address') {
+      if (isIndia) {
+        const pin = String(form.zip || '').replace(/\D/g, '')
+        if (!/^[1-9]\d{5}$/.test(pin)) {
+          setError('Enter a valid 6-digit Indian PIN code (e.g. 110001).')
+          return
+        }
+        if (pin !== form.zip) {
+          setForm((prev) => ({ ...prev, zip: pin }))
+        }
+      }
       setStep('payment')
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
@@ -516,6 +532,7 @@ export default function Checkout() {
                       onChange={onChange}
                       inputMode={isIndia ? 'numeric' : undefined}
                       autoComplete="postal-code"
+                      maxLength={isIndia ? 6 : undefined}
                       pattern={isIndia ? '[1-9][0-9]{5}' : undefined}
                       title={isIndia ? 'Enter a 6-digit Indian PIN code' : undefined}
                       placeholder={isIndia ? '6-digit PIN' : undefined}
