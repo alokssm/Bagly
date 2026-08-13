@@ -43,11 +43,18 @@ export function buildCreateOrderPayload({
     city: String(city || '').trim(),
     state: String(state || '').trim(),
     zip: String(zip || '').trim(),
-    country: String(country || 'United States').trim(),
+    country: String(country || 'India').trim(),
   }
 
   if (phone) {
     payload.phone = String(phone).trim()
+  }
+
+  if (payload.country === 'India' && payload.zip) {
+    const pin = String(payload.zip).replace(/\D/g, '')
+    if (pin.length === 6) {
+      payload.zip = pin
+    }
   }
 
   if (paymentMethod) {

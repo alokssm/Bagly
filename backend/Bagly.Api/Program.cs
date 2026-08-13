@@ -82,6 +82,12 @@ try
     builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
     builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection(RazorpayOptions.SectionName));
     builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(ShiprocketOptions.SectionName));
+    // Surface Shiprocket create failures immediately during local checkout debugging.
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.PostConfigure<ShiprocketOptions>(opts => opts.SyncCreateOnCheckout = true);
+    }
+
     builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
     builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
     builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));

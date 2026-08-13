@@ -52,6 +52,14 @@ public class OrdersController(
             });
         }
 
+        if (isIndia && ShiprocketService.NormalizePincode(request.Zip) is null)
+        {
+            return BadRequest(new
+            {
+                message = "A valid 6-digit Indian PIN code is required for India orders (needed for shipment creation).",
+            });
+        }
+
         var lineItems = new List<(string ProductId, string Name, string Color, decimal Price, int Quantity)>();
 
         if (request.CartId is Guid cartId)
@@ -107,8 +115,10 @@ public class OrdersController(
             Address = request.Address.Trim(),
             City = request.City.Trim(),
             State = request.State.Trim(),
-            Zip = request.Zip.Trim(),
-            Country = string.IsNullOrWhiteSpace(request.Country) ? "United States" : request.Country.Trim(),
+            Zip = isIndia
+                ? ShiprocketService.NormalizePincode(request.Zip)!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : request.Zip.Trim(),
+            Country = string.IsNullOrWhiteSpace(request.Country) ? "India" : request.Country.Trim(),
             Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             Subtotal = subtotal,
             Shipping = shipping,

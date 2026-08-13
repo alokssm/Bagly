@@ -30,7 +30,34 @@ public static class DatabaseBootstrapper
             Console.Error.WriteLine($"EF MigrateAsync warning: {ex.Message}");
         }
 
+        await EnsureOrdersShiprocketSchemaAsync(db, cancellationToken);
         await DbSeeder.SeedAsync(db, adminOptions);
+    }
+
+    /// <summary>
+    /// Self-heal Orders Shiprocket/Phone columns if MigrateAsync was skipped or partially applied.
+    /// Safe to call repeatedly (ADD COLUMN IF NOT EXISTS).
+    /// </summary>
+    public static async Task EnsureOrdersShiprocketSchemaAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                ALTER TABLE "Orders" ADD COLUMN IF NOT EXISTS "Phone" character varying(30);
+                ALTER TABLE "Orders" ADD COLUMN IF NOT EXISTS "ShiprocketOrderId" character varying(50);
+                ALTER TABLE "Orders" ADD COLUMN IF NOT EXISTS "ShiprocketShipmentId" character varying(50);
+                ALTER TABLE "Orders" ADD COLUMN IF NOT EXISTS "ShiprocketStatus" character varying(50);
+                ALTER TABLE "Orders" ADD COLUMN IF NOT EXISTS "ShiprocketLastError" character varying(500);
+                """,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step 'OrdersShiprocketSchemaSelfHeal' failed: {ex.Message}");
+        }
     }
 
     /// <summary>Idempotent seed for empty Neon databases (safe to call multiple times).</summary>

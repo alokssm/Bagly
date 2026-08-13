@@ -508,7 +508,18 @@ export default function Checkout() {
                   </div>
                   <div className="form-field">
                     <label htmlFor="zip">{isIndia ? 'PIN code' : 'ZIP'}</label>
-                    <input id="zip" name="zip" required value={form.zip} onChange={onChange} />
+                    <input
+                      id="zip"
+                      name="zip"
+                      required
+                      value={form.zip}
+                      onChange={onChange}
+                      inputMode={isIndia ? 'numeric' : undefined}
+                      autoComplete="postal-code"
+                      pattern={isIndia ? '[1-9][0-9]{5}' : undefined}
+                      title={isIndia ? 'Enter a 6-digit Indian PIN code' : undefined}
+                      placeholder={isIndia ? '6-digit PIN' : undefined}
+                    />
                   </div>
                   <div className="form-field">
                     <label htmlFor="country">Country</label>

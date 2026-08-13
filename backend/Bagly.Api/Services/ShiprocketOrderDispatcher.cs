@@ -38,6 +38,9 @@ public sealed class ShiprocketOrderDispatcher(
         {
             try
             {
+                // Brief delay so checkout CommitAsync is fully visible before the first read
+                // (defensive against rare commit visibility races on Neon).
+                await Task.Delay(250, stoppingToken);
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var shiprocket = scope.ServiceProvider.GetRequiredService<IShiprocketService>();
                 await shiprocket.TryCreateAdhocOrderForConfirmedOrderAsync(orderId, stoppingToken);

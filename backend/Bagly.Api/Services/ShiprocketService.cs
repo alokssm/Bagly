@@ -135,6 +135,16 @@ public sealed class ShiprocketService(
             return;
         }
 
+        var pincode = NormalizePincode(order.Zip);
+        if (pincode is null)
+        {
+            await MarkSkippedAsync(
+                order,
+                $"billing_pincode missing or not a valid 6-digit Indian PIN (raw={(string.IsNullOrWhiteSpace(order.Zip) ? "(null)" : order.Zip.Trim())})",
+                cancellationToken);
+            return;
+        }
+
         if (order.Items.Count == 0)
         {
             await MarkSkippedAsync(order, "order has no line items", cancellationToken);
@@ -145,15 +155,19 @@ public sealed class ShiprocketService(
 
         try
         {
-            var payload = BuildCreatePayload(order, phone, pickup);
+            var payload = BuildCreatePayload(order, phone, pincode.Value, pickup);
+            var requestJson = JsonSerializer.Serialize(payload, JsonOptions);
             logger.LogInformation(
-                "Shiprocket create starting for {OrderNumber}: pickup_location={Pickup}, payment_method={PaymentMethod}, phone=***{PhoneLast4}, items={ItemCount}, sub_total={SubTotal}.",
+                "Shiprocket create starting for {OrderNumber}: pickup_location={Pickup}, payment_method={PaymentMethod}, phone=***{PhoneLast4}, pincode={Pincode}, items={ItemCount}, sub_total={SubTotal}, shipping_charges={Shipping}, request={RequestJson}.",
                 order.OrderNumber,
                 pickup,
                 payload.PaymentMethod,
                 phone.Length >= 4 ? phone[^4..] : phone,
+                pincode.Value,
                 order.Items.Count,
-                payload.SubTotal);
+                payload.SubTotal,
+                payload.ShippingCharges,
+                Truncate(requestJson, 900));
 
             var result = await CreateAdhocOrderWithAuthRetryAsync(payload, cancellationToken);
 
@@ -301,12 +315,12 @@ public sealed class ShiprocketService(
                string.Equals(value, "IND", StringComparison.OrdinalIgnoreCase);
     }
 
-    private ShiprocketCreatePayload BuildCreatePayload(Order order, string phone, string pickup)
+    private ShiprocketCreatePayload BuildCreatePayload(Order order, string phone, int pincode, string pickup)
     {
         var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
         var paymentMethod = isCod ? "COD" : "Prepaid";
 
-        // Shiprocket expects rupee integers for money fields.
+        // Match Shiprocket adhoc sample: selling_price as string; money totals as integers.
         var orderItems = order.Items.Select(i => new ShiprocketOrderItemPayload
         {
             Name = Truncate(
@@ -316,7 +330,7 @@ public sealed class ShiprocketService(
                 200),
             Sku = Truncate(string.IsNullOrWhiteSpace(i.ProductId) ? i.ProductName : i.ProductId, 50),
             Units = i.Quantity,
-            SellingPrice = ToRupeeInt(i.UnitPrice),
+            SellingPrice = ToRupeeInt(i.UnitPrice).ToString(CultureInfo.InvariantCulture),
         }).ToList();
 
         var subTotal = ToRupeeInt(order.Subtotal);
@@ -328,12 +342,15 @@ public sealed class ShiprocketService(
             OrderId = Truncate(order.OrderNumber, 50),
             OrderDate = FormatOrderDateIst(order.CreatedAt),
             PickupLocation = pickup,
+            // Empty string => default Custom channel (official sample).
+            ChannelId = "",
             BillingCustomerName = Truncate(order.FirstName.Trim(), 50),
             BillingLastName = Truncate(order.LastName.Trim(), 50),
             BillingAddress = Truncate(order.Address.Trim(), 190),
             BillingAddress2 = "",
             BillingCity = Truncate(order.City.Trim(), 30),
-            BillingPincode = order.Zip.Trim(),
+            // Shiprocket validates billing_pincode as a JSON number, exactly 6 digits.
+            BillingPincode = pincode,
             BillingState = Truncate(order.State.Trim(), 50),
             BillingCountry = "India",
             BillingEmail = Truncate(order.Email.Trim(), 100),
@@ -341,9 +358,12 @@ public sealed class ShiprocketService(
             ShippingIsBilling = true,
             OrderItems = orderItems,
             PaymentMethod = paymentMethod,
-            // COD collectable amount — required by many Shiprocket account validations for COD.
+            // COD collectable amount (order total incl. shipping).
             Cod = isCod ? codAmount : null,
             ShippingCharges = shippingCharges,
+            GiftwrapCharges = 0,
+            TransactionCharges = 0,
+            TotalDiscount = 0,
             SubTotal = subTotal,
             Length = _options.DefaultLength,
             Breadth = _options.DefaultBreadth,
@@ -421,7 +441,7 @@ public sealed class ShiprocketService(
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException(
-                $"Shiprocket create failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw)}");
+                $"Shiprocket create failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw, 480)}");
         }
 
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
@@ -568,6 +588,32 @@ public sealed class ShiprocketService(
         return digits.Length == 10 ? digits : null;
     }
 
+    /// <summary>
+    /// Normalize to digits and require a 6-digit Indian PIN.
+    /// Shiprocket rejects non-numeric / wrong-length billing_pincode with HTTP 422.
+    /// </summary>
+    internal static int? NormalizePincode(string? zip)
+    {
+        if (string.IsNullOrWhiteSpace(zip))
+        {
+            return null;
+        }
+
+        var digits = new string(zip.Where(char.IsDigit).ToArray());
+        if (digits.Length != 6)
+        {
+            return null;
+        }
+
+        // Indian PINs are 100000–999999 (never leading zero in practice; first digit 1–9).
+        if (digits[0] == '0')
+        {
+            return null;
+        }
+
+        return int.Parse(digits, CultureInfo.InvariantCulture);
+    }
+
     private static bool TryReadStatusCode(JsonElement root, out int statusCode)
     {
         statusCode = 0;
@@ -642,6 +688,9 @@ public sealed class ShiprocketService(
         [JsonPropertyName("pickup_location")]
         public string PickupLocation { get; set; } = string.Empty;
 
+        [JsonPropertyName("channel_id")]
+        public string ChannelId { get; set; } = string.Empty;
+
         [JsonPropertyName("billing_customer_name")]
         public string BillingCustomerName { get; set; } = string.Empty;
 
@@ -658,7 +707,7 @@ public sealed class ShiprocketService(
         public string BillingCity { get; set; } = string.Empty;
 
         [JsonPropertyName("billing_pincode")]
-        public string BillingPincode { get; set; } = string.Empty;
+        public int BillingPincode { get; set; }
 
         [JsonPropertyName("billing_state")]
         public string BillingState { get; set; } = string.Empty;
@@ -686,6 +735,15 @@ public sealed class ShiprocketService(
 
         [JsonPropertyName("shipping_charges")]
         public int ShippingCharges { get; set; }
+
+        [JsonPropertyName("giftwrap_charges")]
+        public int GiftwrapCharges { get; set; }
+
+        [JsonPropertyName("transaction_charges")]
+        public int TransactionCharges { get; set; }
+
+        [JsonPropertyName("total_discount")]
+        public int TotalDiscount { get; set; }
 
         [JsonPropertyName("sub_total")]
         public int SubTotal { get; set; }
@@ -715,6 +773,6 @@ public sealed class ShiprocketService(
         public int Units { get; set; }
 
         [JsonPropertyName("selling_price")]
-        public int SellingPrice { get; set; }
+        public string SellingPrice { get; set; } = string.Empty;
     }
 }
