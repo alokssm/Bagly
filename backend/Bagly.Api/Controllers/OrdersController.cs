@@ -13,7 +13,8 @@ namespace Bagly.Api.Controllers;
 [Route("api/[controller]")]
 public class OrdersController(
     BaglyDbContext db,
-    IOrderConfirmationEmailDispatcher emailDispatcher) : ControllerBase
+    IOrderConfirmationEmailDispatcher emailDispatcher,
+    IShiprocketOrderDispatcher shiprocketDispatcher) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<OrderDto>> CreateOrder(
@@ -96,6 +97,7 @@ public class OrdersController(
             State = request.State.Trim(),
             Zip = request.Zip.Trim(),
             Country = string.IsNullOrWhiteSpace(request.Country) ? "United States" : request.Country.Trim(),
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             Subtotal = subtotal,
             Shipping = shipping,
             Total = subtotal + shipping,
@@ -144,6 +146,7 @@ public class OrdersController(
 
         var createdOrder = MapOrder(order);
         emailDispatcher.Enqueue(order.Id, "order-create");
+        shiprocketDispatcher.Enqueue(order.Id);
         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, createdOrder);
     }
 

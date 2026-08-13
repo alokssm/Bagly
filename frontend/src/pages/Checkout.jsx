@@ -13,6 +13,7 @@ const initialForm = {
   email: '',
   firstName: '',
   lastName: '',
+  phone: '',
   address: '',
   city: '',
   state: '',
@@ -134,6 +135,7 @@ export default function Checkout() {
       email: addr.email || user?.email || '',
       firstName: addr.firstName || '',
       lastName: addr.lastName || '',
+      phone: addr.phone || '',
       address: addr.address || '',
       city: addr.city || '',
       state: addr.state || '',
@@ -328,7 +330,7 @@ export default function Checkout() {
             prefill: {
               name: session.customerName,
               email: session.customerEmail,
-              contact: '9999999999',
+              contact: String(form.phone || '').replace(/\D/g, '').slice(-10) || undefined,
             },
             notes: {
               bagly_order_id: session.orderId,
@@ -471,6 +473,20 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="form-field full">
+                    <label htmlFor="phone">Phone</label>
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      required={isIndia}
+                      value={form.phone}
+                      onChange={onChange}
+                      placeholder="10-digit mobile"
+                      inputMode="tel"
+                      autoComplete="tel"
+                    />
+                  </div>
+                  <div className="form-field full">
                     <label htmlFor="address">Address</label>
                     <input
                       id="address"
@@ -549,6 +565,7 @@ export default function Checkout() {
                       {form.address}, {form.city}, {form.state} {form.zip}, {form.country}
                     </span>
                     <span>{form.email}</span>
+                    {form.phone ? <span>{form.phone}</span> : null}
                   </div>
                   <button type="button" className="btn btn-secondary" onClick={backToAddress}>
                     Change

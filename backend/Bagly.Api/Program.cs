@@ -81,6 +81,7 @@ try
     builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
     builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
     builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection(RazorpayOptions.SectionName));
+    builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(ShiprocketOptions.SectionName));
     builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
     builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
     builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));
@@ -110,6 +111,10 @@ try
     });
     builder.Services.AddSingleton<IOrderConfirmationEmailDispatcher, OrderConfirmationEmailDispatcher>();
     builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
+    builder.Services.AddSingleton<ShiprocketTokenStore>();
+    builder.Services.AddScoped<IShiprocketService, ShiprocketService>();
+    builder.Services.AddSingleton<IShiprocketOrderDispatcher, ShiprocketOrderDispatcher>();
+    builder.Services.AddHostedService(sp => (ShiprocketOrderDispatcher)sp.GetRequiredService<IShiprocketOrderDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();
     builder.Services.AddSingleton<IStockAlertNotificationDispatcher, StockAlertNotificationDispatcher>();
     builder.Services.AddHostedService(sp => (StockAlertNotificationDispatcher)sp.GetRequiredService<IStockAlertNotificationDispatcher>());
@@ -122,6 +127,15 @@ try
     builder.Services.AddHttpClient("Resend", client =>
     {
         client.BaseAddress = new Uri("https://api.resend.com/");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
+    builder.Services.AddHttpClient("Shiprocket", (sp, client) =>
+    {
+        var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ShiprocketOptions>>().Value;
+        var baseUrl = string.IsNullOrWhiteSpace(opts.BaseUrl)
+            ? "https://apiv2.shiprocket.in"
+            : opts.BaseUrl.Trim().TrimEnd('/');
+        client.BaseAddress = new Uri(baseUrl + "/");
         client.Timeout = TimeSpan.FromSeconds(30);
     });
     builder.Services.AddHttpClient<IRazorpayService, RazorpayService>();

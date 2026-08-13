@@ -30,6 +30,7 @@ export function buildCreateOrderPayload({
   state,
   zip,
   country,
+  phone,
   cartId,
   items,
   paymentMethod,
@@ -43,6 +44,10 @@ export function buildCreateOrderPayload({
     state: String(state || '').trim(),
     zip: String(zip || '').trim(),
     country: String(country || 'United States').trim(),
+  }
+
+  if (phone) {
+    payload.phone = String(phone).trim()
   }
 
   if (paymentMethod) {

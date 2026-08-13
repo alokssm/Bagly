@@ -13,6 +13,8 @@ public class Order
     public string State { get; set; } = string.Empty;
     public string Zip { get; set; } = string.Empty;
     public string Country { get; set; } = string.Empty;
+    /// <summary>Optional customer phone (required for Shiprocket shipment creation).</summary>
+    public string? Phone { get; set; }
     public decimal Subtotal { get; set; }
     public decimal Shipping { get; set; }
     public decimal Total { get; set; }
@@ -24,6 +26,10 @@ public class Order
     public string? RazorpayOrderId { get; set; }
     public string? RazorpayPaymentId { get; set; }
     public DateTime? PaidAtUtc { get; set; }
+    /// <summary>Shiprocket platform order id from create/adhoc (not Bagly OrderNumber).</summary>
+    public string? ShiprocketOrderId { get; set; }
+    public string? ShiprocketShipmentId { get; set; }
+    public string? ShiprocketStatus { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<OrderItem> Items { get; set; } = [];
 }

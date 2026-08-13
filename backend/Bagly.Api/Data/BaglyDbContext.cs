@@ -104,6 +104,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.State).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Zip).HasMaxLength(20).IsRequired();
             entity.Property(x => x.Country).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(30);
             entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
             entity.Property(x => x.PaymentStatus).HasMaxLength(50).IsRequired();
             entity.Property(x => x.PaymentProvider).HasMaxLength(50);
@@ -111,6 +112,9 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.AmountInr).HasColumnType("decimal(18,2)");
             entity.Property(x => x.RazorpayOrderId).HasMaxLength(100);
             entity.Property(x => x.RazorpayPaymentId).HasMaxLength(100);
+            entity.Property(x => x.ShiprocketOrderId).HasMaxLength(50);
+            entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
+            entity.Property(x => x.ShiprocketStatus).HasMaxLength(50);
             entity.Property(x => x.Subtotal).HasColumnType("decimal(18,2)");
             entity.Property(x => x.Shipping).HasColumnType("decimal(18,2)");
             entity.Property(x => x.Total).HasColumnType("decimal(18,2)");
@@ -118,6 +122,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.Email);
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => x.RazorpayOrderId);
+            entity.HasIndex(x => x.ShiprocketOrderId);
             entity.HasIndex(x => x.PaymentStatus);
             entity.HasIndex(x => x.CustomerUserId);
             entity.HasMany(x => x.Items)

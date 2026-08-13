@@ -15,6 +15,7 @@ public class PaymentsController(
     IRazorpayService razorpay,
     IPaymentLogService paymentLogs,
     IOrderConfirmationEmailDispatcher emailDispatcher,
+    IShiprocketOrderDispatcher shiprocketDispatcher,
     ILogger<PaymentsController> logger) : ControllerBase
 {
     [HttpGet("razorpay/config")]
@@ -79,6 +80,7 @@ public class PaymentsController(
                 State = request.State.Trim(),
                 Zip = request.Zip.Trim(),
                 Country = "India",
+                Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
                 Subtotal = subtotal,
                 Shipping = shipping,
                 Total = totalInr,
@@ -232,6 +234,12 @@ public class PaymentsController(
             logger.LogDebug(
                 "Razorpay verify idempotent for {OrderNumber}: already confirmed and paid; confirmation email is not resent.",
                 order.OrderNumber);
+            // Idempotent Shiprocket create (skips if ShiprocketOrderId already stored).
+            if (string.IsNullOrWhiteSpace(order.ShiprocketOrderId))
+            {
+                shiprocketDispatcher.Enqueue(order.Id);
+            }
+
             return Ok(OrdersController.MapOrder(order));
         }
 
@@ -363,6 +371,7 @@ public class PaymentsController(
 
         var confirmedOrder = OrdersController.MapOrder(order);
         emailDispatcher.Enqueue(order.Id, "razorpay-verify");
+        shiprocketDispatcher.Enqueue(order.Id);
         return Ok(confirmedOrder);
     }
 

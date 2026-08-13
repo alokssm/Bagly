@@ -199,13 +199,13 @@ public class OrderConfirmationEmailService(
         return (subject, textBody, htmlBody);
     }
 
-    /// <summary>Admin copy sent alongside every successful order confirmation. Order does not
-    /// currently capture a phone number at checkout, so that line is a fixed placeholder.</summary>
+    /// <summary>Admin copy sent alongside every successful order confirmation.</summary>
     private static (string Subject, string TextBody, string HtmlBody) BuildAdminNotificationMessage(Order order)
     {
         var items = order.Items ?? [];
         var customerName = $"{order.FirstName} {order.LastName}".Trim();
         var amountLabel = FormatOrderTotal(order);
+        var phoneLabel = string.IsNullOrWhiteSpace(order.Phone) ? "not provided" : order.Phone.Trim();
         var subject = $"New Bagly order — {order.OrderNumber} ({amountLabel})";
 
         var sb = new StringBuilder();
@@ -219,7 +219,7 @@ public class OrderConfirmationEmailService(
         sb.AppendLine("Customer:");
         sb.AppendLine($"  Name: {(string.IsNullOrWhiteSpace(customerName) ? "—" : customerName)}");
         sb.AppendLine($"  Email: {order.Email}");
-        sb.AppendLine("  Phone: not collected at checkout");
+        sb.AppendLine($"  Phone: {phoneLabel}");
         sb.AppendLine();
         sb.AppendLine("Shipping address:");
         sb.AppendLine($"  {order.Address}");
@@ -268,7 +268,7 @@ public class OrderConfirmationEmailService(
               <p><strong>Customer</strong><br>
               {Escape(string.IsNullOrWhiteSpace(customerName) ? "—" : customerName)}<br>
               {Escape(order.Email)}<br>
-              Phone: not collected at checkout</p>
+              Phone: {Escape(phoneLabel)}</p>
               <p><strong>Ship to</strong><br>
               {Escape(order.Address)}<br>
               {Escape($"{order.City}, {order.State} {order.Zip}")}<br>
