@@ -47,9 +47,14 @@ public record AdminShippingOrdersResult(
 public record CourierOptionDto(
     int CourierId,
     string CourierName,
+    /// <summary>Total shipping charge (panel-aligned): Freight + Coverage + WhatsApp [+ COD].</summary>
     decimal Rate,
     string? EstimatedDelivery,
-    int? EstimatedDeliveryDays
+    int? EstimatedDeliveryDays,
+    decimal FreightCharge = 0,
+    decimal CoverageCharge = 0,
+    decimal WhatsAppCharge = 0,
+    decimal CodCharge = 0
 );
 
 public record ReadyToShipResponse(
@@ -61,6 +66,10 @@ public record ReadyToShipResponse(
     int DeliveryPostcode,
     bool Cod,
     double WeightKg,
+    double Length,
+    double Breadth,
+    double Height,
+    decimal DeclaredValue,
     string ShippingStatus,
     DateTime? ReadyToShipAt,
     IReadOnlyList<CourierOptionDto> Couriers

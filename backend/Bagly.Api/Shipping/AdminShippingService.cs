@@ -181,7 +181,8 @@ public sealed class AdminShippingService(
         EnsureShiprocketConfigured();
 
         var shipment = await db.OrderShiprocketShipments
-            .Include(s => s.Order)
+            .Include(s => s.Order!)
+            .ThenInclude(o => o.Items)
             .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
             ?? throw new InvalidOperationException("Shipment not found.");
 
@@ -206,13 +207,20 @@ public sealed class AdminShippingService(
             shipment.PickupLocation, order.Id, shipment.Id, cancellationToken);
         var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
         var weightKg = _options.DefaultWeightKg > 0 ? _options.DefaultWeightKg : 0.5;
+        var length = _options.DefaultLength > 0 ? _options.DefaultLength : 10;
+        var breadth = _options.DefaultBreadth > 0 ? _options.DefaultBreadth : 15;
+        var height = _options.DefaultHeight > 0 ? _options.DefaultHeight : 20;
+        var declaredValue = await ResolveDeclaredValueAsync(order, shipment.PickupLocation, cancellationToken);
 
         var couriers = await GetServiceabilityAsync(
             pickupPostcode,
             deliveryPostcode,
             weightKg,
+            length,
+            breadth,
+            height,
             isCod,
-            order.Total,
+            declaredValue,
             order.Id,
             shipment.Id,
             cancellationToken);
@@ -224,12 +232,17 @@ public sealed class AdminShippingService(
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Ready to ship for {OrderNumber}/{Pickup}: shipmentId={ShiprocketShipmentId}, pickupPin={PickupPin}, deliveryPin={DeliveryPin}, couriers={CourierCount}.",
+            "Ready to ship for {OrderNumber}/{Pickup}: shipmentId={ShiprocketShipmentId}, pickupPin={PickupPin}, deliveryPin={DeliveryPin}, weight={Weight}, dims={L}x{B}x{H}, declared={Declared}, couriers={CourierCount}.",
             order.OrderNumber,
             shipment.PickupLocation,
             shipment.ShiprocketShipmentId,
             pickupPostcode,
             deliveryPostcode,
+            weightKg,
+            length,
+            breadth,
+            height,
+            declaredValue,
             couriers.Count);
 
         return new ReadyToShipResponse(
@@ -241,6 +254,10 @@ public sealed class AdminShippingService(
             deliveryPostcode,
             isCod,
             weightKg,
+            length,
+            breadth,
+            height,
+            declaredValue,
             shipment.ShippingStatus!,
             shipment.ReadyToShipAt,
             couriers);
@@ -515,10 +532,58 @@ public sealed class AdminShippingService(
         return null;
     }
 
+    private async Task<decimal> ResolveDeclaredValueAsync(
+        Order order,
+        string pickupLocation,
+        CancellationToken cancellationToken)
+    {
+        var defaultPickup = _options.PickupLocation.Trim();
+
+        var productIds = order.Items
+            .Select(i => i.ProductId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Dictionary<string, string?> productPickups;
+        if (productIds.Count == 0)
+        {
+            productPickups = new Dictionary<string, string?>(StringComparer.Ordinal);
+        }
+        else
+        {
+            productPickups = await db.Products.AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.ShiprocketPickupLocation })
+                .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+        }
+
+        var lineSubtotal = order.Items
+            .Where(item =>
+            {
+                productPickups.TryGetValue(item.ProductId, out var productPickup);
+                var pickup = string.IsNullOrWhiteSpace(productPickup) ? defaultPickup : productPickup.Trim();
+                return string.Equals(pickup, pickupLocation, StringComparison.Ordinal);
+            })
+            .Sum(i => i.UnitPrice * i.Quantity);
+
+        if (lineSubtotal > 0)
+        {
+            return lineSubtotal;
+        }
+
+        // Fallback: order goods subtotal, then total (never invent a charge from shipping alone).
+        if (order.Subtotal > 0) return order.Subtotal;
+        return order.Total > 0 ? order.Total : 0m;
+    }
+
     private async Task<IReadOnlyList<CourierOptionDto>> GetServiceabilityAsync(
         int pickupPostcode,
         int deliveryPostcode,
         double weightKg,
+        double length,
+        double breadth,
+        double height,
         bool isCod,
         decimal declaredValue,
         Guid orderId,
@@ -528,14 +593,14 @@ public sealed class AdminShippingService(
         try
         {
             return await GetServiceabilityOnceAsync(
-                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue,
+                pickupPostcode, deliveryPostcode, weightKg, length, breadth, height, isCod, declaredValue,
                 forceLogin: false, orderId, shipmentId, cancellationToken);
         }
         catch (ShiprocketAuthException)
         {
             tokenStore.Invalidate();
             return await GetServiceabilityOnceAsync(
-                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue,
+                pickupPostcode, deliveryPostcode, weightKg, length, breadth, height, isCod, declaredValue,
                 forceLogin: true, orderId, shipmentId, cancellationToken);
         }
     }
@@ -544,6 +609,9 @@ public sealed class AdminShippingService(
         int pickupPostcode,
         int deliveryPostcode,
         double weightKg,
+        double length,
+        double breadth,
+        double height,
         bool isCod,
         decimal declaredValue,
         bool forceLogin,
@@ -555,17 +623,17 @@ public sealed class AdminShippingService(
             ? await LoginAsync(cancellationToken)
             : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
 
+        // Match Shiprocket panel: all dimensions + declared_value must be present.
         var qs = new QueryStringBuilder()
             .Add("pickup_postcode", pickupPostcode.ToString(CultureInfo.InvariantCulture))
             .Add("delivery_postcode", deliveryPostcode.ToString(CultureInfo.InvariantCulture))
             .Add("weight", weightKg.ToString("0.###", CultureInfo.InvariantCulture))
-            .Add("cod", isCod ? "1" : "0");
-
-        if (declaredValue > 0)
-        {
-            qs.Add("declared_value", ((int)Math.Round(declaredValue, MidpointRounding.AwayFromZero))
+            .Add("length", FormatDim(length))
+            .Add("breadth", FormatDim(breadth))
+            .Add("height", FormatDim(height))
+            .Add("cod", isCod ? "1" : "0")
+            .Add("declared_value", ((int)Math.Round(Math.Max(0, declaredValue), MidpointRounding.AwayFromZero))
                 .ToString(CultureInfo.InvariantCulture));
-        }
 
         var query = qs.ToString();
         var path = "v1/external/courier/serviceability/?" + query;
@@ -619,16 +687,23 @@ public sealed class AdminShippingService(
             var name = TryReadString(item, "courier_name")
                        ?? TryReadString(item, "courier_company_name")
                        ?? $"Courier {id}";
-            var rate = TryReadDecimal(item, "rate")
-                       ?? TryReadDecimal(item, "freight_charge")
-                       ?? TryReadDecimal(item, "total_charge")
-                       ?? 0m;
             var etd = TryReadString(item, "etd")
                       ?? TryReadString(item, "estimated_delivery")
                       ?? TryReadString(item, "etd_hours");
             var days = TryReadInt(item, "estimated_delivery_days");
 
-            couriers.Add(new CourierOptionDto(id.Value, name, rate, etd, days));
+            var (rate, freight, coverage, whatsapp, codCharge) = ComputeCourierShippingCharge(item);
+
+            couriers.Add(new CourierOptionDto(
+                id.Value,
+                name,
+                rate,
+                etd,
+                days,
+                freight,
+                coverage,
+                whatsapp,
+                codCharge));
         }
 
         return couriers
@@ -636,6 +711,58 @@ public sealed class AdminShippingService(
             .ThenBy(c => c.CourierName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    /// <summary>
+    /// Panel-aligned shipping charge: Freight + Coverage + WhatsApp [+ COD].
+    /// Declared/order value is an API input only — never added into the rate.
+    /// Prefer Shiprocket <c>rate</c> when it already equals the component sum.
+    /// </summary>
+    private static (decimal Rate, decimal Freight, decimal Coverage, decimal WhatsApp, decimal Cod)
+        ComputeCourierShippingCharge(JsonElement item)
+    {
+        var freight = TryReadDecimal(item, "freight_charge") ?? 0m;
+        var coverage = TryReadDecimal(item, "coverage_charges")
+                       ?? TryReadDecimal(item, "coverage_charge")
+                       ?? TryReadDecimal(item, "insurance_charge")
+                       ?? TryReadDecimal(item, "insurance_charges")
+                       ?? 0m;
+        var whatsapp = TryReadDecimal(item, "whatsapp_charge")
+                       ?? TryReadDecimal(item, "whatsapp_charges")
+                       ?? TryReadDecimal(item, "other_charges")
+                       ?? 0m;
+        var codCharge = TryReadDecimal(item, "cod_charges")
+                        ?? TryReadDecimal(item, "cod_charge")
+                        ?? 0m;
+
+        var componentSum = freight + coverage + whatsapp + codCharge;
+        var panelRate = TryReadDecimal(item, "rate")
+                        ?? TryReadDecimal(item, "total_charge")
+                        ?? TryReadDecimal(item, "total_charges");
+
+        // Prefer panel total when it matches the fee sum (within 1 paise).
+        if (panelRate is decimal pr && Math.Abs(pr - componentSum) <= 0.01m)
+        {
+            return (pr, freight, coverage, whatsapp, codCharge);
+        }
+
+        // If components are all zero but panel rate exists, use panel rate.
+        if (componentSum == 0 && panelRate is decimal fallback && fallback > 0)
+        {
+            return (fallback, freight, coverage, whatsapp, codCharge);
+        }
+
+        // If panel rate is higher and components miss something, still prefer explicit sum
+        // when we have any fee component; otherwise fall back to panel rate.
+        if (componentSum > 0)
+        {
+            return (componentSum, freight, coverage, whatsapp, codCharge);
+        }
+
+        return (panelRate ?? 0m, freight, coverage, whatsapp, codCharge);
+    }
+
+    private static string FormatDim(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private async Task<AssignAwbApiResult> AssignAwbWithAuthRetryAsync(
         long shipmentId,

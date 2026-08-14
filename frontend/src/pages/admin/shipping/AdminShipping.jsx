@@ -28,6 +28,20 @@ function truncate(text, max = 120) {
   return text.length <= max ? text : `${text.slice(0, max)}…`
 }
 
+function courierRateBreakdown(courier, currency) {
+  const freight = Number(courier.freightCharge ?? 0)
+  const coverage = Number(courier.coverageCharge ?? 0)
+  const whatsapp = Number(courier.whatsAppCharge ?? courier.whatsappCharge ?? 0)
+  const cod = Number(courier.codCharge ?? 0)
+  const parts = [
+    freight ? `Freight ${formatPrice(freight, currency)}` : null,
+    coverage ? `Coverage ${formatPrice(coverage, currency)}` : null,
+    whatsapp ? `WhatsApp ${formatPrice(whatsapp, currency)}` : null,
+    cod ? `COD ${formatPrice(cod, currency)}` : null,
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : null
+}
+
 export default function AdminShipping() {
   const [tab, setTab] = useState('new')
   const [result, setResult] = useState({
@@ -110,6 +124,10 @@ export default function AdminShipping() {
           pickupPostcode: data.pickupPostcode,
           deliveryPostcode: data.deliveryPostcode,
           weightKg: data.weightKg,
+          length: data.length,
+          breadth: data.breadth,
+          height: data.height,
+          declaredValue: data.declaredValue,
           cod: data.cod,
         },
       }))
@@ -295,41 +313,57 @@ export default function AdminShipping() {
                           {meta ? (
                             <p className="admin-muted" style={{ marginBottom: 6 }}>
                               {meta.pickupPostcode} → {meta.deliveryPostcode} · {meta.weightKg} kg ·{' '}
+                              {meta.length}×{meta.breadth}×{meta.height} cm · decl{' '}
+                              {formatPrice(meta.declaredValue, order.currency)} ·{' '}
                               {meta.cod ? 'COD' : 'Prepaid'}
                             </p>
                           ) : null}
                           <table className="admin-table" style={{ fontSize: '0.9rem' }}>
                             <thead>
                               <tr>
-                                <th>Courier</th>
+                                <th>Name</th>
                                 <th>Rate</th>
-                                <th>ETA</th>
+                                <th>Delivery ETA</th>
                                 <th />
                               </tr>
                             </thead>
                             <tbody>
-                              {couriers.map((c) => (
-                                <tr key={c.courierId}>
-                                  <td>{c.courierName}</td>
-                                  <td>{formatPrice(c.rate, order.currency)}</td>
-                                  <td>
-                                    {c.estimatedDelivery ||
-                                      (c.estimatedDeliveryDays != null
-                                        ? `${c.estimatedDeliveryDays} days`
-                                        : '—')}
-                                  </td>
-                                  <td>
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary"
-                                      disabled={busy}
-                                      onClick={() => assignAwb(shipment, c)}
-                                    >
-                                      Assign AWB
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                              {couriers.map((c) => {
+                                const breakdown = courierRateBreakdown(c, order.currency)
+                                return (
+                                  <tr key={c.courierId}>
+                                    <td>{c.courierName}</td>
+                                    <td>
+                                      <strong>{formatPrice(c.rate, order.currency)}</strong>
+                                      {breakdown ? (
+                                        <div
+                                          className="admin-muted"
+                                          style={{ fontSize: '0.75rem', marginTop: 2 }}
+                                          title={breakdown}
+                                        >
+                                          {breakdown}
+                                        </div>
+                                      ) : null}
+                                    </td>
+                                    <td>
+                                      {c.estimatedDelivery ||
+                                        (c.estimatedDeliveryDays != null
+                                          ? `${c.estimatedDeliveryDays} days`
+                                          : '—')}
+                                    </td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        disabled={busy}
+                                        onClick={() => assignAwb(shipment, c)}
+                                      >
+                                        Assign AWB
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
