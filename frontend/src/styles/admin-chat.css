@@ -46,7 +46,7 @@
 .admin-chat-head {
   background: var(--forest);
   color: #fff;
-  padding: 14px 16px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -56,7 +56,7 @@
 .admin-chat-head strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
 }
 
 .admin-chat-body {
@@ -80,7 +80,7 @@
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--line);
-  padding: 10px 12px;
+  padding: 8px 10px;
   cursor: pointer;
   font-family: var(--font-body);
 }
@@ -101,7 +101,7 @@
 }
 
 .admin-chat-conversation-top strong {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,7 +130,7 @@
 
 .admin-chat-conversation-snippet {
   margin: 4px 0 0;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--ink-soft);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -174,9 +174,10 @@
   font-size: 0.74rem;
 }
 
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.78rem;
+.admin-chat-widget .btn-sm {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
 }
 
 .admin-chat-messages {
@@ -200,10 +201,10 @@
 }
 
 .admin-chat-empty {
-  padding: 16px;
+  padding: 12px;
   text-align: center;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .admin-chat-placeholder {

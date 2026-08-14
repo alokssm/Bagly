@@ -13,7 +13,7 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="admin-shell">
+    <div className="admin-shell admin-layout">
       <aside className="admin-sidebar">
         <div className="admin-brand">
           Bag<span>ly</span> Admin
