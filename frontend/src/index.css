@@ -3863,43 +3863,150 @@ a.order-item-row__name:hover {
   min-width: 9.5rem;
 }
 
+.admin-shipping-courier-row > td {
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--forest) 2.5%, #fff);
+  vertical-align: top;
+}
+
 .admin-shipping-couriers {
-  margin-top: 0.35rem;
-  width: min(640px, 72vw);
-  min-width: 280px;
+  margin: 0;
+  padding: 0.45rem 0.55rem 0.55rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-shipping-couriers-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+}
+
+.admin-shipping-couriers-title-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.admin-shipping-couriers-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--forest);
+}
+
+.admin-shipping-couriers-status {
+  font-size: var(--admin-fs-xs, 0.72rem);
 }
 
 .admin-shipping-courier-meta {
-  margin: 0 0 0.35rem;
-  font-size: 0.7rem;
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.admin-shipping-couriers-state {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  font-size: var(--admin-fs-xs, 0.72rem);
   line-height: 1.35;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed color-mix(in srgb, var(--line) 90%, var(--forest));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.admin-shipping-couriers-state.admin-error {
+  color: inherit;
+  border-style: solid;
+  border-color: color-mix(in srgb, currentColor 28%, var(--line));
+  background: color-mix(in srgb, currentColor 6%, #fff);
 }
 
 .admin-shipping-courier-wrap {
-  border-color: color-mix(in srgb, var(--brass) 35%, var(--line));
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid color-mix(in srgb, var(--forest) 12%, var(--line));
+  border-radius: calc(var(--radius) - 2px);
+  background: #fff;
+  box-shadow: none;
+  overflow: auto;
 }
 
 .admin-shipping-courier-table {
-  font-size: 0.74rem;
+  font-size: var(--admin-fs-xs, 0.72rem);
+  width: 100%;
 }
 
 .admin-shipping-courier-table th,
 .admin-shipping-courier-table td {
-  padding: 0.3rem 0.45rem;
+  padding: 0.28rem 0.45rem;
   vertical-align: middle;
+  border-bottom-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.admin-shipping-courier-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .admin-shipping-courier-table th {
-  font-size: 0.64rem;
-  background: color-mix(in srgb, var(--forest) 6%, #fff);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  background: color-mix(in srgb, var(--forest) 5%, #fff);
+  color: var(--ink-soft);
+}
+
+.admin-shipping-courier-name {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.admin-shipping-courier-rating {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-shipping-courier-rate {
+  white-space: nowrap;
+}
+
+.admin-shipping-courier-rate-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--forest);
 }
 
 .admin-shipping-rate-breakdown {
+  font-size: 0.6rem;
+  margin-top: 0.08rem;
+  line-height: 1.2;
+  max-width: 12rem;
+  white-space: normal;
+  opacity: 0.85;
+}
+
+.admin-shipping-courier-awb-col {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.admin-shipping-courier-table th.admin-shipping-courier-awb-col {
+  text-align: right;
+}
+
+.admin-shipping-awb-btn {
+  min-height: 24px;
+  padding: 0.15rem 0.45rem;
   font-size: 0.66rem;
-  margin-top: 0.1rem;
-  line-height: 1.25;
-  max-width: 11rem;
+  line-height: 1.2;
 }
 
 .admin-shipping-logs {
@@ -3974,10 +4081,18 @@ a.order-item-row__name:hover {
 
 @media (max-width: 960px) {
   .admin-shipping-couriers {
-    width: min(100%, 70vw);
+    padding: 0.4rem 0.45rem 0.5rem;
   }
 
   .admin-shipping-actions {
     min-width: 0;
+  }
+
+  .admin-shipping-courier-awb-col {
+    text-align: left;
+  }
+
+  .admin-shipping-courier-table th.admin-shipping-courier-awb-col {
+    text-align: left;
   }
 }
