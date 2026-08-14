@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Bagly.Api.Data;
 using Bagly.Api.Models;
 using Bagly.Api.Options;
+using Bagly.Api.Shipping;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -41,6 +42,7 @@ public sealed class ShiprocketService(
     BaglyDbContext db,
     ShiprocketTokenStore tokenStore,
     IOptions<ShiprocketOptions> options,
+    IShiprocketApiLogService apiLogs,
     ILogger<ShiprocketService> logger) : IShiprocketService
 {
     /// <summary>
@@ -262,7 +264,8 @@ public sealed class ShiprocketService(
                     payload.Cod,
                     Truncate(requestJson, 900));
 
-                var result = await CreateAdhocOrderWithAuthRetryAsync(payload, cancellationToken);
+                var result = await CreateAdhocOrderWithAuthRetryAsync(
+                    payload, order.Id, shipment.Id, cancellationToken);
 
                 shipment.ShiprocketOrderId = result.OrderId;
                 shipment.ShiprocketShipmentId = result.ShipmentId;
@@ -567,36 +570,54 @@ public sealed class ShiprocketService(
 
     private async Task<ShiprocketCreateResult> CreateAdhocOrderWithAuthRetryAsync(
         ShiprocketCreatePayload payload,
+        Guid orderId,
+        Guid baglyShipmentId,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await CreateAdhocOrderAsync(payload, forceLogin: false, cancellationToken);
+            return await CreateAdhocOrderAsync(
+                payload, forceLogin: false, orderId, baglyShipmentId, cancellationToken);
         }
         catch (ShiprocketAuthException)
         {
             tokenStore.Invalidate();
-            return await CreateAdhocOrderAsync(payload, forceLogin: true, cancellationToken);
+            return await CreateAdhocOrderAsync(
+                payload, forceLogin: true, orderId, baglyShipmentId, cancellationToken);
         }
     }
 
     private async Task<ShiprocketCreateResult> CreateAdhocOrderAsync(
         ShiprocketCreatePayload payload,
         bool forceLogin,
+        Guid orderId,
+        Guid baglyShipmentId,
         CancellationToken cancellationToken)
     {
         var token = forceLogin
             ? await LoginAsync(cancellationToken)
             : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
 
+        const string path = "v1/external/orders/create/adhoc";
         var client = httpClientFactory.CreateClient("Shiprocket");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "v1/external/orders/create/adhoc");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var json = SerializeCreatePayload(payload);
         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var response = await client.SendAsync(request, cancellationToken);
         var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "CreateAdhoc",
+            "POST",
+            path,
+            requestJson: json,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: baglyShipmentId,
+            cancellationToken: cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
@@ -620,13 +641,13 @@ public sealed class ShiprocketService(
                 $"Shiprocket create rejected status_code={apiStatus}: {apiMessage}");
         }
 
-        var orderId = ReadId(root, "order_id");
+        var orderIdResult = ReadId(root, "order_id");
         var shipmentId = ReadId(root, "shipment_id");
         var status = root.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.String
             ? statusEl.GetString()
             : null;
 
-        if (string.IsNullOrWhiteSpace(orderId))
+        if (string.IsNullOrWhiteSpace(orderIdResult))
         {
             var apiMessage = TryReadMessage(root);
             throw new InvalidOperationException(
@@ -635,7 +656,7 @@ public sealed class ShiprocketService(
                     : $"Shiprocket create returned no order_id: {apiMessage}. Body: {Truncate(raw)}");
         }
 
-        return new ShiprocketCreateResult(orderId, shipmentId, status);
+        return new ShiprocketCreateResult(orderIdResult, shipmentId, status);
     }
 
     private async Task<string> LoginAsync(CancellationToken cancellationToken)

@@ -23,6 +23,11 @@ function shipmentMatchesTab(shipment, tab) {
   return !!shipment.shiprocketShipmentId && !shipment.readyToShipAt && !shipment.awbCode
 }
 
+function truncate(text, max = 120) {
+  if (!text) return '—'
+  return text.length <= max ? text : `${text.slice(0, max)}…`
+}
+
 export default function AdminShipping() {
   const [tab, setTab] = useState('new')
   const [result, setResult] = useState({
@@ -39,6 +44,11 @@ export default function AdminShipping() {
   const [busyShipmentId, setBusyShipmentId] = useState('')
   const [couriersByShipment, setCouriersByShipment] = useState({})
   const [courierMetaByShipment, setCourierMetaByShipment] = useState({})
+  const [apiLogs, setApiLogs] = useState([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState('')
+  const [expandedLogId, setExpandedLogId] = useState(null)
+  const [logsFilterShipmentId, setLogsFilterShipmentId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,9 +71,29 @@ export default function AdminShipping() {
     }
   }, [tab])
 
+  const loadLogs = useCallback(async (shipmentId) => {
+    setLogsLoading(true)
+    setLogsError('')
+    try {
+      const params = { take: 40 }
+      if (shipmentId) params.shipmentId = shipmentId
+      const data = await api.adminGetShippingApiLogs(params)
+      setApiLogs(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setLogsError(err.message || 'Unable to load API logs.')
+      setApiLogs([])
+    } finally {
+      setLogsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    loadLogs(logsFilterShipmentId)
+  }, [loadLogs, logsFilterShipmentId])
 
   const readyToShip = async (shipment) => {
     setBusyShipmentId(shipment.id)
@@ -84,6 +114,7 @@ export default function AdminShipping() {
         },
       }))
       await load()
+      await loadLogs(logsFilterShipmentId)
     } catch (err) {
       setActionError(err.message || 'Ready to Ship failed.')
     } finally {
@@ -105,6 +136,7 @@ export default function AdminShipping() {
         return next
       })
       await load()
+      await loadLogs(logsFilterShipmentId)
     } catch (err) {
       setActionError(err.message || 'Assign AWB failed.')
     } finally {
@@ -246,6 +278,18 @@ export default function AdminShipping() {
                           {busy ? 'Loading…' : shipment.readyToShipAt ? 'Refresh Couriers' : 'Ready to Ship'}
                         </button>
                       ) : null}
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            setLogsFilterShipmentId(shipment.id)
+                            setExpandedLogId(null)
+                          }}
+                        >
+                          API logs
+                        </button>
+                      </div>
                       {couriers.length > 0 ? (
                         <div style={{ marginTop: 10, minWidth: 280 }}>
                           {meta ? (
@@ -298,6 +342,109 @@ export default function AdminShipping() {
           </table>
         </div>
       )}
+
+      <section style={{ marginTop: '2rem' }}>
+        <div className="admin-page-head" style={{ marginBottom: '0.75rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.15rem' }}>Shiprocket API logs</h2>
+            <p className="admin-muted" style={{ margin: '0.25rem 0 0' }}>
+              Exact request bodies / query strings sent to Shiprocket (tokens and passwords redacted).
+              {logsFilterShipmentId ? ' Filtered to one shipment.' : ' Showing recent across all shipments.'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {logsFilterShipmentId ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setLogsFilterShipmentId('')
+                  setExpandedLogId(null)
+                }}
+              >
+                Clear filter
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={logsLoading}
+              onClick={() => loadLogs(logsFilterShipmentId)}
+            >
+              {logsLoading ? 'Loading…' : 'Refresh logs'}
+            </button>
+          </div>
+        </div>
+
+        {logsError ? <p className="admin-error">{logsError}</p> : null}
+        {logsLoading && !apiLogs.length ? (
+          <p className="admin-muted">Loading API logs…</p>
+        ) : !apiLogs.length ? (
+          <p className="admin-muted">No Shiprocket API logs yet. Run Ready to Ship or Assign AWB to create one.</p>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Action</th>
+                  <th>HTTP</th>
+                  <th>Status</th>
+                  <th>Request</th>
+                  <th>Admin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {apiLogs.map((log) => {
+                  const open = expandedLogId === log.id
+                  return (
+                    <tr key={log.id}>
+                      <td>
+                        <div>{formatDateTime(log.createdAtUtc)}</div>
+                        <div className="admin-muted">#{log.id}</div>
+                      </td>
+                      <td>
+                        <strong>{log.action}</strong>
+                        <div className="admin-muted">{truncate(log.url, 48)}</div>
+                      </td>
+                      <td>{log.httpMethod}</td>
+                      <td>{log.responseStatus ?? '—'}</td>
+                      <td style={{ maxWidth: 420 }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ marginBottom: 6 }}
+                          onClick={() => setExpandedLogId(open ? null : log.id)}
+                        >
+                          {open ? 'Hide request' : 'View request'}
+                        </button>
+                        {open ? (
+                          <pre
+                            style={{
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              fontSize: '0.8rem',
+                              maxHeight: 280,
+                              overflow: 'auto',
+                            }}
+                          >
+                            {log.requestJson || '(empty)'}
+                            {log.responseJson ? `\n\n--- response ---\n${log.responseJson}` : ''}
+                          </pre>
+                        ) : (
+                          <div className="admin-muted">{truncate(log.requestJson, 100)}</div>
+                        )}
+                      </td>
+                      <td className="admin-muted">{log.adminEmail || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

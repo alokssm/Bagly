@@ -499,6 +499,14 @@ export const api = {
       body: payload,
       auth: true,
     }),
+  adminGetShippingApiLogs: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/shipping/logs${query ? `?${query}` : ''}`, { auth: true })
+  },
 
   adminGetOrders: (params = {}) => {
     const qs = new URLSearchParams()

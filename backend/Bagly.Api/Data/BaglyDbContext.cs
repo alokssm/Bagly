@@ -18,6 +18,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
+    public DbSet<ShiprocketApiLog> ShiprocketApiLogs => Set<ShiprocketApiLog>();
     public DbSet<StockAlert> StockAlerts => Set<StockAlert>();
     public DbSet<CustomerShippingAddress> ShippingAddresses => Set<CustomerShippingAddress>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
@@ -283,6 +284,23 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.RazorpayOrderId);
             entity.HasIndex(x => x.EventType);
             entity.HasIndex(x => x.Status);
+        });
+
+        modelBuilder.Entity<ShiprocketApiLog>(entity =>
+        {
+            entity.ToTable("ShiprocketApiLogs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.Action).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.HttpMethod).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.RequestJson).HasColumnType("text");
+            entity.Property(x => x.ResponseJson).HasColumnType("text");
+            entity.Property(x => x.AdminEmail).HasMaxLength(256);
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => x.OrderId);
+            entity.HasIndex(x => x.ShipmentId);
+            entity.HasIndex(x => x.Action);
         });
 
         modelBuilder.Entity<StockAlert>(entity =>

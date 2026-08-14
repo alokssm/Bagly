@@ -79,3 +79,17 @@ public record AssignAwbResponse(
     string ShippingStatus,
     DateTime? AwbAssignedAt
 );
+
+public record ShiprocketApiLogDto(
+    long Id,
+    Guid? OrderId,
+    Guid? ShipmentId,
+    string Action,
+    string HttpMethod,
+    string Url,
+    string? RequestJson,
+    int? ResponseStatus,
+    string? ResponseJson,
+    DateTime CreatedAtUtc,
+    string? AdminEmail
+);

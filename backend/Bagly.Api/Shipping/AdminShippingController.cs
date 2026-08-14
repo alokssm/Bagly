@@ -121,6 +121,18 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    /// <summary>Recent Shiprocket outbound API request logs (request body / query redacted of secrets).</summary>
+    [HttpGet("logs")]
+    public async Task<ActionResult<IReadOnlyList<ShiprocketApiLogDto>>> ListLogs(
+        [FromQuery] Guid? orderId = null,
+        [FromQuery] Guid? shipmentId = null,
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var logs = await shipping.ListApiLogsAsync(orderId, shipmentId, take, cancellationToken);
+        return Ok(logs);
+    }
 }
 
 public record ReadyToShipOrderRequest(Guid? ShipmentId = null);

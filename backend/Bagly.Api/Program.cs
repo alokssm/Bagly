@@ -93,6 +93,7 @@ try
     builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.SectionName));
     builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
     builder.Services.Configure<StorefrontOptions>(builder.Configuration.GetSection(StorefrontOptions.SectionName));
+    builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<TokenService>();
     builder.Services.AddSingleton<ICloudinaryImageService, CloudinaryImageService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -121,6 +122,7 @@ try
     builder.Services.AddSingleton<ShiprocketTokenStore>();
     builder.Services.AddScoped<IShiprocketService, ShiprocketService>();
     builder.Services.AddScoped<Bagly.Api.Shipping.IAdminShippingService, Bagly.Api.Shipping.AdminShippingService>();
+    builder.Services.AddScoped<Bagly.Api.Shipping.IShiprocketApiLogService, Bagly.Api.Shipping.ShiprocketApiLogService>();
     builder.Services.AddSingleton<IShiprocketOrderDispatcher, ShiprocketOrderDispatcher>();
     builder.Services.AddHostedService(sp => (ShiprocketOrderDispatcher)sp.GetRequiredService<IShiprocketOrderDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();

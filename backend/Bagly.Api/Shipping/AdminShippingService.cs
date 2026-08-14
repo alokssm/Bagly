@@ -24,6 +24,12 @@ public interface IAdminShippingService
         int courierId,
         decimal? rate,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
+        Guid? orderId,
+        Guid? shipmentId,
+        int take = 50,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class AdminShippingService(
@@ -31,6 +37,7 @@ public sealed class AdminShippingService(
     BaglyDbContext db,
     ShiprocketTokenStore tokenStore,
     IOptions<ShiprocketOptions> options,
+    IShiprocketApiLogService apiLogs,
     ILogger<AdminShippingService> logger) : IAdminShippingService
 {
     public const string TabNew = "new";
@@ -160,6 +167,13 @@ public sealed class AdminShippingService(
             awbCount);
     }
 
+    public Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
+        Guid? orderId,
+        Guid? shipmentId,
+        int take = 50,
+        CancellationToken cancellationToken = default) =>
+        apiLogs.ListAsync(orderId, shipmentId, take, cancellationToken);
+
     public async Task<ReadyToShipResponse> ReadyToShipAsync(
         Guid shipmentId,
         CancellationToken cancellationToken = default)
@@ -188,7 +202,8 @@ public sealed class AdminShippingService(
         var deliveryPostcode = ShiprocketService.NormalizePincode(order.Zip)
             ?? throw new InvalidOperationException($"Order zip '{order.Zip}' is not a valid 6-digit PIN.");
 
-        var pickupPostcode = await ResolvePickupPostcodeAsync(shipment.PickupLocation, cancellationToken);
+        var pickupPostcode = await ResolvePickupPostcodeAsync(
+            shipment.PickupLocation, order.Id, shipment.Id, cancellationToken);
         var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
         var weightKg = _options.DefaultWeightKg > 0 ? _options.DefaultWeightKg : 0.5;
 
@@ -198,6 +213,8 @@ public sealed class AdminShippingService(
             weightKg,
             isCod,
             order.Total,
+            order.Id,
+            shipment.Id,
             cancellationToken);
 
         shipment.ShippingStatus = StatusReadyToShip;
@@ -266,7 +283,8 @@ public sealed class AdminShippingService(
                 $"Shiprocket shipment_id '{shipment.ShiprocketShipmentId}' is not numeric.");
         }
 
-        var assignResult = await AssignAwbWithAuthRetryAsync(srShipmentId, courierId, cancellationToken);
+        var assignResult = await AssignAwbWithAuthRetryAsync(
+            srShipmentId, courierId, order.Id, shipment.Id, cancellationToken);
 
         shipment.AwbCode = assignResult.AwbCode;
         shipment.CourierId = assignResult.CourierId ?? courierId;
@@ -330,9 +348,13 @@ public sealed class AdminShippingService(
         return TabNew;
     }
 
-    private async Task<int> ResolvePickupPostcodeAsync(string pickupNickname, CancellationToken cancellationToken)
+    private async Task<int> ResolvePickupPostcodeAsync(
+        string pickupNickname,
+        Guid? orderId,
+        Guid? shipmentId,
+        CancellationToken cancellationToken)
     {
-        var map = await GetPickupPostcodeMapAsync(cancellationToken);
+        var map = await GetPickupPostcodeMapAsync(orderId, shipmentId, cancellationToken);
         if (map.TryGetValue(pickupNickname.Trim(), out var pin))
         {
             return pin;
@@ -351,7 +373,10 @@ public sealed class AdminShippingService(
             "Ensure the pickup exists in Shiprocket → Settings → Pickup Addresses and has a pin code.");
     }
 
-    private async Task<IReadOnlyDictionary<string, int>> GetPickupPostcodeMapAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyDictionary<string, int>> GetPickupPostcodeMapAsync(
+        Guid? orderId,
+        Guid? shipmentId,
+        CancellationToken cancellationToken)
     {
         lock (PickupCacheLock)
         {
@@ -361,7 +386,7 @@ public sealed class AdminShippingService(
             }
         }
 
-        var map = await FetchPickupPostcodesAsync(cancellationToken);
+        var map = await FetchPickupPostcodesAsync(orderId, shipmentId, cancellationToken);
         lock (PickupCacheLock)
         {
             _pickupPostcodes = map;
@@ -371,33 +396,50 @@ public sealed class AdminShippingService(
         return map;
     }
 
-    private async Task<Dictionary<string, int>> FetchPickupPostcodesAsync(CancellationToken cancellationToken)
+    private async Task<Dictionary<string, int>> FetchPickupPostcodesAsync(
+        Guid? orderId,
+        Guid? shipmentId,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return await FetchPickupPostcodesOnceAsync(forceLogin: false, cancellationToken);
+            return await FetchPickupPostcodesOnceAsync(forceLogin: false, orderId, shipmentId, cancellationToken);
         }
         catch (ShiprocketAuthException)
         {
             tokenStore.Invalidate();
-            return await FetchPickupPostcodesOnceAsync(forceLogin: true, cancellationToken);
+            return await FetchPickupPostcodesOnceAsync(forceLogin: true, orderId, shipmentId, cancellationToken);
         }
     }
 
     private async Task<Dictionary<string, int>> FetchPickupPostcodesOnceAsync(
         bool forceLogin,
+        Guid? orderId,
+        Guid? shipmentId,
         CancellationToken cancellationToken)
     {
         var token = forceLogin
             ? await LoginAsync(cancellationToken)
             : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
 
+        const string path = "v1/external/settings/company/pickup";
         var client = httpClientFactory.CreateClient("Shiprocket");
-        using var request = new HttpRequestMessage(HttpMethod.Get, "v1/external/settings/company/pickup");
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await client.SendAsync(request, cancellationToken);
         var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "PickupList",
+            "GET",
+            path,
+            requestJson: null,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: shipmentId,
+            cancellationToken: cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
@@ -479,18 +521,22 @@ public sealed class AdminShippingService(
         double weightKg,
         bool isCod,
         decimal declaredValue,
+        Guid orderId,
+        Guid shipmentId,
         CancellationToken cancellationToken)
     {
         try
         {
             return await GetServiceabilityOnceAsync(
-                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue, forceLogin: false, cancellationToken);
+                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue,
+                forceLogin: false, orderId, shipmentId, cancellationToken);
         }
         catch (ShiprocketAuthException)
         {
             tokenStore.Invalidate();
             return await GetServiceabilityOnceAsync(
-                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue, forceLogin: true, cancellationToken);
+                pickupPostcode, deliveryPostcode, weightKg, isCod, declaredValue,
+                forceLogin: true, orderId, shipmentId, cancellationToken);
         }
     }
 
@@ -501,6 +547,8 @@ public sealed class AdminShippingService(
         bool isCod,
         decimal declaredValue,
         bool forceLogin,
+        Guid orderId,
+        Guid shipmentId,
         CancellationToken cancellationToken)
     {
         var token = forceLogin
@@ -519,14 +567,25 @@ public sealed class AdminShippingService(
                 .ToString(CultureInfo.InvariantCulture));
         }
 
+        var query = qs.ToString();
+        var path = "v1/external/courier/serviceability/?" + query;
         var client = httpClientFactory.CreateClient("Shiprocket");
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            "v1/external/courier/serviceability/?" + qs);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await client.SendAsync(request, cancellationToken);
         var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "Serviceability",
+            "GET",
+            path,
+            requestJson: query,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: shipmentId,
+            cancellationToken: cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
@@ -581,16 +640,20 @@ public sealed class AdminShippingService(
     private async Task<AssignAwbApiResult> AssignAwbWithAuthRetryAsync(
         long shipmentId,
         int courierId,
+        Guid orderId,
+        Guid baglyShipmentId,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await AssignAwbOnceAsync(shipmentId, courierId, forceLogin: false, cancellationToken);
+            return await AssignAwbOnceAsync(
+                shipmentId, courierId, forceLogin: false, orderId, baglyShipmentId, cancellationToken);
         }
         catch (ShiprocketAuthException)
         {
             tokenStore.Invalidate();
-            return await AssignAwbOnceAsync(shipmentId, courierId, forceLogin: true, cancellationToken);
+            return await AssignAwbOnceAsync(
+                shipmentId, courierId, forceLogin: true, orderId, baglyShipmentId, cancellationToken);
         }
     }
 
@@ -598,6 +661,8 @@ public sealed class AdminShippingService(
         long shipmentId,
         int courierId,
         bool forceLogin,
+        Guid orderId,
+        Guid baglyShipmentId,
         CancellationToken cancellationToken)
     {
         var token = forceLogin
@@ -609,17 +674,27 @@ public sealed class AdminShippingService(
             ["shipment_id"] = shipmentId,
             ["courier_id"] = courierId,
         };
+        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        const string path = "v1/external/courier/assign/awb";
 
         var client = httpClientFactory.CreateClient("Shiprocket");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "v1/external/courier/assign/awb");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(body, JsonOptions),
-            Encoding.UTF8,
-            "application/json");
+        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
         using var response = await client.SendAsync(request, cancellationToken);
         var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "AssignAwb",
+            "POST",
+            path,
+            requestJson: requestJson,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: baglyShipmentId,
+            cancellationToken: cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
