@@ -69,38 +69,53 @@ public sealed class AdminShippingService(
         var baseQuery = db.Orders.AsNoTracking()
             .Where(o => o.Status == "Confirmed")
             .Where(o => o.ShiprocketShipments.Any(s =>
-                s.ShiprocketShipmentId != null && s.ShiprocketShipmentId != ""));
+                s.ShiprocketShipmentId != null && s.ShiprocketShipmentId != "" &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")));
 
         var newCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.ShiprocketShipmentId != null &&
                 s.ShiprocketShipmentId != "" &&
                 (s.AwbCode == null || s.AwbCode == "") &&
-                s.ReadyToShipAt == null),
+                s.ReadyToShipAt == null &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
         var readyCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.ReadyToShipAt != null &&
-                (s.AwbCode == null || s.AwbCode == "")),
+                (s.AwbCode == null || s.AwbCode == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
         var awbCount = await baseQuery.CountAsync(
-            o => o.ShiprocketShipments.Any(s => s.AwbCode != null && s.AwbCode != ""),
+            o => o.ShiprocketShipments.Any(s =>
+                s.AwbCode != null && s.AwbCode != "" &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
         var filtered = normalizedTab switch
         {
             TabReady => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.ReadyToShipAt != null &&
-                (s.AwbCode == null || s.AwbCode == ""))),
+                (s.AwbCode == null || s.AwbCode == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
             TabAwb => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
-                s.AwbCode != null && s.AwbCode != "")),
+                s.AwbCode != null && s.AwbCode != "" &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
             _ => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.ShiprocketShipmentId != null &&
                 s.ShiprocketShipmentId != "" &&
                 (s.AwbCode == null || s.AwbCode == "") &&
-                s.ReadyToShipAt == null)),
+                s.ReadyToShipAt == null &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
         };
 
         var orders = await filtered
@@ -138,7 +153,9 @@ public sealed class AdminShippingService(
                         s.ReadyToShipAt,
                         s.AwbAssignedAt,
                         s.CreatedAt,
-                        s.UpdatedAt))
+                        s.UpdatedAt,
+                        s.SellerReadyToShipAt,
+                        s.SellerReadyToShipAt != null))
                     .ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -216,6 +233,18 @@ public sealed class AdminShippingService(
         if (!string.IsNullOrWhiteSpace(shipment.AwbCode))
         {
             throw new InvalidOperationException($"AWB already assigned ({shipment.AwbCode}).");
+        }
+
+        if (shipment.SellerReadyToShipAt is null)
+        {
+            throw new InvalidOperationException(
+                "Waiting for seller to mark this shipment Ready to Ship.");
+        }
+
+        if (string.Equals(shipment.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(shipment.ShippingStatus, "Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("This shipment was cancelled.");
         }
 
         var deliveryPostcode = ShiprocketService.NormalizePincode(order.Zip)

@@ -28,6 +28,7 @@ import SellerDashboard from './pages/SellerDashboard'
 import SellerProducts from './pages/SellerProducts'
 import SellerProductForm from './pages/SellerProductForm'
 import SellerPickups from './pages/SellerPickups'
+import SellerOrders from './pages/SellerOrders'
 import SellerRoute from './components/SellerRoute'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -140,6 +141,14 @@ export default function App() {
                     element={
                       <SellerRoute>
                         <SellerPickups />
+                      </SellerRoute>
+                    }
+                  />
+                  <Route
+                    path="/seller/orders"
+                    element={
+                      <SellerRoute>
+                        <SellerOrders />
                       </SellerRoute>
                     }
                   />

@@ -29,6 +29,11 @@ public class OrderShiprocketShipment
     public decimal? ActualShippingCharge { get; set; }
     public DateTime? ReadyToShipAt { get; set; }
     public DateTime? AwbAssignedAt { get; set; }
+    /// <summary>
+    /// When the marketplace seller marked this pickup shipment ready.
+    /// Admin Ready to Ship (courier serviceability) stays disabled until set.
+    /// </summary>
+    public DateTime? SellerReadyToShipAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

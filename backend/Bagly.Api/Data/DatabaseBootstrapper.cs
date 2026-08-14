@@ -122,6 +122,7 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ActualShippingCharge" numeric(18,2);
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ReadyToShipAt" timestamp with time zone;
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "AwbAssignedAt" timestamp with time zone;
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "SellerReadyToShipAt" timestamp with time zone;
                 CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_AwbCode"
                     ON "OrderShiprocketShipments" ("AwbCode");
                 CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_ShippingStatus"

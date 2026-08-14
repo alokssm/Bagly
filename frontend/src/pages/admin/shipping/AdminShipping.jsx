@@ -326,7 +326,11 @@ export default function AdminShipping() {
                 const courierError = courierErrorByShipment[shipment.id]
                 const courierLoading = courierLoadingId === shipment.id
                 const busy = busyShipmentId === shipment.id
-                const canReady = !!shipment.shiprocketShipmentId && !shipment.awbCode
+                const sellerReady = !!(shipment.sellerReady || shipment.sellerReadyToShipAt)
+                const canReady =
+                  !!shipment.shiprocketShipmentId && !shipment.awbCode && sellerReady
+                const waitingForSeller =
+                  !!shipment.shiprocketShipmentId && !shipment.awbCode && !sellerReady
                 const showCourierPanel = couriersLoaded || courierLoading || !!courierError
 
                 return (
@@ -349,6 +353,11 @@ export default function AdminShipping() {
                         <strong>{shipment.pickupLocation}</strong>
                         <div className="admin-muted admin-shipping-meta">SR ship #{shipment.shiprocketShipmentId || '—'}</div>
                         <div className="admin-muted admin-shipping-meta">SR order {shipment.shiprocketOrderId || '—'}</div>
+                        {waitingForSeller ? (
+                          <div className="admin-muted admin-shipping-meta">Waiting for seller</div>
+                        ) : sellerReady && !shipment.awbCode ? (
+                          <div className="admin-muted admin-shipping-meta">Seller ready</div>
+                        ) : null}
                       </td>
                       <td>
                         <span className={shippingPill(shipment.shippingStatus, shipment.awbCode)}>
@@ -391,6 +400,15 @@ export default function AdminShipping() {
                               : shipment.readyToShipAt
                                 ? 'Refresh Couriers'
                                 : 'Ready to Ship'}
+                          </button>
+                        ) : waitingForSeller ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled
+                            title="Waiting for seller to mark Ready to Ship"
+                          >
+                            Waiting for seller
                           </button>
                         ) : null}
                         <button

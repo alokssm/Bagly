@@ -260,6 +260,24 @@ export const api = {
   sellerGetPickups: () => request('/seller/pickups', { auth: 'seller' }),
   sellerCreatePickup: (payload) =>
     request('/seller/pickups', { method: 'POST', body: payload, auth: 'seller' }),
+  sellerGetOrders: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/seller/orders${query ? `?${query}` : ''}`, { auth: 'seller' })
+  },
+  sellerMarkShipmentReadyToShip: (orderId, shipmentId) =>
+    request(`/seller/orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/ready-to-ship`, {
+      method: 'POST',
+      auth: 'seller',
+    }),
+  sellerCancelOrder: (orderId) =>
+    request(`/seller/orders/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      auth: 'seller',
+    }),
 
   customerLogin: (email, password) =>
     request('/auth/customer/login', {

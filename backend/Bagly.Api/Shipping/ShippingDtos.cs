@@ -15,7 +15,9 @@ public record AdminShippingShipmentDto(
     DateTime? ReadyToShipAt,
     DateTime? AwbAssignedAt,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    DateTime? SellerReadyToShipAt = null,
+    bool SellerReady = false
 );
 
 public record AdminShippingOrderDto(
