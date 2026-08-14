@@ -3,6 +3,7 @@ using System;
 using Bagly.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bagly.Api.Data.Migrations
 {
     [DbContext(typeof(BaglyDbContext))]
-    partial class BaglyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814043627_AddShippingAwbFields")]
+    partial class AddShippingAwbFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

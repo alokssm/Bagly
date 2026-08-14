@@ -15,9 +15,21 @@ public class OrderShiprocketShipment
 
     public string? ShiprocketOrderId { get; set; }
     public string? ShiprocketShipmentId { get; set; }
+    /// <summary>Shiprocket create status (e.g. NEW) or last API status string.</summary>
     public string? Status { get; set; }
+    /// <summary>Admin shipping workflow: ReadyToShip / AwbAssigned (null until Ready to Ship).</summary>
+    public string? ShippingStatus { get; set; }
     /// <summary>Last skip/API error for this group (never credentials).</summary>
     public string? LastError { get; set; }
+
+    public string? AwbCode { get; set; }
+    public int? CourierId { get; set; }
+    public string? CourierName { get; set; }
+    /// <summary>Courier rate selected from serviceability / assign response.</summary>
+    public decimal? ActualShippingCharge { get; set; }
+    public DateTime? ReadyToShipAt { get; set; }
+    public DateTime? AwbAssignedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

@@ -156,10 +156,16 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.ShiprocketOrderId).HasMaxLength(50);
             entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
             entity.Property(x => x.Status).HasMaxLength(50);
+            entity.Property(x => x.ShippingStatus).HasMaxLength(50);
             entity.Property(x => x.LastError).HasMaxLength(500);
+            entity.Property(x => x.AwbCode).HasMaxLength(50);
+            entity.Property(x => x.CourierName).HasMaxLength(100);
+            entity.Property(x => x.ActualShippingCharge).HasColumnType("decimal(18,2)");
             entity.HasIndex(x => x.OrderId);
             entity.HasIndex(x => new { x.OrderId, x.PickupLocation }).IsUnique();
             entity.HasIndex(x => x.ShiprocketOrderId);
+            entity.HasIndex(x => x.AwbCode);
+            entity.HasIndex(x => x.ShippingStatus);
         });
 
         modelBuilder.Entity<AdminUser>(entity =>

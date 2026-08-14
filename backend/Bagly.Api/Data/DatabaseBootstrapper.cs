@@ -33,6 +33,7 @@ public static class DatabaseBootstrapper
         await EnsureOrdersShiprocketSchemaAsync(db, cancellationToken);
         await EnsureProductsSchemaAsync(db, cancellationToken);
         await EnsureOrderShiprocketShipmentsSchemaAsync(db, cancellationToken);
+        await EnsureOrderShiprocketShippingFieldsAsync(db, cancellationToken);
         await DbSeeder.SeedAsync(db, adminOptions);
     }
 
@@ -99,6 +100,35 @@ public static class DatabaseBootstrapper
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Database bootstrap step 'OrderShiprocketShipmentsSchemaSelfHeal' failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Self-heal AWB / Ready-to-Ship columns on OrderShiprocketShipments.</summary>
+    public static async Task EnsureOrderShiprocketShippingFieldsAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ShippingStatus" character varying(50);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "AwbCode" character varying(50);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "CourierId" integer;
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "CourierName" character varying(100);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ActualShippingCharge" numeric(18,2);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ReadyToShipAt" timestamp with time zone;
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "AwbAssignedAt" timestamp with time zone;
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_AwbCode"
+                    ON "OrderShiprocketShipments" ("AwbCode");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_ShippingStatus"
+                    ON "OrderShiprocketShipments" ("ShippingStatus");
+                """,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step 'OrderShiprocketShippingFieldsSelfHeal' failed: {ex.Message}");
         }
     }
 

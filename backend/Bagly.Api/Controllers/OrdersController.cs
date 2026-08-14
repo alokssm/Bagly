@@ -252,7 +252,14 @@ public class OrdersController(
                     s.Status,
                     s.LastError,
                     s.CreatedAt,
-                    s.UpdatedAt))
+                    s.UpdatedAt,
+                    s.ShippingStatus,
+                    s.AwbCode,
+                    s.CourierId,
+                    s.CourierName,
+                    s.ActualShippingCharge,
+                    s.ReadyToShipAt,
+                    s.AwbAssignedAt))
                 .ToList()
         );
 

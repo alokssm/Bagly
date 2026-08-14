@@ -1,0 +1,303 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '../../../api/client'
+import { formatPrice } from '../../../utils/format'
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  try {
+    return new Date(value).toLocaleString()
+  } catch {
+    return String(value)
+  }
+}
+
+function shippingPill(status, awb) {
+  if (awb) return 'admin-pill on'
+  if ((status || '').toLowerCase() === 'readytoship') return 'admin-pill'
+  return 'admin-pill off'
+}
+
+function shipmentMatchesTab(shipment, tab) {
+  if (tab === 'awb') return !!shipment.awbCode
+  if (tab === 'ready') return !!shipment.readyToShipAt && !shipment.awbCode
+  return !!shipment.shiprocketShipmentId && !shipment.readyToShipAt && !shipment.awbCode
+}
+
+export default function AdminShipping() {
+  const [tab, setTab] = useState('new')
+  const [result, setResult] = useState({
+    items: [],
+    totalCount: 0,
+    tab: 'new',
+    newCount: 0,
+    readyCount: 0,
+    awbCount: 0,
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [busyShipmentId, setBusyShipmentId] = useState('')
+  const [couriersByShipment, setCouriersByShipment] = useState({})
+  const [courierMetaByShipment, setCourierMetaByShipment] = useState({})
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await api.adminGetShippingOrders({ tab })
+      setResult({
+        items: data.items || [],
+        totalCount: data.totalCount || 0,
+        tab: data.tab || tab,
+        newCount: data.newCount || 0,
+        readyCount: data.readyCount || 0,
+        awbCount: data.awbCount || 0,
+      })
+    } catch (err) {
+      setError(err.message || 'Unable to load shipping orders.')
+      setResult((prev) => ({ ...prev, items: [], totalCount: 0 }))
+    } finally {
+      setLoading(false)
+    }
+  }, [tab])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const readyToShip = async (shipment) => {
+    setBusyShipmentId(shipment.id)
+    setActionError('')
+    try {
+      const data = await api.adminShippingReadyToShip(shipment.id)
+      setCouriersByShipment((prev) => ({
+        ...prev,
+        [shipment.id]: data.couriers || [],
+      }))
+      setCourierMetaByShipment((prev) => ({
+        ...prev,
+        [shipment.id]: {
+          pickupPostcode: data.pickupPostcode,
+          deliveryPostcode: data.deliveryPostcode,
+          weightKg: data.weightKg,
+          cod: data.cod,
+        },
+      }))
+      await load()
+    } catch (err) {
+      setActionError(err.message || 'Ready to Ship failed.')
+    } finally {
+      setBusyShipmentId('')
+    }
+  }
+
+  const assignAwb = async (shipment, courier) => {
+    setBusyShipmentId(shipment.id)
+    setActionError('')
+    try {
+      await api.adminShippingAssignAwb(shipment.id, {
+        courierId: courier.courierId,
+        rate: courier.rate,
+      })
+      setCouriersByShipment((prev) => {
+        const next = { ...prev }
+        delete next[shipment.id]
+        return next
+      })
+      await load()
+    } catch (err) {
+      setActionError(err.message || 'Assign AWB failed.')
+    } finally {
+      setBusyShipmentId('')
+    }
+  }
+
+  const tabs = [
+    { id: 'new', label: 'New', count: result.newCount },
+    { id: 'ready', label: 'Ready to Ship', count: result.readyCount },
+    { id: 'awb', label: 'AWB Assigned', count: result.awbCount },
+  ]
+
+  const rows = []
+  for (const order of result.items) {
+    for (const shipment of order.shipments || []) {
+      if (!shipmentMatchesTab(shipment, tab)) continue
+      rows.push({ order, shipment, highlight: true })
+    }
+  }
+
+  return (
+    <div className="admin-page">
+      <div className="admin-page-head">
+        <div>
+          <p className="eyebrow">Fulfillment</p>
+          <h1>Shipping</h1>
+          <p className="admin-subtitle">
+            Per-pickup Shiprocket shipments (home/work). Ready to Ship loads couriers; Assign AWB stores AWB + charge.
+          </p>
+        </div>
+        <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error ? <p className="admin-error">{error}</p> : null}
+      {actionError ? <p className="admin-error">{actionError}</p> : null}
+
+      <div className="admin-filters" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`btn ${tab === t.id ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => {
+              setTab(t.id)
+              setActionError('')
+            }}
+          >
+            {t.label} ({t.count})
+          </button>
+        ))}
+      </div>
+
+      {loading && !rows.length ? (
+        <p className="admin-muted">Loading shipping orders…</p>
+      ) : !rows.length ? (
+        <p className="admin-muted">No orders in this tab. Confirmed orders need a successful Shiprocket create first.</p>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Payment</th>
+                <th>Pickup / Shipment</th>
+                <th>Status</th>
+                <th>AWB / Charge</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ order, shipment, highlight }) => {
+                const couriers = couriersByShipment[shipment.id] || []
+                const meta = courierMetaByShipment[shipment.id]
+                const busy = busyShipmentId === shipment.id
+                const canReady = !!shipment.shiprocketShipmentId && !shipment.awbCode
+
+                return (
+                  <tr key={shipment.id} style={highlight ? undefined : { opacity: 0.55 }}>
+                    <td>
+                      <strong>{order.orderNumber}</strong>
+                      <div className="admin-muted">{formatDateTime(order.createdAt)}</div>
+                    </td>
+                    <td>
+                      {order.customerName}
+                      <div className="admin-muted">{order.email}</div>
+                      <div className="admin-muted">PIN {order.zip || '—'}</div>
+                    </td>
+                    <td>
+                      {order.paymentProvider || '—'}
+                      <div className="admin-muted">{formatPrice(order.total, order.currency)}</div>
+                    </td>
+                    <td>
+                      <strong>{shipment.pickupLocation}</strong>
+                      <div className="admin-muted">SR ship #{shipment.shiprocketShipmentId || '—'}</div>
+                      <div className="admin-muted">SR order {shipment.shiprocketOrderId || '—'}</div>
+                    </td>
+                    <td>
+                      <span className={shippingPill(shipment.shippingStatus, shipment.awbCode)}>
+                        {shipment.awbCode
+                          ? 'AWB Assigned'
+                          : shipment.shippingStatus || shipment.status || 'Created'}
+                      </span>
+                      {shipment.lastError ? (
+                        <div className="admin-error" style={{ marginTop: 4 }}>
+                          {shipment.lastError}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>
+                      {shipment.awbCode ? (
+                        <>
+                          <strong>{shipment.awbCode}</strong>
+                          <div className="admin-muted">
+                            {shipment.courierName || 'Courier'}
+                            {shipment.courierId ? ` (#${shipment.courierId})` : ''}
+                          </div>
+                          <div>
+                            {shipment.actualShippingCharge != null
+                              ? formatPrice(shipment.actualShippingCharge, order.currency)
+                              : '—'}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="admin-muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {canReady ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy}
+                          onClick={() => readyToShip(shipment)}
+                        >
+                          {busy ? 'Loading…' : shipment.readyToShipAt ? 'Refresh Couriers' : 'Ready to Ship'}
+                        </button>
+                      ) : null}
+                      {couriers.length > 0 ? (
+                        <div style={{ marginTop: 10, minWidth: 280 }}>
+                          {meta ? (
+                            <p className="admin-muted" style={{ marginBottom: 6 }}>
+                              {meta.pickupPostcode} → {meta.deliveryPostcode} · {meta.weightKg} kg ·{' '}
+                              {meta.cod ? 'COD' : 'Prepaid'}
+                            </p>
+                          ) : null}
+                          <table className="admin-table" style={{ fontSize: '0.9rem' }}>
+                            <thead>
+                              <tr>
+                                <th>Courier</th>
+                                <th>Rate</th>
+                                <th>ETA</th>
+                                <th />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {couriers.map((c) => (
+                                <tr key={c.courierId}>
+                                  <td>{c.courierName}</td>
+                                  <td>{formatPrice(c.rate, order.currency)}</td>
+                                  <td>
+                                    {c.estimatedDelivery ||
+                                      (c.estimatedDeliveryDays != null
+                                        ? `${c.estimatedDeliveryDays} days`
+                                        : '—')}
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      disabled={busy}
+                                      onClick={() => assignAwb(shipment, c)}
+                                    >
+                                      Assign AWB
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}

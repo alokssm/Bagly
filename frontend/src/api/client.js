@@ -479,6 +479,27 @@ export const api = {
     }),
   adminRetryShiprocket: (id) =>
     request(`/admin/orders/${encodeURIComponent(id)}/shiprocket/retry`, { method: 'POST', auth: true }),
+
+  adminGetShippingOrders: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/shipping/orders${query ? `?${query}` : ''}`, { auth: true })
+  },
+  adminShippingReadyToShip: (shipmentId) =>
+    request(`/admin/shipping/shipments/${encodeURIComponent(shipmentId)}/ready-to-ship`, {
+      method: 'POST',
+      auth: true,
+    }),
+  adminShippingAssignAwb: (shipmentId, payload) =>
+    request(`/admin/shipping/shipments/${encodeURIComponent(shipmentId)}/assign-awb`, {
+      method: 'POST',
+      body: payload,
+      auth: true,
+    }),
+
   adminGetOrders: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {

@@ -873,8 +873,6 @@ public sealed class ShiprocketService(
 
     private sealed record ShiprocketCreateResult(string OrderId, string? ShipmentId, string? Status);
 
-    private sealed class ShiprocketAuthException(string message) : Exception(message);
-
     internal sealed class ShiprocketCreatePayload
     {
         [JsonPropertyName("order_id")]

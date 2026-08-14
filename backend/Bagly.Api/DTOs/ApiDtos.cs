@@ -301,7 +301,14 @@ public record OrderShiprocketShipmentDto(
     string? Status,
     string? LastError,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    string? ShippingStatus = null,
+    string? AwbCode = null,
+    int? CourierId = null,
+    string? CourierName = null,
+    decimal? ActualShippingCharge = null,
+    DateTime? ReadyToShipAt = null,
+    DateTime? AwbAssignedAt = null
 );
 
 public record OrderDto(

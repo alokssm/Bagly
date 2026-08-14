@@ -120,6 +120,7 @@ try
     builder.Services.AddHostedService(sp => (OrderConfirmationEmailDispatcher)sp.GetRequiredService<IOrderConfirmationEmailDispatcher>());
     builder.Services.AddSingleton<ShiprocketTokenStore>();
     builder.Services.AddScoped<IShiprocketService, ShiprocketService>();
+    builder.Services.AddScoped<Bagly.Api.Shipping.IAdminShippingService, Bagly.Api.Shipping.AdminShippingService>();
     builder.Services.AddSingleton<IShiprocketOrderDispatcher, ShiprocketOrderDispatcher>();
     builder.Services.AddHostedService(sp => (ShiprocketOrderDispatcher)sp.GetRequiredService<IShiprocketOrderDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();

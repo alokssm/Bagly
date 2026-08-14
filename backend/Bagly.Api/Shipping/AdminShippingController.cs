@@ -1,0 +1,126 @@
+using Bagly.Api.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Bagly.Api.Shipping;
+
+/// <summary>Admin shipping workflow: serviceability couriers + AWB assignment (per Shiprocket shipment).</summary>
+[ApiController]
+[Route("api/admin/shipping")]
+[Authorize(Roles = "Admin")]
+public class AdminShippingController(IAdminShippingService shipping, BaglyDbContext db) : ControllerBase
+{
+    /// <summary>
+    /// Orders with Shiprocket shipments. Tabs: new | ready | awb.
+    /// </summary>
+    [HttpGet("orders")]
+    public async Task<ActionResult<AdminShippingOrdersResult>> ListOrders(
+        [FromQuery] string? tab = "new",
+        CancellationToken cancellationToken = default)
+    {
+        var result = await shipping.ListOrdersAsync(tab, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Mark a shipment Ready to Ship and return Shiprocket serviceability couriers.
+    /// Works per pickup group (home/work) via OrderShiprocketShipments.Id.
+    /// </summary>
+    [HttpPost("shipments/{shipmentId:guid}/ready-to-ship")]
+    public async Task<ActionResult<ReadyToShipResponse>> ReadyToShip(
+        Guid shipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await shipping.ReadyToShipAsync(shipmentId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Convenience: Ready to Ship for a specific shipment on an order (same as shipments/{id}/ready-to-ship).
+    /// Body optional: { "shipmentId": "..." } — required when the order has multiple pickups.
+    /// </summary>
+    [HttpPost("orders/{orderId:guid}/ready-to-ship")]
+    public async Task<ActionResult<ReadyToShipResponse>> ReadyToShipForOrder(
+        Guid orderId,
+        [FromBody] ReadyToShipOrderRequest? body,
+        CancellationToken cancellationToken)
+    {
+        Guid shipmentId;
+        if (body?.ShipmentId is Guid explicitId)
+        {
+            shipmentId = explicitId;
+        }
+        else
+        {
+            var shipments = await db.OrderShiprocketShipments.AsNoTracking()
+                .Where(s => s.OrderId == orderId &&
+                            s.ShiprocketShipmentId != null &&
+                            s.ShiprocketShipmentId != "")
+                .Select(s => new { s.Id, s.PickupLocation, s.ShiprocketShipmentId })
+                .ToListAsync(cancellationToken);
+
+            if (shipments.Count == 0)
+            {
+                return BadRequest(new { message = "No Shiprocket shipments found for this order." });
+            }
+
+            if (shipments.Count > 1)
+            {
+                return BadRequest(new
+                {
+                    message = "Order has multiple pickups. Pass shipmentId in the body.",
+                    shipments,
+                });
+            }
+
+            shipmentId = shipments[0].Id;
+        }
+
+        try
+        {
+            var result = await shipping.ReadyToShipAsync(shipmentId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>Assign AWB via Shiprocket and persist AWB + actual shipping charge.</summary>
+    [HttpPost("shipments/{shipmentId:guid}/assign-awb")]
+    public async Task<ActionResult<AssignAwbResponse>> AssignAwb(
+        Guid shipmentId,
+        [FromBody] AssignAwbRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || request.CourierId <= 0)
+        {
+            return BadRequest(new { message = "courierId is required." });
+        }
+
+        try
+        {
+            var result = await shipping.AssignAwbAsync(
+                shipmentId,
+                request.CourierId,
+                request.Rate,
+                cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+}
+
+public record ReadyToShipOrderRequest(Guid? ShipmentId = null);
