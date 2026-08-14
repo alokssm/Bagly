@@ -54,7 +54,11 @@ public record CourierOptionDto(
     decimal FreightCharge = 0,
     decimal CoverageCharge = 0,
     decimal WhatsAppCharge = 0,
-    decimal CodCharge = 0
+    decimal CodCharge = 0,
+    /// <summary>Shiprocket courier <c>rating</c>.</summary>
+    decimal? Rating = null,
+    /// <summary>Human-readable expected pickup from Shiprocket courier object.</summary>
+    string? ExpectedPickup = null
 );
 
 public record ReadyToShipResponse(

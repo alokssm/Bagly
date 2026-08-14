@@ -322,7 +322,9 @@ export default function AdminShipping() {
                             <thead>
                               <tr>
                                 <th>Name</th>
+                                <th>Rating</th>
                                 <th>Rate</th>
+                                <th>Expected pickup</th>
                                 <th>Delivery ETA</th>
                                 <th />
                               </tr>
@@ -330,9 +332,15 @@ export default function AdminShipping() {
                             <tbody>
                               {couriers.map((c) => {
                                 const breakdown = courierRateBreakdown(c)
+                                const ratingNum = Number(c.rating)
                                 return (
                                   <tr key={c.courierId}>
                                     <td>{c.courierName}</td>
+                                    <td>
+                                      {Number.isFinite(ratingNum) && ratingNum > 0
+                                        ? ratingNum.toFixed(1)
+                                        : '—'}
+                                    </td>
                                     <td>
                                       <strong>{formatShippingPrice(c.rate)}</strong>
                                       {breakdown ? (
@@ -345,6 +353,7 @@ export default function AdminShipping() {
                                         </div>
                                       ) : null}
                                     </td>
+                                    <td>{c.expectedPickup || '—'}</td>
                                     <td>
                                       {c.estimatedDelivery ||
                                         (c.estimatedDeliveryDays != null

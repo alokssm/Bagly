@@ -691,10 +691,20 @@ public sealed class AdminShippingService(
             var name = TryReadString(item, "courier_name")
                        ?? TryReadString(item, "courier_company_name")
                        ?? $"Courier {id}";
+            // Delivery ETA: prefer etd / estimated_delivery / edd; etd_hours is delivery hours (int).
             var etd = TryReadString(item, "etd")
                       ?? TryReadString(item, "estimated_delivery")
-                      ?? TryReadString(item, "etd_hours");
+                      ?? TryReadString(item, "edd");
+            if (string.IsNullOrWhiteSpace(etd))
+            {
+                var etdHours = TryReadInt(item, "etd_hours");
+                if (etdHours is > 0)
+                    etd = $"{etdHours} hours";
+            }
+
             var days = TryReadInt(item, "estimated_delivery_days");
+            var rating = TryReadDecimal(item, "rating");
+            var expectedPickup = FormatExpectedPickup(item);
 
             var (rate, freight, coverage, whatsapp, codCharge) = ComputeCourierShippingCharge(item);
 
@@ -707,7 +717,9 @@ public sealed class AdminShippingService(
                 freight,
                 coverage,
                 whatsapp,
-                codCharge));
+                codCharge,
+                rating,
+                expectedPickup));
         }
 
         return couriers
@@ -963,6 +975,50 @@ public sealed class AdminShippingService(
                     return Truncate(el.GetRawText(), 200);
                 }
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps Shiprocket courier pickup timing fields into a display string.
+    /// Prefers explicit pickup strings, then seconds_left_for_pickup, then cutoff_time / pickup_availability.
+    /// </summary>
+    private static string? FormatExpectedPickup(JsonElement item)
+    {
+        var direct = TryReadString(item, "expected_pickup")
+                     ?? TryReadString(item, "pickup_date")
+                     ?? TryReadString(item, "expected_pickup_date");
+        if (!string.IsNullOrWhiteSpace(direct))
+            return direct.Trim();
+
+        var seconds = TryReadInt(item, "seconds_left_for_pickup");
+        if (seconds is > 0)
+        {
+            var ts = TimeSpan.FromSeconds(seconds.Value);
+            if (ts.TotalMinutes < 60)
+                return $"in {(int)Math.Max(1, ts.TotalMinutes)} min";
+            if (ts.TotalHours < 24)
+            {
+                var h = (int)ts.TotalHours;
+                var m = ts.Minutes;
+                return m > 0 ? $"in {h}h {m}m" : $"in {h}h";
+            }
+
+            var days = (int)Math.Ceiling(ts.TotalDays);
+            return days == 1 ? "in 1 day" : $"in {days} days";
+        }
+
+        var cutoff = TryReadString(item, "cutoff_time");
+        if (!string.IsNullOrWhiteSpace(cutoff))
+            return $"by {cutoff.Trim()}";
+
+        // pickup_availability is often "0"/"1"; only use when it looks like a label/time.
+        var availability = TryReadString(item, "pickup_availability");
+        if (!string.IsNullOrWhiteSpace(availability) &&
+            availability is not ("0" or "1"))
+        {
+            return availability.Trim();
         }
 
         return null;
