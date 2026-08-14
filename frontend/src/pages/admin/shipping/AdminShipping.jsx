@@ -177,7 +177,7 @@ export default function AdminShipping() {
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-shipping">
       <div className="admin-page-head">
         <div>
           <p className="eyebrow">Fulfillment</p>
@@ -186,7 +186,7 @@ export default function AdminShipping() {
             Per-pickup Shiprocket shipments (home/work). Ready to Ship loads couriers; Assign AWB stores AWB + charge.
           </p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
@@ -194,18 +194,21 @@ export default function AdminShipping() {
       {error ? <p className="admin-error">{error}</p> : null}
       {actionError ? <p className="admin-error">{actionError}</p> : null}
 
-      <div className="admin-filters" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+      <div className="admin-tabs admin-shipping-tabs" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
-            className={`btn ${tab === t.id ? 'btn-primary' : 'btn-secondary'}`}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`admin-tab${tab === t.id ? ' active' : ''}`}
             onClick={() => {
               setTab(t.id)
               setActionError('')
             }}
           >
-            {t.label} ({t.count})
+            {t.label}
+            <span className="admin-shipping-tab-count">{t.count}</span>
           </button>
         ))}
       </div>
@@ -215,8 +218,8 @@ export default function AdminShipping() {
       ) : !rows.length ? (
         <p className="admin-muted">No orders in this tab. Confirmed orders need a successful Shiprocket create first.</p>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
+        <div className="admin-table-wrap admin-shipping-table-wrap">
+          <table className="admin-table admin-shipping-table">
             <thead>
               <tr>
                 <th>Order</th>
@@ -236,24 +239,24 @@ export default function AdminShipping() {
                 const canReady = !!shipment.shiprocketShipmentId && !shipment.awbCode
 
                 return (
-                  <tr key={shipment.id} style={highlight ? undefined : { opacity: 0.55 }}>
+                  <tr key={shipment.id} className={highlight ? undefined : 'admin-shipping-row-dim'}>
                     <td>
-                      <strong>{order.orderNumber}</strong>
-                      <div className="admin-muted">{formatDateTime(order.createdAt)}</div>
+                      <strong className="admin-shipping-order-num">{order.orderNumber}</strong>
+                      <div className="admin-muted admin-shipping-meta">{formatDateTime(order.createdAt)}</div>
                     </td>
                     <td>
-                      {order.customerName}
-                      <div className="admin-muted">{order.email}</div>
-                      <div className="admin-muted">PIN {order.zip || '—'}</div>
+                      <div>{order.customerName}</div>
+                      <div className="admin-muted admin-shipping-meta">{order.email}</div>
+                      <div className="admin-muted admin-shipping-meta">PIN {order.zip || '—'}</div>
                     </td>
                     <td>
-                      {order.paymentProvider || '—'}
-                      <div className="admin-muted">{formatPrice(order.total, order.currency)}</div>
+                      <div>{order.paymentProvider || '—'}</div>
+                      <div className="admin-muted admin-shipping-meta">{formatPrice(order.total, order.currency)}</div>
                     </td>
                     <td>
                       <strong>{shipment.pickupLocation}</strong>
-                      <div className="admin-muted">SR ship #{shipment.shiprocketShipmentId || '—'}</div>
-                      <div className="admin-muted">SR order {shipment.shiprocketOrderId || '—'}</div>
+                      <div className="admin-muted admin-shipping-meta">SR ship #{shipment.shiprocketShipmentId || '—'}</div>
+                      <div className="admin-muted admin-shipping-meta">SR order {shipment.shiprocketOrderId || '—'}</div>
                     </td>
                     <td>
                       <span className={shippingPill(shipment.shippingStatus, shipment.awbCode)}>
@@ -262,16 +265,14 @@ export default function AdminShipping() {
                           : shipment.shippingStatus || shipment.status || 'Created'}
                       </span>
                       {shipment.lastError ? (
-                        <div className="admin-error" style={{ marginTop: 4 }}>
-                          {shipment.lastError}
-                        </div>
+                        <div className="admin-error admin-shipping-error">{shipment.lastError}</div>
                       ) : null}
                     </td>
                     <td>
                       {shipment.awbCode ? (
                         <>
                           <strong>{shipment.awbCode}</strong>
-                          <div className="admin-muted">
+                          <div className="admin-muted admin-shipping-meta">
                             {shipment.courierName || 'Courier'}
                             {shipment.courierId ? ` (#${shipment.courierId})` : ''}
                           </div>
@@ -285,96 +286,92 @@ export default function AdminShipping() {
                         <span className="admin-muted">—</span>
                       )}
                     </td>
-                    <td>
+                    <td className="admin-shipping-actions">
                       {canReady ? (
                         <button
                           type="button"
-                          className="btn btn-primary"
+                          className="btn btn-primary btn-sm"
                           disabled={busy}
                           onClick={() => readyToShip(shipment)}
                         >
                           {busy ? 'Loading…' : shipment.readyToShipAt ? 'Refresh Couriers' : 'Ready to Ship'}
                         </button>
                       ) : null}
-                      <div style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => {
-                            setLogsFilterShipmentId(shipment.id)
-                            setExpandedLogId(null)
-                          }}
-                        >
-                          API logs
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setLogsFilterShipmentId(shipment.id)
+                          setExpandedLogId(null)
+                        }}
+                      >
+                        API logs
+                      </button>
                       {couriers.length > 0 ? (
-                        <div style={{ marginTop: 10, minWidth: 280 }}>
+                        <div className="admin-shipping-couriers">
                           {meta ? (
-                            <p className="admin-muted" style={{ marginBottom: 6 }}>
+                            <p className="admin-muted admin-shipping-courier-meta">
                               {meta.pickupPostcode} → {meta.deliveryPostcode} · {meta.weightKg} kg ·{' '}
                               {meta.length}×{meta.breadth}×{meta.height} cm · decl{' '}
                               {formatPrice(meta.declaredValue, order.currency)} ·{' '}
                               {meta.cod ? 'COD' : 'Prepaid'}
                             </p>
                           ) : null}
-                          <table className="admin-table" style={{ fontSize: '0.9rem' }}>
-                            <thead>
-                              <tr>
-                                <th>Name</th>
-                                <th>Rating</th>
-                                <th>Rate</th>
-                                <th>Expected pickup</th>
-                                <th>Delivery ETA</th>
-                                <th />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {couriers.map((c) => {
-                                const breakdown = courierRateBreakdown(c)
-                                const ratingNum = Number(c.rating)
-                                return (
-                                  <tr key={c.courierId}>
-                                    <td>{c.courierName}</td>
-                                    <td>
-                                      {Number.isFinite(ratingNum) && ratingNum > 0
-                                        ? ratingNum.toFixed(1)
-                                        : '—'}
-                                    </td>
-                                    <td>
-                                      <strong>{formatShippingPrice(c.rate)}</strong>
-                                      {breakdown ? (
-                                        <div
-                                          className="admin-muted"
-                                          style={{ fontSize: '0.75rem', marginTop: 2 }}
-                                          title={breakdown}
+                          <div className="admin-table-wrap admin-shipping-courier-wrap">
+                            <table className="admin-table admin-shipping-courier-table">
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Rating</th>
+                                  <th>Rate</th>
+                                  <th>Expected pickup</th>
+                                  <th>Delivery ETA</th>
+                                  <th />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {couriers.map((c) => {
+                                  const breakdown = courierRateBreakdown(c)
+                                  const ratingNum = Number(c.rating)
+                                  return (
+                                    <tr key={c.courierId}>
+                                      <td>{c.courierName}</td>
+                                      <td>
+                                        {Number.isFinite(ratingNum) && ratingNum > 0
+                                          ? ratingNum.toFixed(1)
+                                          : '—'}
+                                      </td>
+                                      <td>
+                                        <strong>{formatShippingPrice(c.rate)}</strong>
+                                        {breakdown ? (
+                                          <div className="admin-muted admin-shipping-rate-breakdown" title={breakdown}>
+                                            {breakdown}
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                      <td>{c.expectedPickup || '—'}</td>
+                                      <td>
+                                        {c.estimatedDelivery ||
+                                          (c.estimatedDeliveryDays != null
+                                            ? `${c.estimatedDeliveryDays} days`
+                                            : '—')}
+                                      </td>
+                                      <td>
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-sm"
+                                          disabled={busy}
+                                          onClick={() => assignAwb(shipment, c)}
                                         >
-                                          {breakdown}
-                                        </div>
-                                      ) : null}
-                                    </td>
-                                    <td>{c.expectedPickup || '—'}</td>
-                                    <td>
-                                      {c.estimatedDelivery ||
-                                        (c.estimatedDeliveryDays != null
-                                          ? `${c.estimatedDeliveryDays} days`
-                                          : '—')}
-                                    </td>
-                                    <td>
-                                      <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        disabled={busy}
-                                        onClick={() => assignAwb(shipment, c)}
-                                      >
-                                        Assign AWB
-                                      </button>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
+                                          Assign AWB
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       ) : null}
                     </td>
@@ -386,20 +383,20 @@ export default function AdminShipping() {
         </div>
       )}
 
-      <section style={{ marginTop: '2rem' }}>
-        <div className="admin-page-head" style={{ marginBottom: '0.75rem' }}>
+      <section className="admin-shipping-logs">
+        <div className="admin-page-head admin-shipping-logs-head">
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.15rem' }}>Shiprocket API logs</h2>
-            <p className="admin-muted" style={{ margin: '0.25rem 0 0' }}>
+            <h2>Shiprocket API logs</h2>
+            <p className="admin-muted">
               Exact request bodies / query strings sent to Shiprocket (tokens and passwords redacted).
               {logsFilterShipmentId ? ' Filtered to one shipment.' : ' Showing recent across all shipments.'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="admin-shipping-logs-actions">
             {logsFilterShipmentId ? (
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-sm"
                 onClick={() => {
                   setLogsFilterShipmentId('')
                   setExpandedLogId(null)
@@ -410,7 +407,7 @@ export default function AdminShipping() {
             ) : null}
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               disabled={logsLoading}
               onClick={() => loadLogs(logsFilterShipmentId)}
             >
@@ -425,8 +422,8 @@ export default function AdminShipping() {
         ) : !apiLogs.length ? (
           <p className="admin-muted">No Shiprocket API logs yet. Run Ready to Ship or Assign AWB to create one.</p>
         ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
+          <div className="admin-table-wrap admin-shipping-table-wrap">
+            <table className="admin-table admin-shipping-table admin-shipping-logs-table">
               <thead>
                 <tr>
                   <th>When</th>
@@ -444,39 +441,29 @@ export default function AdminShipping() {
                     <tr key={log.id}>
                       <td>
                         <div>{formatDateTime(log.createdAtUtc)}</div>
-                        <div className="admin-muted">#{log.id}</div>
+                        <div className="admin-muted admin-shipping-meta">#{log.id}</div>
                       </td>
                       <td>
                         <strong>{log.action}</strong>
-                        <div className="admin-muted">{truncate(log.url, 48)}</div>
+                        <div className="admin-muted admin-shipping-meta">{truncate(log.url, 48)}</div>
                       </td>
                       <td>{log.httpMethod}</td>
                       <td>{log.responseStatus ?? '—'}</td>
-                      <td style={{ maxWidth: 420 }}>
+                      <td className="admin-shipping-log-request">
                         <button
                           type="button"
-                          className="btn btn-secondary"
-                          style={{ marginBottom: 6 }}
+                          className="btn btn-secondary btn-sm"
                           onClick={() => setExpandedLogId(open ? null : log.id)}
                         >
                           {open ? 'Hide request' : 'View request'}
                         </button>
                         {open ? (
-                          <pre
-                            style={{
-                              margin: 0,
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                              fontSize: '0.8rem',
-                              maxHeight: 280,
-                              overflow: 'auto',
-                            }}
-                          >
+                          <pre className="admin-shipping-log-pre">
                             {log.requestJson || '(empty)'}
                             {log.responseJson ? `\n\n--- response ---\n${log.responseJson}` : ''}
                           </pre>
                         ) : (
-                          <div className="admin-muted">{truncate(log.requestJson, 100)}</div>
+                          <div className="admin-muted admin-shipping-meta">{truncate(log.requestJson, 100)}</div>
                         )}
                       </td>
                       <td className="admin-muted">{log.adminEmail || '—'}</td>
