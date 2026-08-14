@@ -395,6 +395,22 @@ try
         });
     });
 
+    // Same protection as /api/setup/seed (open setup endpoint). Clears all tables except AdminUsers + Categories.
+    app.MapPost("/api/setup/cleanup", async (IServiceProvider sp) =>
+    {
+        Console.WriteLine("[setup/cleanup] POST /api/setup/cleanup invoked.");
+        var counts = await DatabaseBootstrapper.CleanupExceptAdminAndCategoriesAsync(sp);
+        return Results.Ok(new
+        {
+            message = "Cleanup completed. Kept AdminUsers and Categories; cleared all other data tables. Re-seed with POST /api/setup/seed and recreate sellers as needed.",
+            kept = new { adminUsers = counts["AdminUsers"], categories = counts["Categories"] },
+            cleared = counts
+                .Where(kv => kv.Key is not ("AdminUsers" or "Categories"))
+                .ToDictionary(kv => kv.Key, kv => kv.Value),
+            counts,
+        });
+    });
+
     app.MapGet("/api/health", async (IConfiguration config, BaglyDbContext db, EmailDeliveryDiagnostics emailDiagnostics) =>
     {
         var cs = config.GetConnectionString("DefaultConnection") ?? "";

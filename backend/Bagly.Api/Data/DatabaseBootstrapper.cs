@@ -188,6 +188,77 @@ public static class DatabaseBootstrapper
             await db.AdminUsers.CountAsync(cancellationToken));
     }
 
+    /// <summary>
+    /// Clears all business/user data tables while keeping <c>AdminUsers</c>, <c>Categories</c>,
+    /// and <c>__EFMigrationsHistory</c>. Uses a single Postgres TRUNCATE so FK order is handled
+    /// atomically. Safe to call repeatedly.
+    /// </summary>
+    public static async Task<Dictionary<string, int>> CleanupExceptAdminAndCategoriesAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
+
+        Console.WriteLine("[setup/cleanup] Starting DB cleanup — keeping AdminUsers + Categories only.");
+
+        // All tables in one TRUNCATE: Postgres disables FK checks among the listed tables for the
+        // duration of the statement. Do NOT include AdminUsers, Categories, or __EFMigrationsHistory.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            TRUNCATE TABLE
+                "OrderShiprocketShipments",
+                "OrderItems",
+                "ShiprocketApiLogs",
+                "PaymentLogs",
+                "ProductReviews",
+                "StockAlerts",
+                "CartItems",
+                "ShippingAddresses",
+                "Orders",
+                "Carts",
+                "Products",
+                "CustomerUsers",
+                "SellerUsers",
+                "AuditLogs",
+                "Logs",
+                "ContactMessages",
+                "SiteHits"
+            RESTART IDENTITY;
+            """,
+            cancellationToken);
+
+        var counts = new Dictionary<string, int>
+        {
+            ["AdminUsers"] = await db.AdminUsers.CountAsync(cancellationToken),
+            ["Categories"] = await db.Categories.CountAsync(cancellationToken),
+            ["Products"] = await db.Products.CountAsync(cancellationToken),
+            ["Orders"] = await db.Orders.CountAsync(cancellationToken),
+            ["OrderItems"] = await db.OrderItems.CountAsync(cancellationToken),
+            ["OrderShiprocketShipments"] = await db.OrderShiprocketShipments.CountAsync(cancellationToken),
+            ["Carts"] = await db.Carts.CountAsync(cancellationToken),
+            ["CartItems"] = await db.CartItems.CountAsync(cancellationToken),
+            ["CustomerUsers"] = await db.CustomerUsers.CountAsync(cancellationToken),
+            ["SellerUsers"] = await db.SellerUsers.CountAsync(cancellationToken),
+            ["ProductReviews"] = await db.ProductReviews.CountAsync(cancellationToken),
+            ["ShippingAddresses"] = await db.ShippingAddresses.CountAsync(cancellationToken),
+            ["StockAlerts"] = await db.StockAlerts.CountAsync(cancellationToken),
+            ["PaymentLogs"] = await db.PaymentLogs.CountAsync(cancellationToken),
+            ["ShiprocketApiLogs"] = await db.ShiprocketApiLogs.CountAsync(cancellationToken),
+            ["AuditLogs"] = await db.AuditLogs.CountAsync(cancellationToken),
+            ["Logs"] = await db.SystemLogs.CountAsync(cancellationToken),
+            ["ContactMessages"] = await db.ContactMessages.CountAsync(cancellationToken),
+            ["SiteHits"] = await db.SiteHits.CountAsync(cancellationToken),
+        };
+
+        Console.WriteLine(
+            $"[setup/cleanup] Done. Kept AdminUsers={counts["AdminUsers"]}, Categories={counts["Categories"]}. " +
+            $"Cleared Products={counts["Products"]}, Orders={counts["Orders"]}, SellerUsers={counts["SellerUsers"]}, " +
+            $"CustomerUsers={counts["CustomerUsers"]}.");
+
+        return counts;
+    }
+
     /// <summary>Re-applies the Products table's SubCategoryId + SEO columns using Postgres'
     /// <c>ADD COLUMN IF NOT EXISTS</c>, which is safe to call repeatedly/concurrently. Used as a
     /// self-heal fallback by ProductsController when a query fails with Postgres error 42703
