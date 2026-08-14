@@ -14,6 +14,8 @@ namespace Bagly.Api.Controllers;
 /// <summary>
 /// Approved sellers view orders that include their products, mark pickup shipments
 /// Ready to Ship (gates admin courier selection), and cancel before AWB.
+/// Visibility: Product.SellerId match, or order shipments whose PickupLocation matches
+/// a nickname in the seller's SellerPickupLocations (case-sensitive / Ordinal).
 /// </summary>
 [ApiController]
 [Authorize(Roles = "Seller")]
@@ -40,20 +42,20 @@ public class SellerOrdersController(
 
         (page, pageSize) = NormalizePaging(page, pageSize);
 
-        var sellerProductIds = await db.Products.AsNoTracking()
-            .Where(p => p.SellerId == seller.Id)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-
-        if (sellerProductIds.Count == 0)
+        var scope = await LoadSellerOrderScopeAsync(seller.Id, cancellationToken);
+        if (scope.OwnedProductIds.Count == 0 && scope.RegisteredPickups.Count == 0)
         {
             return Ok(new SellerOrdersListResult([], page, pageSize, 0, 0));
         }
 
-        var defaultPickup = shiprocketOptions.Value.PickupLocation?.Trim() ?? "";
+        var ownedSet = scope.OwnedProductIds.ToHashSet(StringComparer.Ordinal);
+        var pickupSet = scope.RegisteredPickups.ToHashSet(StringComparer.Ordinal);
+        var visibleProductSet = scope.VisibleProductIds.ToHashSet(StringComparer.Ordinal);
 
         var baseQuery = db.Orders.AsNoTracking()
-            .Where(o => o.Items.Any(i => sellerProductIds.Contains(i.ProductId)));
+            .Where(o =>
+                o.Items.Any(i => visibleProductSet.Contains(i.ProductId)) ||
+                (pickupSet.Count > 0 && o.ShiprocketShipments.Any(s => pickupSet.Contains(s.PickupLocation))));
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -66,27 +68,23 @@ public class SellerOrdersController(
             .Include(o => o.ShiprocketShipments)
             .ToListAsync(cancellationToken);
 
-        var sellerIdSet = sellerProductIds.ToHashSet(StringComparer.Ordinal);
         var productIdsOnPage = orders
             .SelectMany(o => o.Items.Select(i => i.ProductId))
-            .Where(id => sellerIdSet.Contains(id))
+            .Where(id => visibleProductSet.Contains(id))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
         var productPickups = await db.Products.AsNoTracking()
-            .Where(p => productIdsOnPage.Contains(p.Id) && p.SellerId == seller.Id)
+            .Where(p => productIdsOnPage.Contains(p.Id))
             .Select(p => new { p.Id, p.ShiprocketPickupLocation })
             .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
 
-        var registeredPickups = await db.SellerPickupLocations.AsNoTracking()
-            .Where(p => p.SellerUserId == seller.Id)
-            .Select(p => p.PickupLocation)
-            .ToListAsync(cancellationToken);
+        var defaultPickup = shiprocketOptions.Value.PickupLocation?.Trim() ?? "";
 
         var items = orders.Select(o =>
         {
             var sellerItems = o.Items
-                .Where(i => sellerIdSet.Contains(i.ProductId))
+                .Where(i => visibleProductSet.Contains(i.ProductId))
                 .Select(i => new SellerOrderItemDto(
                     i.ProductId,
                     i.ProductName,
@@ -97,14 +95,14 @@ public class SellerOrdersController(
 
             var sellerSubtotal = sellerItems.Sum(i => i.UnitPrice * i.Quantity);
             var pickupNicknames = ResolveSellerPickupNicknames(
-                sellerItems.Select(i => i.ProductId),
+                sellerItems.Select(i => i.ProductId).Where(id => ownedSet.Contains(id)),
                 productPickups,
-                registeredPickups,
+                scope.RegisteredPickups,
                 defaultPickup);
 
             var shipments = o.ShiprocketShipments
                 .Where(s => pickupNicknames.Contains(s.PickupLocation))
-                .OrderBy(s => s.PickupLocation)
+                .OrderBy(s => s.PickupLocation, StringComparer.Ordinal)
                 .Select(MapShipment)
                 .ToList();
 
@@ -231,13 +229,11 @@ public class SellerOrdersController(
         var ownership = await EnsureSellerOwnsOrderAsync(order, seller.Id, cancellationToken);
         if (ownership is not null) return ownership;
 
-        var sellerProductIds = await db.Products.AsNoTracking()
-            .Where(p => p.SellerId == seller.Id)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var sellerIdSet = sellerProductIds.ToHashSet(StringComparer.Ordinal);
+        var scope = await LoadSellerOrderScopeAsync(seller.Id, cancellationToken);
+        var ownedSet = scope.OwnedProductIds.ToHashSet(StringComparer.Ordinal);
+        var visibleProductSet = scope.VisibleProductIds.ToHashSet(StringComparer.Ordinal);
 
-        var sellerItems = order.Items.Where(i => sellerIdSet.Contains(i.ProductId)).ToList();
+        var sellerItems = order.Items.Where(i => visibleProductSet.Contains(i.ProductId)).ToList();
         if (sellerItems.Count == 0)
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "This order has no items of yours." });
 
@@ -246,14 +242,10 @@ public class SellerOrdersController(
             .Where(p => sellerItems.Select(i => i.ProductId).Contains(p.Id))
             .Select(p => new { p.Id, p.ShiprocketPickupLocation })
             .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
-        var registeredPickups = await db.SellerPickupLocations.AsNoTracking()
-            .Where(p => p.SellerUserId == seller.Id)
-            .Select(p => p.PickupLocation)
-            .ToListAsync(cancellationToken);
         var pickupNicknames = ResolveSellerPickupNicknames(
-            sellerItems.Select(i => i.ProductId),
+            sellerItems.Select(i => i.ProductId).Where(id => ownedSet.Contains(id)),
             productPickups,
-            registeredPickups,
+            scope.RegisteredPickups,
             defaultPickup);
 
         var sellerShipments = order.ShiprocketShipments
@@ -282,7 +274,7 @@ public class SellerOrdersController(
             shipment.LastError = "Cancelled by seller";
         }
 
-        var allItemsAreSellers = order.Items.All(i => sellerIdSet.Contains(i.ProductId));
+        var allItemsAreSellers = order.Items.All(i => visibleProductSet.Contains(i.ProductId));
         if (allItemsAreSellers)
         {
             order.Status = "Cancelled";
@@ -342,21 +334,66 @@ public class SellerOrdersController(
         return Ok(dto);
     }
 
+    private async Task<SellerOrderScope> LoadSellerOrderScopeAsync(
+        Guid sellerId,
+        CancellationToken cancellationToken)
+    {
+        var ownedProductIds = await db.Products.AsNoTracking()
+            .Where(p => p.SellerId == sellerId)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        var registeredPickups = await db.SellerPickupLocations.AsNoTracking()
+            .Where(p => p.SellerUserId == sellerId)
+            .Select(p => p.PickupLocation)
+            .ToListAsync(cancellationToken);
+
+        // Exact nickname match (Shiprocket case-sensitive); ignore blank nicknames.
+        var pickupList = registeredPickups
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        List<string> pickupMatchedProductIds = [];
+        if (pickupList.Count > 0)
+        {
+            pickupMatchedProductIds = await db.Products.AsNoTracking()
+                .Where(p => p.ShiprocketPickupLocation != null
+                            && pickupList.Contains(p.ShiprocketPickupLocation))
+                .Select(p => p.Id)
+                .ToListAsync(cancellationToken);
+        }
+
+        var visible = ownedProductIds
+            .Concat(pickupMatchedProductIds)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return new SellerOrderScope(ownedProductIds, pickupList, visible);
+    }
+
     private async Task<ActionResult?> EnsureSellerOwnsOrderAsync(
         Order order,
         Guid sellerId,
         CancellationToken cancellationToken)
     {
+        var scope = await LoadSellerOrderScopeAsync(sellerId, cancellationToken);
         var productIds = order.Items.Select(i => i.ProductId).Distinct(StringComparer.Ordinal).ToList();
-        var hasItem = productIds.Count > 0 && await db.Products.AsNoTracking()
-            .AnyAsync(p => p.SellerId == sellerId && productIds.Contains(p.Id), cancellationToken);
+        var hasVisibleItem = productIds.Count > 0
+            && productIds.Any(id => scope.VisibleProductIds.Contains(id, StringComparer.Ordinal));
 
-        if (!hasItem)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "This order is not associated with your products." });
-        }
+        if (hasVisibleItem)
+            return null;
 
-        return null;
+        var pickupSet = scope.RegisteredPickups.ToHashSet(StringComparer.Ordinal);
+        var hasPickupShipment = pickupSet.Count > 0
+            && order.ShiprocketShipments.Any(s => pickupSet.Contains(s.PickupLocation));
+
+        if (hasPickupShipment)
+            return null;
+
+        return StatusCode(StatusCodes.Status403Forbidden, new { message = "This order is not associated with your products." });
     }
 
     private async Task<bool> SellerOwnsShipmentPickupAsync(
@@ -365,35 +402,44 @@ public class SellerOrdersController(
         string pickupLocation,
         CancellationToken cancellationToken)
     {
-        var defaultPickup = shiprocketOptions.Value.PickupLocation?.Trim() ?? "";
-        var sellerProductIds = await db.Products.AsNoTracking()
-            .Where(p => p.SellerId == sellerId)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var sellerIdSet = sellerProductIds.ToHashSet(StringComparer.Ordinal);
-        var sellerItems = order.Items.Where(i => sellerIdSet.Contains(i.ProductId)).ToList();
-        if (sellerItems.Count == 0) return false;
+        if (string.IsNullOrWhiteSpace(pickupLocation))
+            return false;
 
-        var productPickups = await db.Products.AsNoTracking()
-            .Where(p => sellerItems.Select(i => i.ProductId).Contains(p.Id))
-            .Select(p => new { p.Id, p.ShiprocketPickupLocation })
-            .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
-        var registeredPickups = await db.SellerPickupLocations.AsNoTracking()
-            .Where(p => p.SellerUserId == sellerId)
-            .Select(p => p.PickupLocation)
-            .ToListAsync(cancellationToken);
+        var scope = await LoadSellerOrderScopeAsync(sellerId, cancellationToken);
+        var defaultPickup = shiprocketOptions.Value.PickupLocation?.Trim() ?? "";
+        var ownedSet = scope.OwnedProductIds.ToHashSet(StringComparer.Ordinal);
+
+        var ownedItemProductIds = order.Items
+            .Select(i => i.ProductId)
+            .Where(id => ownedSet.Contains(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Dictionary<string, string?> productPickups = new(StringComparer.Ordinal);
+        if (ownedItemProductIds.Count > 0)
+        {
+            productPickups = await db.Products.AsNoTracking()
+                .Where(p => ownedItemProductIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.ShiprocketPickupLocation })
+                .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+        }
 
         var nicknames = ResolveSellerPickupNicknames(
-            sellerItems.Select(i => i.ProductId),
+            ownedItemProductIds,
             productPickups,
-            registeredPickups,
+            scope.RegisteredPickups,
             defaultPickup);
 
         return nicknames.Contains(pickupLocation);
     }
 
+    /// <summary>
+    /// Seller-controlled pickups: registered SellerPickupLocations nicknames (Ordinal),
+    /// plus resolved pickups for seller-owned products (falls back to platform default).
+    /// Registered nicknames alone gate platform products fulfilled from seller warehouses.
+    /// </summary>
     private static HashSet<string> ResolveSellerPickupNicknames(
-        IEnumerable<string> sellerProductIds,
+        IEnumerable<string> sellerOwnedProductIds,
         IReadOnlyDictionary<string, string?> productPickups,
         IEnumerable<string> registeredPickups,
         string defaultPickup)
@@ -405,7 +451,7 @@ public class SellerOrdersController(
                 set.Add(nick.Trim());
         }
 
-        foreach (var productId in sellerProductIds)
+        foreach (var productId in sellerOwnedProductIds)
         {
             productPickups.TryGetValue(productId, out var pickup);
             var resolved = string.IsNullOrWhiteSpace(pickup) ? defaultPickup : pickup.Trim();
@@ -476,6 +522,11 @@ public class SellerOrdersController(
         if (pageSize > MaxPageSize) pageSize = MaxPageSize;
         return (page, pageSize);
     }
+
+    private sealed record SellerOrderScope(
+        IReadOnlyList<string> OwnedProductIds,
+        IReadOnlyList<string> RegisteredPickups,
+        IReadOnlyList<string> VisibleProductIds);
 }
 
 public record SellerOrderItemDto(
