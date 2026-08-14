@@ -29,6 +29,11 @@ const emptyForm = {
   seoDescription: '',
   seoKeywords: '',
   shiprocketPickupLocation: '',
+  useDefaultPackageSize: true,
+  weightKg: '',
+  lengthCm: '',
+  breadthCm: '',
+  heightCm: '',
 }
 
 function toForm(product) {
@@ -56,6 +61,11 @@ function toForm(product) {
     seoDescription: product.seoDescription || '',
     seoKeywords: product.seoKeywords || '',
     shiprocketPickupLocation: product.shiprocketPickupLocation || '',
+    useDefaultPackageSize: product.useDefaultPackageSize !== false,
+    weightKg: product.weightKg != null ? String(product.weightKg) : '',
+    lengthCm: product.lengthCm != null ? String(product.lengthCm) : '',
+    breadthCm: product.breadthCm != null ? String(product.breadthCm) : '',
+    heightCm: product.heightCm != null ? String(product.heightCm) : '',
   }
 }
 
@@ -338,6 +348,77 @@ export default function SellerProductForm() {
                   </button>
                 ) : null}
               </div>
+
+              <label className="admin-check full">
+                <input
+                  type="checkbox"
+                  name="useDefaultPackageSize"
+                  checked={form.useDefaultPackageSize !== false}
+                  onChange={onChange}
+                />
+                Use default package size (Shiprocket defaults)
+              </label>
+
+              {form.useDefaultPackageSize === false ? (
+                <>
+                  <div className="form-field">
+                    <label htmlFor="weightKg">Weight (kg)</label>
+                    <input
+                      id="weightKg"
+                      name="weightKg"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={form.weightKg}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="lengthCm">Length (cm)</label>
+                    <input
+                      id="lengthCm"
+                      name="lengthCm"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={form.lengthCm}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="breadthCm">Breadth (cm)</label>
+                    <input
+                      id="breadthCm"
+                      name="breadthCm"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={form.breadthCm}
+                      onChange={onChange}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="heightCm">Height (cm)</label>
+                    <input
+                      id="heightCm"
+                      name="heightCm"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={form.heightCm}
+                      onChange={onChange}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="admin-muted full" style={{ margin: 0 }}>
+                  Shiprocket will use platform default weight and dimensions for this product.
+                </p>
+              )}
 
               <div className="form-field full">
                 <label htmlFor="image">Image URL</label>

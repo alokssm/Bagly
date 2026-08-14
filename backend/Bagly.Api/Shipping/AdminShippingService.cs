@@ -224,10 +224,11 @@ public sealed class AdminShippingService(
         var pickupPostcode = await ResolvePickupPostcodeAsync(
             shipment.PickupLocation, order.Id, shipment.Id, cancellationToken);
         var isCod = string.Equals(order.PaymentProvider, "COD", StringComparison.OrdinalIgnoreCase);
-        var weightKg = _options.DefaultWeightKg > 0 ? _options.DefaultWeightKg : 0.5;
-        var length = _options.DefaultLength > 0 ? _options.DefaultLength : 10;
-        var breadth = _options.DefaultBreadth > 0 ? _options.DefaultBreadth : 15;
-        var height = _options.DefaultHeight > 0 ? _options.DefaultHeight : 20;
+        var package = await ResolvePackageForShipmentAsync(order, shipment.PickupLocation, cancellationToken);
+        var weightKg = package.WeightKg;
+        var length = package.Length;
+        var breadth = package.Breadth;
+        var height = package.Height;
         var declaredValue = await ResolveDeclaredValueAsync(order, shipment.PickupLocation, cancellationToken);
 
         var couriers = await GetServiceabilityAsync(
@@ -552,6 +553,72 @@ public sealed class AdminShippingService(
         }
 
         return null;
+    }
+
+    private async Task<ShiprocketPackageResolver.PackageSize> ResolvePackageForShipmentAsync(
+        Order order,
+        string pickupLocation,
+        CancellationToken cancellationToken)
+    {
+        var defaultPickup = _options.PickupLocation.Trim();
+        var productIds = order.Items
+            .Select(i => i.ProductId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Dictionary<string, string?> productPickups;
+        Dictionary<string, ShiprocketPackageResolver.ProductPackageInfo> productPackages;
+        if (productIds.Count == 0)
+        {
+            productPickups = new Dictionary<string, string?>(StringComparer.Ordinal);
+            productPackages = new Dictionary<string, ShiprocketPackageResolver.ProductPackageInfo>(StringComparer.Ordinal);
+        }
+        else
+        {
+            var rows = await db.Products.AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    p.ShiprocketPickupLocation,
+                    p.UseDefaultPackageSize,
+                    p.WeightKg,
+                    p.LengthCm,
+                    p.BreadthCm,
+                    p.HeightCm,
+                })
+                .ToListAsync(cancellationToken);
+
+            productPickups = rows.ToDictionary(
+                p => p.Id,
+                p => p.ShiprocketPickupLocation,
+                StringComparer.Ordinal);
+            productPackages = rows.ToDictionary(
+                p => p.Id,
+                p => new ShiprocketPackageResolver.ProductPackageInfo(
+                    p.UseDefaultPackageSize,
+                    p.WeightKg,
+                    p.LengthCm,
+                    p.BreadthCm,
+                    p.HeightCm),
+                StringComparer.Ordinal);
+        }
+
+        var groupLines = order.Items
+            .Where(item =>
+            {
+                productPickups.TryGetValue(item.ProductId, out var productPickup);
+                var pickup = string.IsNullOrWhiteSpace(productPickup) ? defaultPickup : productPickup.Trim();
+                return string.Equals(pickup, pickupLocation, StringComparison.Ordinal);
+            })
+            .Select(item =>
+            {
+                productPackages.TryGetValue(item.ProductId, out var info);
+                return (item.Quantity, (ShiprocketPackageResolver.ProductPackageInfo?)info);
+            });
+
+        return ShiprocketPackageResolver.ResolveForLines(groupLines, _options);
     }
 
     private async Task<decimal> ResolveDeclaredValueAsync(

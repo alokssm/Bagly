@@ -51,6 +51,11 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.SeoDescription).HasMaxLength(300);
             entity.Property(x => x.SeoKeywords).HasMaxLength(300);
             entity.Property(x => x.ShiprocketPickupLocation).HasMaxLength(100);
+            entity.Property(x => x.UseDefaultPackageSize).HasDefaultValue(true);
+            entity.Property(x => x.WeightKg).HasColumnType("decimal(18,3)");
+            entity.Property(x => x.LengthCm).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.BreadthCm).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.HeightCm).HasColumnType("decimal(18,2)");
             entity.HasOne(x => x.Seller)
                 .WithMany()
                 .HasForeignKey(x => x.SellerId)

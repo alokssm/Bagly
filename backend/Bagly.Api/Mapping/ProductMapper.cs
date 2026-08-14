@@ -65,7 +65,12 @@ public static class ProductMapper
             product.SeoDescription,
             product.SeoKeywords,
             product.SellerId,
-            product.ShiprocketPickupLocation
+            product.ShiprocketPickupLocation,
+            product.UseDefaultPackageSize,
+            product.WeightKg,
+            product.LengthCm,
+            product.BreadthCm,
+            product.HeightCm
         );
 
     public static void ApplyUpsert(Product product, UpsertProductRequest request)
@@ -95,6 +100,61 @@ public static class ProductMapper
         product.SeoDescription = string.IsNullOrWhiteSpace(request.SeoDescription) ? null : request.SeoDescription.Trim();
         product.SeoKeywords = string.IsNullOrWhiteSpace(request.SeoKeywords) ? null : request.SeoKeywords.Trim();
         product.ShiprocketPickupLocation = NormalizePickupNickname(request.ShiprocketPickupLocation);
+        ApplyPackageFields(
+            product,
+            request.UseDefaultPackageSize,
+            request.WeightKg,
+            request.LengthCm,
+            request.BreadthCm,
+            request.HeightCm);
+    }
+
+    public static void ApplyPackageFields(
+        Product product,
+        bool useDefaultPackageSize,
+        decimal? weightKg,
+        decimal? lengthCm,
+        decimal? breadthCm,
+        decimal? heightCm)
+    {
+        product.UseDefaultPackageSize = useDefaultPackageSize;
+        if (useDefaultPackageSize)
+        {
+            // Preserve previously entered custom values when toggling back to defaults,
+            // but still accept positive values if the client sent them.
+            if (weightKg is > 0) product.WeightKg = weightKg;
+            if (lengthCm is > 0) product.LengthCm = lengthCm;
+            if (breadthCm is > 0) product.BreadthCm = breadthCm;
+            if (heightCm is > 0) product.HeightCm = heightCm;
+            return;
+        }
+
+        product.WeightKg = weightKg;
+        product.LengthCm = lengthCm;
+        product.BreadthCm = breadthCm;
+        product.HeightCm = heightCm;
+    }
+
+    /// <summary>
+    /// When <paramref name="useDefaultPackageSize"/> is false, weight and L/B/H must be present and &gt; 0.
+    /// </summary>
+    public static string? ValidatePackageFields(
+        bool useDefaultPackageSize,
+        decimal? weightKg,
+        decimal? lengthCm,
+        decimal? breadthCm,
+        decimal? heightCm)
+    {
+        if (useDefaultPackageSize)
+        {
+            return null;
+        }
+
+        if (weightKg is null or <= 0) return "Weight (kg) is required when not using the default package size.";
+        if (lengthCm is null or <= 0) return "Length (cm) is required when not using the default package size.";
+        if (breadthCm is null or <= 0) return "Breadth (cm) is required when not using the default package size.";
+        if (heightCm is null or <= 0) return "Height (cm) is required when not using the default package size.";
+        return null;
     }
 
     /// <summary>Trim; empty → null. Does not rewrite case (Shiprocket nicknames are case-sensitive).</summary>

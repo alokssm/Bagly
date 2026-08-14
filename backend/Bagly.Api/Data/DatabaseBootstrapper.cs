@@ -206,6 +206,11 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SeoKeywords" character varying(300);
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "SellerId" uuid;
                 ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "ShiprocketPickupLocation" character varying(100);
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "UseDefaultPackageSize" boolean NOT NULL DEFAULT TRUE;
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "WeightKg" numeric(18,3);
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "LengthCm" numeric(18,2);
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "BreadthCm" numeric(18,2);
+                ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "HeightCm" numeric(18,2);
                 UPDATE "Products" SET "Slug" = "Id" WHERE "Slug" IS NULL OR "Slug" = '';
                 """,
                 cancellationToken);

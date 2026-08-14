@@ -68,7 +68,12 @@ public class AdminProductsController(BaglyDbContext db) : ControllerBase
                 p.IsActive && p.StockQuantity > 0,
                 p.CreatedAt,
                 p.SellerId,
-                p.ShiprocketPickupLocation))
+                p.ShiprocketPickupLocation,
+                p.UseDefaultPackageSize,
+                p.WeightKg,
+                p.LengthCm,
+                p.BreadthCm,
+                p.HeightCm))
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResult<AdminProductListItemDto>(items, page, pageSize, totalCount, totalPages));
@@ -118,6 +123,52 @@ public class AdminProductsController(BaglyDbContext db) : ControllerBase
         }
 
         product.ShiprocketPickupLocation = ProductMapper.NormalizePickupNickname(request?.ShiprocketPickupLocation);
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(ProductMapper.ToAdminDto(product));
+    }
+
+    /// <summary>
+    /// Admin-only: set Shiprocket pickup + package size fields without full product CRUD.
+    /// Preferred over pickup-location alone when editing platform catalog shipping.
+    /// </summary>
+    [AcceptVerbs("PATCH", "PUT")]
+    [Route("{id}/shipping")]
+    public async Task<ActionResult<AdminProductDto>> PatchShipping(
+        string id,
+        [FromBody] PatchProductShippingRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return BadRequest(new { message = "Product id is required." });
+        }
+
+        if (request is null)
+        {
+            return BadRequest(new { message = "Shipping payload is required." });
+        }
+
+        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (product is null)
+        {
+            return NotFound(new { message = "Product not found." });
+        }
+
+        var useDefault = request.UseDefaultPackageSize ?? product.UseDefaultPackageSize;
+        var weightKg = request.WeightKg ?? product.WeightKg;
+        var lengthCm = request.LengthCm ?? product.LengthCm;
+        var breadthCm = request.BreadthCm ?? product.BreadthCm;
+        var heightCm = request.HeightCm ?? product.HeightCm;
+
+        var packageError = ProductMapper.ValidatePackageFields(
+            useDefault, weightKg, lengthCm, breadthCm, heightCm);
+        if (packageError is not null)
+        {
+            return BadRequest(new { message = packageError });
+        }
+
+        product.ShiprocketPickupLocation = ProductMapper.NormalizePickupNickname(request.ShiprocketPickupLocation);
+        ProductMapper.ApplyPackageFields(product, useDefault, weightKg, lengthCm, breadthCm, heightCm);
         await db.SaveChangesAsync(cancellationToken);
         return Ok(ProductMapper.ToAdminDto(product));
     }

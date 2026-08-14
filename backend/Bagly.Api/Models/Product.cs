@@ -54,6 +54,25 @@ public class Product
     /// </summary>
     public string? ShiprocketPickupLocation { get; set; }
 
+    /// <summary>
+    /// When true (default), Shiprocket create + serviceability use
+    /// <c>ShiprocketOptions</c> DefaultWeightKg / DefaultLength / DefaultBreadth / DefaultHeight.
+    /// When false, use <see cref="WeightKg"/> and L/B/H on this product.
+    /// </summary>
+    public bool UseDefaultPackageSize { get; set; } = true;
+
+    /// <summary>Package weight in kg (required when <see cref="UseDefaultPackageSize"/> is false).</summary>
+    public decimal? WeightKg { get; set; }
+
+    /// <summary>Package length in cm (required when <see cref="UseDefaultPackageSize"/> is false).</summary>
+    public decimal? LengthCm { get; set; }
+
+    /// <summary>Package breadth in cm (required when <see cref="UseDefaultPackageSize"/> is false).</summary>
+    public decimal? BreadthCm { get; set; }
+
+    /// <summary>Package height in cm (required when <see cref="UseDefaultPackageSize"/> is false).</summary>
+    public decimal? HeightCm { get; set; }
+
     /// <summary>A product can be bought when it is active and in stock.</summary>
     [NotMapped]
     public bool IsAvailable => IsActive && StockQuantity > 0;

@@ -72,7 +72,12 @@ public class SellerProductsController(
                 p.IsActive && p.StockQuantity > 0,
                 p.CreatedAt,
                 p.SellerId,
-                p.ShiprocketPickupLocation))
+                p.ShiprocketPickupLocation,
+                p.UseDefaultPackageSize,
+                p.WeightKg,
+                p.LengthCm,
+                p.BreadthCm,
+                p.HeightCm))
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResult<AdminProductListItemDto>(items, page, pageSize, totalCount, totalPages));
@@ -309,7 +314,12 @@ public class SellerProductsController(
         if (request.Price < 0) return "Price must be zero or greater.";
         if (request.StockQuantity < 0) return "Stock quantity must be zero or greater.";
         if (string.IsNullOrWhiteSpace(request.Image)) return "Image URL is required.";
-        return null;
+        return ProductMapper.ValidatePackageFields(
+            request.UseDefaultPackageSize,
+            request.WeightKg,
+            request.LengthCm,
+            request.BreadthCm,
+            request.HeightCm);
     }
 
     private async Task<string> GenerateUniqueSlugAsync(string baseSlug, string? excludeId, CancellationToken cancellationToken)

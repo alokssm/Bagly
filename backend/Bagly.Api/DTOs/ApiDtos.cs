@@ -180,7 +180,13 @@ public record UpsertProductRequest(
     string? SeoDescription = null,
     string? SeoKeywords = null,
     /// <summary>Shiprocket pickup nickname (e.g. home/work). Null/empty → platform default.</summary>
-    string? ShiprocketPickupLocation = null
+    string? ShiprocketPickupLocation = null,
+    /// <summary>When true, use ShiprocketOptions package defaults. Default true.</summary>
+    bool UseDefaultPackageSize = true,
+    decimal? WeightKg = null,
+    decimal? LengthCm = null,
+    decimal? BreadthCm = null,
+    decimal? HeightCm = null
 );
 
 public record AdminProductDto(
@@ -209,7 +215,12 @@ public record AdminProductDto(
     string? SeoDescription,
     string? SeoKeywords,
     Guid? SellerId = null,
-    string? ShiprocketPickupLocation = null
+    string? ShiprocketPickupLocation = null,
+    bool UseDefaultPackageSize = true,
+    decimal? WeightKg = null,
+    decimal? LengthCm = null,
+    decimal? BreadthCm = null,
+    decimal? HeightCm = null
 );
 
 /// <summary>Lean row shape for the admin products list/table — avoids shipping gallery/features/colors JSON for every row.</summary>
@@ -225,11 +236,26 @@ public record AdminProductListItemDto(
     bool IsAvailable,
     DateTime CreatedAt,
     Guid? SellerId = null,
-    string? ShiprocketPickupLocation = null
+    string? ShiprocketPickupLocation = null,
+    bool UseDefaultPackageSize = true,
+    decimal? WeightKg = null,
+    decimal? LengthCm = null,
+    decimal? BreadthCm = null,
+    decimal? HeightCm = null
 );
 
 /// <summary>Admin-only: set Shiprocket pickup nickname without full product CRUD.</summary>
 public record PatchProductPickupLocationRequest(string? ShiprocketPickupLocation);
+
+/// <summary>Admin-only: set Shiprocket pickup + package fields without full product CRUD.</summary>
+public record PatchProductShippingRequest(
+    string? ShiprocketPickupLocation = null,
+    bool? UseDefaultPackageSize = null,
+    decimal? WeightKg = null,
+    decimal? LengthCm = null,
+    decimal? BreadthCm = null,
+    decimal? HeightCm = null
+);
 
 public record ProductStatsDto(int TotalCount, int ActiveCount);
 

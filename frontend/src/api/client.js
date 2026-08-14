@@ -477,6 +477,12 @@ export const api = {
       body: { shiprocketPickupLocation },
       auth: true,
     }),
+  adminPatchProductShipping: (id, body) =>
+    request(`/admin/products/${encodeURIComponent(id)}/shipping`, {
+      method: 'PATCH',
+      body,
+      auth: true,
+    }),
   adminRetryShiprocket: (id) =>
     request(`/admin/orders/${encodeURIComponent(id)}/shiprocket/retry`, { method: 'POST', auth: true }),
 

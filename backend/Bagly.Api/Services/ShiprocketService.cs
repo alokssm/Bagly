@@ -171,10 +171,34 @@ public sealed class ShiprocketService(
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        var productPickups = await db.Products.AsNoTracking()
+        var productRows = await db.Products.AsNoTracking()
             .Where(p => productIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.ShiprocketPickupLocation })
-            .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+            .Select(p => new
+            {
+                p.Id,
+                p.ShiprocketPickupLocation,
+                p.UseDefaultPackageSize,
+                p.WeightKg,
+                p.LengthCm,
+                p.BreadthCm,
+                p.HeightCm,
+            })
+            .ToListAsync(cancellationToken);
+
+        var productPickups = productRows.ToDictionary(
+            p => p.Id,
+            p => p.ShiprocketPickupLocation,
+            StringComparer.Ordinal);
+
+        var productPackages = productRows.ToDictionary(
+            p => p.Id,
+            p => new ShiprocketPackageResolver.ProductPackageInfo(
+                p.UseDefaultPackageSize,
+                p.WeightKg,
+                p.LengthCm,
+                p.BreadthCm,
+                p.HeightCm),
+            StringComparer.Ordinal);
 
         // Case-sensitive group key = exact Shiprocket nickname.
         var groups = order.Items
@@ -236,6 +260,7 @@ public sealed class ShiprocketService(
                 var payload = BuildCreatePayload(
                     order,
                     group.Items,
+                    productPackages,
                     phone,
                     pincode.Value,
                     group.Pickup,
@@ -464,6 +489,7 @@ public sealed class ShiprocketService(
     private ShiprocketCreatePayload BuildCreatePayload(
         Order order,
         IReadOnlyList<OrderItem> items,
+        IReadOnlyDictionary<string, ShiprocketPackageResolver.ProductPackageInfo> productPackages,
         string phone,
         int pincode,
         string pickup,
@@ -493,6 +519,15 @@ public sealed class ShiprocketService(
 
         var clientOrderId = BuildClientOrderId(order.OrderNumber, pickup);
 
+        // Package: sum(weight×qty); max L/B/H. Default-flagged lines use ShiprocketOptions defaults.
+        var package = ShiprocketPackageResolver.ResolveForLines(
+            items.Select(i =>
+            {
+                productPackages.TryGetValue(i.ProductId, out var info);
+                return (i.Quantity, (ShiprocketPackageResolver.ProductPackageInfo?)info);
+            }),
+            _options);
+
         return new ShiprocketCreatePayload
         {
             OrderId = Truncate(clientOrderId, 50),
@@ -519,10 +554,10 @@ public sealed class ShiprocketService(
             TransactionCharges = 0,
             TotalDiscount = 0,
             SubTotal = subTotal,
-            Length = _options.DefaultLength,
-            Breadth = _options.DefaultBreadth,
-            Height = _options.DefaultHeight,
-            Weight = _options.DefaultWeightKg,
+            Length = package.Length,
+            Breadth = package.Breadth,
+            Height = package.Height,
+            Weight = package.WeightKg,
         };
     }
 

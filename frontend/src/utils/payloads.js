@@ -157,6 +157,23 @@ export function buildUpsertProductPayload(form, { includeId = false } = {}) {
     seoDescription: String(form.seoDescription || '').trim() || null,
     seoKeywords: String(form.seoKeywords || '').trim() || null,
     shiprocketPickupLocation: String(form.shiprocketPickupLocation || '').trim() || null,
+    useDefaultPackageSize: form.useDefaultPackageSize !== false,
+    weightKg:
+      form.useDefaultPackageSize === false && form.weightKg !== '' && form.weightKg != null
+        ? Number(form.weightKg)
+        : null,
+    lengthCm:
+      form.useDefaultPackageSize === false && form.lengthCm !== '' && form.lengthCm != null
+        ? Number(form.lengthCm)
+        : null,
+    breadthCm:
+      form.useDefaultPackageSize === false && form.breadthCm !== '' && form.breadthCm != null
+        ? Number(form.breadthCm)
+        : null,
+    heightCm:
+      form.useDefaultPackageSize === false && form.heightCm !== '' && form.heightCm != null
+        ? Number(form.heightCm)
+        : null,
   }
 
   if (includeId && form.id) {

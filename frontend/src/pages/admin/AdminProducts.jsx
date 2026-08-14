@@ -5,6 +5,46 @@ import { formatPrice } from '../../utils/format'
 const PAGE_SIZE = 50
 const emptyResult = { items: [], totalCount: 0, totalPages: 0, page: 1, pageSize: PAGE_SIZE }
 
+function shippingDraftFromProduct(p) {
+  return {
+    shiprocketPickupLocation: p.shiprocketPickupLocation || '',
+    useDefaultPackageSize: p.useDefaultPackageSize !== false,
+    weightKg: p.weightKg != null ? String(p.weightKg) : '',
+    lengthCm: p.lengthCm != null ? String(p.lengthCm) : '',
+    breadthCm: p.breadthCm != null ? String(p.breadthCm) : '',
+    heightCm: p.heightCm != null ? String(p.heightCm) : '',
+  }
+}
+
+function shippingSnapshot(draft) {
+  return {
+    shiprocketPickupLocation: String(draft.shiprocketPickupLocation || '').trim() || null,
+    useDefaultPackageSize: draft.useDefaultPackageSize !== false,
+    weightKg:
+      draft.useDefaultPackageSize === false && draft.weightKg !== ''
+        ? Number(draft.weightKg)
+        : null,
+    lengthCm:
+      draft.useDefaultPackageSize === false && draft.lengthCm !== ''
+        ? Number(draft.lengthCm)
+        : null,
+    breadthCm:
+      draft.useDefaultPackageSize === false && draft.breadthCm !== ''
+        ? Number(draft.breadthCm)
+        : null,
+    heightCm:
+      draft.useDefaultPackageSize === false && draft.heightCm !== ''
+        ? Number(draft.heightCm)
+        : null,
+  }
+}
+
+function isShippingDirty(draft, product) {
+  const a = shippingSnapshot(draft)
+  const b = shippingSnapshot(shippingDraftFromProduct(product))
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
 export default function AdminProducts() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -13,8 +53,8 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pickupChoices, setPickupChoices] = useState(['home', 'work'])
-  const [pickupDrafts, setPickupDrafts] = useState({})
-  const [savingPickupId, setSavingPickupId] = useState('')
+  const [shippingDrafts, setShippingDrafts] = useState({})
+  const [savingId, setSavingId] = useState('')
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -53,9 +93,9 @@ export default function AdminProducts() {
       })
       const drafts = {}
       for (const p of data.items || []) {
-        drafts[p.id] = p.shiprocketPickupLocation || ''
+        drafts[p.id] = shippingDraftFromProduct(p)
       }
-      setPickupDrafts(drafts)
+      setShippingDrafts(drafts)
     } catch (err) {
       setError(err.message || 'Unable to load products.')
       setResult(emptyResult)
@@ -68,37 +108,69 @@ export default function AdminProducts() {
     load()
   }, [load])
 
-  const savePickup = async (productId) => {
-    setSavingPickupId(productId)
+  const updateDraft = (productId, patch) => {
+    setShippingDrafts((prev) => ({
+      ...prev,
+      [productId]: { ...prev[productId], ...patch },
+    }))
+  }
+
+  const saveShipping = async (productId) => {
+    setSavingId(productId)
     setError('')
     try {
-      const value = String(pickupDrafts[productId] || '').trim() || null
-      const updated = await api.adminPatchProductPickupLocation(productId, value)
+      const draft = shippingDrafts[productId] || shippingDraftFromProduct({})
+      if (draft.useDefaultPackageSize === false) {
+        const missing =
+          !draft.weightKg ||
+          !draft.lengthCm ||
+          !draft.breadthCm ||
+          !draft.heightCm ||
+          Number(draft.weightKg) <= 0 ||
+          Number(draft.lengthCm) <= 0 ||
+          Number(draft.breadthCm) <= 0 ||
+          Number(draft.heightCm) <= 0
+        if (missing) {
+          setError('Custom package requires weight (kg) and length/breadth/height (cm) greater than 0.')
+          return
+        }
+      }
+
+      const body = shippingSnapshot(draft)
+      const updated = await api.adminPatchProductShipping(productId, body)
       setResult((prev) => ({
         ...prev,
         items: prev.items.map((p) =>
           p.id === productId
-            ? { ...p, shiprocketPickupLocation: updated.shiprocketPickupLocation || null }
+            ? {
+                ...p,
+                shiprocketPickupLocation: updated.shiprocketPickupLocation || null,
+                useDefaultPackageSize: updated.useDefaultPackageSize !== false,
+                weightKg: updated.weightKg ?? null,
+                lengthCm: updated.lengthCm ?? null,
+                breadthCm: updated.breadthCm ?? null,
+                heightCm: updated.heightCm ?? null,
+              }
             : p,
         ),
       }))
-      setPickupDrafts((prev) => ({
+      setShippingDrafts((prev) => ({
         ...prev,
-        [productId]: updated.shiprocketPickupLocation || '',
+        [productId]: shippingDraftFromProduct(updated),
       }))
     } catch (err) {
       const status = err?.status
       if (status === 404) {
         setError(
-          'Pickup save API not found (404). Confirm Render is on the latest main deploy (/api/health → shiprocket.multiPickupApi=true), then retry.',
+          'Shipping save API not found (404). Confirm Render is on the latest main deploy, then retry.',
         )
       } else if (status === 401) {
-        setError('Admin session expired. Sign in again, then save pickup.')
+        setError('Admin session expired. Sign in again, then save shipping.')
       } else {
-        setError(err.message || 'Unable to update pickup location.')
+        setError(err.message || 'Unable to update shipping package.')
       }
     } finally {
-      setSavingPickupId('')
+      setSavingId('')
     }
   }
 
@@ -113,8 +185,8 @@ export default function AdminProducts() {
           <p className="eyebrow">Catalog</p>
           <h1>Products</h1>
           <p className="admin-muted" style={{ marginTop: '0.35rem' }}>
-            Sellers manage listings. Admins can assign Shiprocket pickup nicknames (home / work) for platform
-            or seller products.
+            Sellers manage listings. Admins can set Shiprocket pickup and package size for platform or seller
+            products.
           </p>
         </div>
       </div>
@@ -148,14 +220,14 @@ export default function AdminProducts() {
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
-                <th>Shiprocket pickup</th>
+                <th>Shiprocket shipping</th>
               </tr>
             </thead>
             <tbody>
               {products.map((product) => {
-                const draft = pickupDrafts[product.id] ?? ''
-                const saved = product.shiprocketPickupLocation || ''
-                const dirty = draft !== saved
+                const draft = shippingDrafts[product.id] || shippingDraftFromProduct(product)
+                const dirty = isShippingDirty(draft, product)
+                const pickupDraft = draft.shiprocketPickupLocation || ''
                 return (
                   <tr key={product.id}>
                     <td>
@@ -186,44 +258,118 @@ export default function AdminProducts() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <select
-                          value={pickupChoices.includes(draft) || draft === '' ? draft : '__custom__'}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            if (v === '__custom__') {
-                              setPickupDrafts((prev) => ({ ...prev, [product.id]: draft || '' }))
-                              return
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.4rem',
+                          minWidth: '14rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <select
+                            value={
+                              pickupChoices.includes(pickupDraft) || pickupDraft === ''
+                                ? pickupDraft
+                                : '__custom__'
                             }
-                            setPickupDrafts((prev) => ({ ...prev, [product.id]: v }))
-                          }}
-                          aria-label={`Pickup for ${product.name}`}
-                        >
-                          <option value="">Default</option>
-                          {pickupChoices.map((nick) => (
-                            <option key={nick} value={nick}>
-                              {nick}
-                            </option>
-                          ))}
-                          <option value="__custom__">Custom…</option>
-                        </select>
-                        {!pickupChoices.includes(draft) && draft !== '' ? (
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (v === '__custom__') {
+                                updateDraft(product.id, {
+                                  shiprocketPickupLocation: pickupDraft || '',
+                                })
+                                return
+                              }
+                              updateDraft(product.id, { shiprocketPickupLocation: v })
+                            }}
+                            aria-label={`Pickup for ${product.name}`}
+                          >
+                            <option value="">Default</option>
+                            {pickupChoices.map((nick) => (
+                              <option key={nick} value={nick}>
+                                {nick}
+                              </option>
+                            ))}
+                            <option value="__custom__">Custom…</option>
+                          </select>
+                          {!pickupChoices.includes(pickupDraft) && pickupDraft !== '' ? (
+                            <input
+                              style={{ width: '6.5rem' }}
+                              value={pickupDraft}
+                              onChange={(e) =>
+                                updateDraft(product.id, { shiprocketPickupLocation: e.target.value })
+                              }
+                              placeholder="nickname"
+                            />
+                          ) : null}
+                        </div>
+
+                        <label className="admin-check" style={{ fontSize: '0.85rem' }}>
                           <input
-                            style={{ width: '6.5rem' }}
-                            value={draft}
+                            type="checkbox"
+                            checked={draft.useDefaultPackageSize !== false}
                             onChange={(e) =>
-                              setPickupDrafts((prev) => ({ ...prev, [product.id]: e.target.value }))
+                              updateDraft(product.id, { useDefaultPackageSize: e.target.checked })
                             }
-                            placeholder="nickname"
                           />
+                          Default package size
+                        </label>
+
+                        {draft.useDefaultPackageSize === false ? (
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(2, minmax(4.5rem, 1fr))',
+                              gap: '0.3rem',
+                            }}
+                          >
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="kg"
+                              value={draft.weightKg}
+                              onChange={(e) => updateDraft(product.id, { weightKg: e.target.value })}
+                              aria-label={`Weight for ${product.name}`}
+                            />
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="L cm"
+                              value={draft.lengthCm}
+                              onChange={(e) => updateDraft(product.id, { lengthCm: e.target.value })}
+                              aria-label={`Length for ${product.name}`}
+                            />
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="B cm"
+                              value={draft.breadthCm}
+                              onChange={(e) => updateDraft(product.id, { breadthCm: e.target.value })}
+                              aria-label={`Breadth for ${product.name}`}
+                            />
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="H cm"
+                              value={draft.heightCm}
+                              onChange={(e) => updateDraft(product.id, { heightCm: e.target.value })}
+                              aria-label={`Height for ${product.name}`}
+                            />
+                          </div>
                         ) : null}
+
                         <button
                           type="button"
                           className="btn btn-secondary btn-sm"
-                          disabled={!dirty || savingPickupId === product.id}
-                          onClick={() => savePickup(product.id)}
+                          disabled={!dirty || savingId === product.id}
+                          onClick={() => saveShipping(product.id)}
                         >
-                          {savingPickupId === product.id ? 'Saving…' : 'Save'}
+                          {savingId === product.id ? 'Saving…' : 'Save shipping'}
                         </button>
                       </div>
                     </td>
