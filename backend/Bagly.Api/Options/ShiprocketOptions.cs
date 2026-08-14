@@ -21,6 +21,19 @@ public class ShiprocketOptions
 
     public string BaseUrl { get; set; } = "https://apiv2.shiprocket.in";
 
+    /// <summary>
+    /// Optional shared secret for <c>POST /api/webhooks/shiprocket</c>.
+    /// When set (and not a SET_VIA_ENV placeholder), requests must send the same value in
+    /// <c>x-api-key</c>, <c>X-Shiprocket-Webhook-Secret</c>, or <c>Authorization: Bearer …</c>
+    /// (Shiprocket panel “API key” / security token).
+    /// </summary>
+    public string WebhookSecret { get; set; } = string.Empty;
+
+    /// <summary>True when <see cref="WebhookSecret"/> is configured and usable.</summary>
+    public bool HasWebhookSecret =>
+        !string.IsNullOrWhiteSpace(WebhookSecret) &&
+        !IsMissingCredential(WebhookSecret);
+
     /// <summary>Configured UI nicknames (trimmed, non-empty), plus default <see cref="PickupLocation"/> when set.</summary>
     public IReadOnlyList<string> GetPickupLocationChoices()
     {

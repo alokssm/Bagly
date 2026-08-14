@@ -1,17 +1,19 @@
 using System.Text.Json;
 using Bagly.Api.Data;
 using Bagly.Api.Models;
+using Bagly.Api.Options;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Shipping;
 
 /// <summary>
 /// Inbound Shiprocket tracking webhooks.
-/// Configure in Shiprocket panel → API → Webhooks to POST here.
+/// Configure in Shiprocket panel → Settings → API → Webhooks to POST here.
 /// Maps courier statuses into <see cref="OrderShiprocketShipment.TrackingStatus"/>
-/// and appends <see cref="OrderShipmentTracking"/> history rows.
+/// and appends <see cref="OrderShipmentTracking"/> history rows (one row per forward change).
 /// </summary>
 [ApiController]
 [Route("api/webhooks/shiprocket")]
@@ -19,78 +21,229 @@ namespace Bagly.Api.Shipping;
 public class ShiprocketWebhookController(
     BaglyDbContext db,
     IAdminShippingService shipping,
+    IOptions<ShiprocketOptions> options,
     ILogger<ShiprocketWebhookController> logger) : ControllerBase
 {
+    private readonly ShiprocketOptions _options = options.Value;
+
     [HttpPost]
     public async Task<IActionResult> Receive(CancellationToken cancellationToken)
     {
+        if (!IsWebhookAuthorized())
+        {
+            logger.LogWarning("Shiprocket webhook rejected: missing or invalid webhook secret.");
+            return Unauthorized(new { message = "Invalid webhook secret." });
+        }
+
         using var doc = await JsonDocument.ParseAsync(Request.Body, cancellationToken: cancellationToken);
         var root = doc.RootElement;
-        var raw = root.GetRawText();
+        var raw = Truncate(root.GetRawText(), 3900);
 
         var awb = ReadString(root, "awb", "awb_code", "awbno")
                   ?? ReadNestedString(root, "data", "awb", "awb_code");
         var srShipmentId = ReadString(root, "shipment_id", "sr_shipment_id", "shiprocket_shipment_id")
-                           ?? ReadNestedString(root, "data", "shipment_id");
-        var currentStatus = ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
-                            ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status");
+                           ?? ReadNestedString(root, "data", "shipment_id", "sr_shipment_id");
+        var srOrderId = ReadString(root, "sr_order_id", "shiprocket_order_id")
+                        ?? ReadNestedString(root, "data", "sr_order_id");
 
-        var mapped = ShipmentTrackingStatus.MapFromShiprocket(currentStatus);
-        if (mapped is null)
-        {
-            logger.LogInformation(
-                "Shiprocket webhook ignored (unmapped status={Status}, awb={Awb}, srShipment={Sr}).",
-                currentStatus,
-                awb,
-                srShipmentId);
-            // Acknowledge so Shiprocket does not retry forever for unknown labels.
-            return Ok(new { received = true, updated = false, reason = "unmapped_status" });
-        }
-
-        var shipment = await FindShipmentAsync(awb, srShipmentId, cancellationToken);
+        var shipment = await FindShipmentAsync(awb, srShipmentId, srOrderId, cancellationToken);
         if (shipment is null)
         {
             logger.LogWarning(
-                "Shiprocket webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, status={Status}.",
+                "Shiprocket webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, srOrder={SrOrder}.",
                 awb,
                 srShipmentId,
-                mapped);
+                srOrderId);
             return Ok(new { received = true, updated = false, reason = "shipment_not_found" });
         }
 
-        var updated = await shipping.ApplyTrackingStatusAsync(
-            shipment.Id,
-            mapped,
-            ShipmentTrackingStatus.SourceShiprocketWebhook,
-            raw,
-            cancellationToken);
+        // Collect forward statuses from top-level fields + scans (chronological).
+        var pipeline = CollectForwardStatuses(root, shipment.TrackingStatus);
+        if (pipeline.Count == 0)
+        {
+            var currentStatus = ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
+                                ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status");
+            logger.LogInformation(
+                "Shiprocket webhook ignored (unmapped/non-forward status={Status}, awb={Awb}, srShipment={Sr}, current={Current}).",
+                currentStatus,
+                awb,
+                srShipmentId,
+                shipment.TrackingStatus);
+            return Ok(new { received = true, updated = false, reason = "unmapped_or_non_forward_status" });
+        }
+
+        var anyUpdated = false;
+        string? lastApplied = shipment.TrackingStatus;
+        foreach (var status in pipeline)
+        {
+            var updated = await shipping.ApplyTrackingStatusAsync(
+                shipment.Id,
+                status,
+                ShipmentTrackingStatus.SourceShiprocketWebhook,
+                raw,
+                cancellationToken);
+            if (updated)
+            {
+                anyUpdated = true;
+                lastApplied = status;
+            }
+        }
 
         return Ok(new
         {
             received = true,
-            updated,
+            updated = anyUpdated,
             shipmentId = shipment.Id,
-            trackingStatus = mapped,
+            trackingStatus = lastApplied,
+            applied = pipeline,
         });
+    }
+
+    private bool IsWebhookAuthorized()
+    {
+        if (!_options.HasWebhookSecret)
+        {
+            return true;
+        }
+
+        var expected = _options.WebhookSecret.Trim();
+        if (HeaderEquals("x-api-key", expected) ||
+            HeaderEquals("X-Shiprocket-Webhook-Secret", expected) ||
+            HeaderEquals("X-Webhook-Secret", expected))
+        {
+            return true;
+        }
+
+        var auth = Request.Headers.Authorization.ToString();
+        if (!string.IsNullOrWhiteSpace(auth))
+        {
+            const string bearer = "Bearer ";
+            if (auth.StartsWith(bearer, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(auth[bearer.Length..].Trim(), expected, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.Equals(auth.Trim(), expected, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool HeaderEquals(string name, string expected)
+    {
+        if (!Request.Headers.TryGetValue(name, out var values)) return false;
+        var actual = values.ToString()?.Trim();
+        return !string.IsNullOrEmpty(actual) &&
+               string.Equals(actual, expected, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Builds an ascending list of mapped pipeline statuses from webhook payload.
+    /// Uses <c>current_status</c> / <c>shipment_status</c> / status ids, then walks <c>scans</c>.
+    /// Only includes statuses strictly forward of <paramref name="currentTracking"/>.
+    /// </summary>
+    internal static List<string> CollectForwardStatuses(JsonElement root, string? currentTracking)
+    {
+        var candidates = new List<(int Rank, string Status, int Order)>();
+        var order = 0;
+
+        void Consider(string? mapped)
+        {
+            if (string.IsNullOrWhiteSpace(mapped)) return;
+            if (!ShipmentTrackingStatus.IsForwardOf(mapped, currentTracking)) return;
+            var rank = ShipmentTrackingStatus.Rank(mapped);
+            if (rank <= 0) return;
+            candidates.Add((rank, mapped, order++));
+        }
+
+        Consider(ShipmentTrackingStatus.MapFromShiprocket(
+            ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
+            ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status")));
+
+        Consider(ShipmentTrackingStatus.MapFromShiprocketStatusId(
+            ReadInt(root, "current_status_id", "shipment_status_id")
+            ?? ReadNestedInt(root, "data", "current_status_id", "shipment_status_id")));
+
+        if (TryGetScans(root, out var scans))
+        {
+            foreach (var scan in scans)
+            {
+                Consider(ShipmentTrackingStatus.MapFromShiprocket(
+                    ReadString(scan, "sr-status-label", "sr_status_label", "status_label", "activity", "status")));
+                Consider(ShipmentTrackingStatus.MapFromShiprocketStatusId(
+                    ReadInt(scan, "sr-status", "sr_status", "status_id")));
+            }
+        }
+
+        if (candidates.Count == 0) return [];
+
+        // Distinct ascending ranks so history fills PICKED_UP → IN_TRANSIT → … without duplicates.
+        return candidates
+            .GroupBy(c => c.Rank)
+            .OrderBy(g => g.Key)
+            .Select(g => g.OrderBy(x => x.Order).First().Status)
+            .ToList();
+    }
+
+    private static bool TryGetScans(JsonElement root, out IEnumerable<JsonElement> scans)
+    {
+        if (root.TryGetProperty("scans", out var el) && el.ValueKind == JsonValueKind.Array)
+        {
+            scans = el.EnumerateArray();
+            return true;
+        }
+
+        if (root.TryGetProperty("data", out var data) &&
+            data.ValueKind == JsonValueKind.Object &&
+            data.TryGetProperty("scans", out var nested) &&
+            nested.ValueKind == JsonValueKind.Array)
+        {
+            scans = nested.EnumerateArray();
+            return true;
+        }
+
+        if (root.TryGetProperty("shipment_track_activities", out var acts) &&
+            acts.ValueKind == JsonValueKind.Array)
+        {
+            scans = acts.EnumerateArray();
+            return true;
+        }
+
+        scans = Array.Empty<JsonElement>();
+        return false;
     }
 
     private async Task<OrderShiprocketShipment?> FindShipmentAsync(
         string? awb,
         string? srShipmentId,
+        string? srOrderId,
         CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(awb))
         {
+            var code = awb.Trim();
             var byAwb = await db.OrderShiprocketShipments
-                .FirstOrDefaultAsync(s => s.AwbCode == awb.Trim(), cancellationToken);
+                .FirstOrDefaultAsync(s => s.AwbCode == code, cancellationToken);
             if (byAwb is not null) return byAwb;
         }
 
         if (!string.IsNullOrWhiteSpace(srShipmentId))
         {
             var id = srShipmentId.Trim();
-            return await db.OrderShiprocketShipments
+            var byShipment = await db.OrderShiprocketShipments
                 .FirstOrDefaultAsync(s => s.ShiprocketShipmentId == id, cancellationToken);
+            if (byShipment is not null) return byShipment;
+        }
+
+        if (!string.IsNullOrWhiteSpace(srOrderId))
+        {
+            var id = srOrderId.Trim();
+            return await db.OrderShiprocketShipments
+                .FirstOrDefaultAsync(s => s.ShiprocketOrderId == id, cancellationToken);
         }
 
         return null;
@@ -121,5 +274,38 @@ public class ShiprocketWebhookController(
         }
 
         return ReadString(nested, names);
+    }
+
+    private static int? ReadInt(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!root.TryGetProperty(name, out var el)) continue;
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n)) return n;
+            if (el.ValueKind == JsonValueKind.String &&
+                int.TryParse(el.GetString(), out var parsed) &&
+                parsed > 0)
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ReadNestedInt(JsonElement root, string objectName, params string[] names)
+    {
+        if (!root.TryGetProperty(objectName, out var nested) || nested.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return ReadInt(nested, names);
+    }
+
+    private static string Truncate(string? value, int max)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= max) return value ?? string.Empty;
+        return value[..max];
     }
 }

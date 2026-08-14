@@ -776,6 +776,11 @@ public sealed class AdminShippingService(
         }
 
         var normalized = trackingStatus.Trim().ToUpperInvariant();
+        if (ShipmentTrackingStatus.Rank(normalized) <= 0)
+        {
+            return false;
+        }
+
         var shipment = await db.OrderShiprocketShipments
             .Include(s => s.Order)
             .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken);
@@ -786,6 +791,18 @@ public sealed class AdminShippingService(
 
         if (string.Equals(shipment.TrackingStatus, normalized, StringComparison.OrdinalIgnoreCase))
         {
+            return false;
+        }
+
+        // Never move backwards (e.g. DELIVERED → IN_TRANSIT) unless admin/system forces later.
+        if (!ShipmentTrackingStatus.IsForwardOf(normalized, shipment.TrackingStatus))
+        {
+            logger.LogInformation(
+                "Ignoring non-forward tracking update for shipment {ShipmentId}: {From} → {To} (source={Source}).",
+                shipmentId,
+                shipment.TrackingStatus,
+                normalized,
+                source);
             return false;
         }
 
