@@ -11,16 +11,44 @@ function formatDateTime(value) {
   }
 }
 
-function shippingPill(status, awb, labelUrl) {
+function shippingPill(status, awb, labelUrl, trackingStatus, pickupRequestedAt) {
+  if (trackingStatus === 'DELIVERED') return 'admin-pill on'
+  if (pickupRequestedAt || trackingStatus) return 'admin-pill'
   if (labelUrl) return 'admin-pill on'
   if (awb) return 'admin-pill'
   if ((status || '').toLowerCase() === 'readytoship') return 'admin-pill'
   return 'admin-pill off'
 }
 
+function formatTrackingStatus(status) {
+  if (!status) return null
+  const map = {
+    PICKUP_REQUESTED: 'Pickup requested',
+    PICKED_UP: 'Picked up',
+    IN_TRANSIT: 'In transit',
+    OUT_FOR_DELIVERY: 'Out for delivery',
+    DELIVERED: 'Delivered',
+  }
+  return map[status] || String(status).replaceAll('_', ' ')
+}
+
+function shipmentStatusLabel(shipment) {
+  const tracking = formatTrackingStatus(shipment.trackingStatus)
+  if (tracking) return tracking
+  if (shipment.pickupRequestedAt) return 'Pickup requested'
+  if (shipment.labelUrl) return 'Request Pickup'
+  if (shipment.awbCode) return 'Generate Label'
+  return shipment.shippingStatus || shipment.status || 'Created'
+}
+
 function shipmentMatchesTab(shipment, tab) {
   const sellerReady = !!(shipment.sellerReady || shipment.sellerReadyToShipAt)
-  if (tab === 'labeled') return !!shipment.labelUrl
+  if (tab === 'in-progress' || tab === 'progress' || tab === 'picked-up') {
+    return !!shipment.pickupRequestedAt
+  }
+  if (tab === 'pickup' || tab === 'labeled' || tab === 'label-generated') {
+    return !!shipment.labelUrl && !shipment.pickupRequestedAt
+  }
   if (tab === 'label' || tab === 'awb') return !!shipment.awbCode && !shipment.labelUrl
   if (tab === 'assign-awb' || tab === 'assign') return !!shipment.readyToShipAt && !shipment.awbCode
   if (tab === 'ready') return sellerReady && !shipment.readyToShipAt && !shipment.awbCode
@@ -73,6 +101,8 @@ export default function AdminShipping() {
     assignAwbCount: 0,
     labelCount: 0,
     labeledCount: 0,
+    pickupCount: 0,
+    inProgressCount: 0,
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -104,7 +134,9 @@ export default function AdminShipping() {
         readyCount: data.readyCount || 0,
         assignAwbCount: data.assignAwbCount || 0,
         labelCount: data.labelCount ?? data.awbCount ?? 0,
-        labeledCount: data.labeledCount || 0,
+        labeledCount: data.labeledCount || data.pickupCount || 0,
+        pickupCount: data.pickupCount ?? data.labeledCount ?? 0,
+        inProgressCount: data.inProgressCount || 0,
       })
     } catch (err) {
       setError(err.message || 'Unable to load shipping orders.')
@@ -274,12 +306,29 @@ export default function AdminShipping() {
     }
   }
 
+  const requestPickup = async (shipment) => {
+    setBusyShipmentId(shipment.id)
+    setActionError('')
+    try {
+      await api.adminShippingRequestPickup(shipment.id)
+      setTab('in-progress')
+      if (logsFilterShipmentId || logsOrderQuery) {
+        await loadLogs(logsOrderQuery, logsFilterShipmentId)
+      }
+    } catch (err) {
+      setActionError(err.message || 'Request Pickup failed.')
+    } finally {
+      setBusyShipmentId('')
+    }
+  }
+
   const tabs = [
     { id: 'new', label: 'New', count: result.newCount },
     { id: 'ready', label: 'Ready to Ship', count: result.readyCount },
     { id: 'assign-awb', label: 'Assign AWB', count: result.assignAwbCount },
     { id: 'label', label: 'Generate Label', count: result.labelCount },
-    { id: 'labeled', label: 'Label Generated', count: result.labeledCount },
+    { id: 'pickup', label: 'Request Pickup', count: result.pickupCount },
+    { id: 'in-progress', label: 'In Progress', count: result.inProgressCount },
   ]
 
   const rows = []
@@ -297,7 +346,7 @@ export default function AdminShipping() {
           <p className="eyebrow">Fulfillment</p>
           <h1>Shipping</h1>
           <p className="admin-subtitle">
-            Per-pickup Shiprocket shipments. Ready to Ship → Assign AWB → Generate Label → download for sellers.
+            Per-pickup Shiprocket shipments. Ready to Ship → Assign AWB → Generate Label → Request Pickup → tracking.
           </p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
@@ -367,6 +416,7 @@ export default function AdminShipping() {
                 const waitingForSeller =
                   !!shipment.shiprocketShipmentId && !shipment.awbCode && !sellerReady
                 const canGenerateLabel = !!shipment.awbCode && !shipment.labelUrl
+                const canRequestPickup = !!shipment.labelUrl && !shipment.pickupRequestedAt
                 const showCourierPanel =
                   canRefreshCouriers && (couriersLoaded || courierLoading || !!courierError)
 
@@ -402,14 +452,17 @@ export default function AdminShipping() {
                             shipment.shippingStatus,
                             shipment.awbCode,
                             shipment.labelUrl,
+                            shipment.trackingStatus,
+                            shipment.pickupRequestedAt,
                           )}
                         >
-                          {shipment.labelUrl
-                            ? 'Label Generated'
-                            : shipment.awbCode
-                              ? 'Generate Label'
-                              : shipment.shippingStatus || shipment.status || 'Created'}
+                          {shipmentStatusLabel(shipment)}
                         </span>
+                        {shipment.trackingStatus ? (
+                          <div className="admin-muted admin-shipping-meta">
+                            Tracking: {formatTrackingStatus(shipment.trackingStatus)}
+                          </div>
+                        ) : null}
                         {shipment.lastError ? (
                           <div className="admin-error admin-shipping-error">{shipment.lastError}</div>
                         ) : null}
@@ -436,6 +489,11 @@ export default function AdminShipping() {
                                 >
                                   Open label
                                 </a>
+                              </div>
+                            ) : null}
+                            {shipment.pickupTokenNumber ? (
+                              <div className="admin-muted admin-shipping-meta">
+                                Pickup token {shipment.pickupTokenNumber}
                               </div>
                             ) : null}
                           </>
@@ -480,6 +538,16 @@ export default function AdminShipping() {
                             onClick={() => generateLabel(shipment)}
                           >
                             {busy ? 'Generating…' : 'Generate Label'}
+                          </button>
+                        ) : null}
+                        {canRequestPickup ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy}
+                            onClick={() => requestPickup(shipment)}
+                          >
+                            {busy ? 'Requesting…' : 'Request Pickup'}
                           </button>
                         ) : null}
                         <button

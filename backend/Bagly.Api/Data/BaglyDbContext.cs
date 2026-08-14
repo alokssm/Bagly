@@ -12,6 +12,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderShiprocketShipment> OrderShiprocketShipments => Set<OrderShiprocketShipment>();
+    public DbSet<OrderShipmentTracking> OrderShipmentTrackings => Set<OrderShipmentTracking>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<SellerUser> SellerUsers => Set<SellerUser>();
@@ -169,11 +170,38 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.CourierName).HasMaxLength(100);
             entity.Property(x => x.ActualShippingCharge).HasColumnType("decimal(18,2)");
             entity.Property(x => x.LabelUrl).HasMaxLength(1000);
+            entity.Property(x => x.PickupTokenNumber).HasMaxLength(100);
+            entity.Property(x => x.TrackingStatus).HasMaxLength(50);
             entity.HasIndex(x => x.OrderId);
             entity.HasIndex(x => new { x.OrderId, x.PickupLocation }).IsUnique();
             entity.HasIndex(x => x.ShiprocketOrderId);
             entity.HasIndex(x => x.AwbCode);
             entity.HasIndex(x => x.ShippingStatus);
+            entity.HasIndex(x => x.TrackingStatus);
+            entity.HasIndex(x => x.PickupRequestedAt);
+        });
+
+        modelBuilder.Entity<OrderShipmentTracking>(entity =>
+        {
+            entity.ToTable("OrderShipmentTrackings");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
+            entity.Property(x => x.AwbCode).HasMaxLength(50);
+            entity.Property(x => x.Status).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Source).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.RawJson).HasMaxLength(4000);
+            entity.HasIndex(x => x.OrderId);
+            entity.HasIndex(x => x.OrderShiprocketShipmentId);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.ChangedAtUtc);
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.OrderShiprocketShipment)
+                .WithMany()
+                .HasForeignKey(x => x.OrderShiprocketShipmentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AdminUser>(entity =>

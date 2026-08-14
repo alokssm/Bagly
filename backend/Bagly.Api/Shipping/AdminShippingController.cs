@@ -5,14 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bagly.Api.Shipping;
 
-/// <summary>Admin shipping workflow: serviceability couriers, AWB assignment, and label generation.</summary>
+/// <summary>Admin shipping workflow: serviceability, AWB, label, and courier pickup request.</summary>
 [ApiController]
 [Route("api/admin/shipping")]
 [Authorize(Roles = "Admin")]
 public class AdminShippingController(IAdminShippingService shipping, BaglyDbContext db) : ControllerBase
 {
     /// <summary>
-    /// Orders with Shiprocket shipments. Tabs: new | ready | assign-awb (alias: assign) | label (alias: awb) | labeled.
+    /// Orders with Shiprocket shipments.
+    /// Tabs: new | ready | assign-awb (alias: assign) | label (alias: awb) | pickup (alias: labeled) | in-progress.
     /// </summary>
     [HttpGet("orders")]
     public async Task<ActionResult<AdminShippingOrdersResult>> ListOrders(
@@ -134,6 +135,26 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
         try
         {
             var result = await shipping.GenerateLabelAsync(shipmentId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Request courier pickup via Shiprocket (<c>POST v1/external/courier/generate/pickup</c>)
+    /// and set tracking status to PICKUP_REQUESTED.
+    /// </summary>
+    [HttpPost("shipments/{shipmentId:guid}/request-pickup")]
+    public async Task<ActionResult<RequestPickupResponse>> RequestPickup(
+        Guid shipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await shipping.RequestPickupAsync(shipmentId, cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

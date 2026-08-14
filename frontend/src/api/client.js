@@ -531,6 +531,11 @@ export const api = {
       method: 'POST',
       auth: true,
     }),
+  adminShippingRequestPickup: (shipmentId) =>
+    request(`/admin/shipping/shipments/${encodeURIComponent(shipmentId)}/request-pickup`, {
+      method: 'POST',
+      auth: true,
+    }),
   adminGetShippingApiLogs: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {

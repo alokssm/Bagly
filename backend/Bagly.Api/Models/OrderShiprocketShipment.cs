@@ -18,7 +18,7 @@ public class OrderShiprocketShipment
     /// <summary>Shiprocket create status (e.g. NEW) or last API status string.</summary>
     public string? Status { get; set; }
     /// <summary>
-    /// Admin shipping workflow: ReadyToShip → AwbAssigned (awaiting label) → LabelGenerated
+    /// Admin shipping workflow: ReadyToShip → AwbAssigned → LabelGenerated → PickupRequested
     /// (null until Ready to Ship).
     /// </summary>
     public string? ShippingStatus { get; set; }
@@ -40,6 +40,18 @@ public class OrderShiprocketShipment
     /// Admin Ready to Ship (courier serviceability) stays disabled until set.
     /// </summary>
     public DateTime? SellerReadyToShipAt { get; set; }
+
+    /// <summary>When admin successfully requested courier pickup via Shiprocket generate/pickup.</summary>
+    public DateTime? PickupRequestedAt { get; set; }
+    /// <summary>Shiprocket pickup_token_number (or similar) when returned by generate/pickup.</summary>
+    public string? PickupTokenNumber { get; set; }
+
+    /// <summary>
+    /// Current courier tracking status for quick queries
+    /// (<see cref="ShipmentTrackingStatus"/>: PICKUP_REQUESTED → … → DELIVERED).
+    /// </summary>
+    public string? TrackingStatus { get; set; }
+    public DateTime? TrackingStatusUpdatedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

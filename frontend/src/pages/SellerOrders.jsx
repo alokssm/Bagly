@@ -33,12 +33,30 @@ function formatWhen(value) {
 }
 
 function shipmentLabel(shipment) {
+  const tracking = formatTrackingStatus(shipment.trackingStatus)
+  if (tracking) {
+    const awb = shipment.awbCode ? `AWB ${shipment.awbCode}` : null
+    return awb ? `${awb} · ${tracking}` : tracking
+  }
+  if (shipment.pickupRequestedAt) return shipment.awbCode ? `AWB ${shipment.awbCode} · Pickup requested` : 'Pickup requested'
   if (shipment.labelUrl || shipment.canDownloadLabel) return `AWB ${shipment.awbCode || '—'}`
   if (shipment.awbCode) return `AWB ${shipment.awbCode}`
   if (shipment.shippingStatus === 'Cancelled' || shipment.status === 'Cancelled') return 'Cancelled'
   if (shipment.sellerReady) return 'Seller ready'
   if (shipment.shiprocketShipmentId) return 'Awaiting ready'
   return 'Pending Shiprocket'
+}
+
+function formatTrackingStatus(status) {
+  if (!status) return null
+  const map = {
+    PICKUP_REQUESTED: 'Pickup requested',
+    PICKED_UP: 'Picked up',
+    IN_TRANSIT: 'In transit',
+    OUT_FOR_DELIVERY: 'Out for delivery',
+    DELIVERED: 'Delivered',
+  }
+  return map[status] || String(status).replaceAll('_', ' ')
 }
 
 function canDownloadLabel(shipment) {

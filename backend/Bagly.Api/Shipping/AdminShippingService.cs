@@ -29,11 +29,25 @@ public interface IAdminShippingService
         Guid shipmentId,
         CancellationToken cancellationToken = default);
 
+    Task<RequestPickupResponse> RequestPickupAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
         Guid? orderId,
         Guid? shipmentId,
         string? orderNumber = null,
         int take = 50,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies a tracking status change (webhook / system). Returns true when status changed.
+    /// </summary>
+    Task<bool> ApplyTrackingStatusAsync(
+        Guid shipmentId,
+        string trackingStatus,
+        string source,
+        string? rawJson = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -52,12 +66,17 @@ public sealed class AdminShippingService(
     public const string TabAssignAwb = "assign-awb";
     /// <summary>AWB assigned, waiting for label generation.</summary>
     public const string TabLabel = "label";
-    /// <summary>Label URL stored (done).</summary>
+    /// <summary>Label URL stored; courier pickup not yet requested.</summary>
+    public const string TabPickup = "pickup";
+    /// <summary>Pickup requested (and later in-transit / delivered via tracking).</summary>
+    public const string TabInProgress = "in-progress";
+    /// <summary>Back-compat alias for <see cref="TabPickup"/>.</summary>
     public const string TabLabeled = "labeled";
 
     public const string StatusReadyToShip = "ReadyToShip";
     public const string StatusAwbAssigned = "AwbAssigned";
     public const string StatusLabelGenerated = "LabelGenerated";
+    public const string StatusPickupRequested = "PickupRequested";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -124,9 +143,19 @@ public sealed class AdminShippingService(
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
-        var labeledCount = await baseQuery.CountAsync(
+        // Request Pickup: label ready, pickup not yet requested.
+        var pickupCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.LabelUrl != null && s.LabelUrl != "" &&
+                s.PickupRequestedAt == null &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
+            cancellationToken);
+
+        // In Progress: pickup requested (tracking may advance later).
+        var inProgressCount = await baseQuery.CountAsync(
+            o => o.ShiprocketShipments.Any(s =>
+                s.PickupRequestedAt != null &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
@@ -149,8 +178,13 @@ public sealed class AdminShippingService(
                 (s.LabelUrl == null || s.LabelUrl == "") &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
-            TabLabeled => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+            TabPickup or TabLabeled => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.LabelUrl != null && s.LabelUrl != "" &&
+                s.PickupRequestedAt == null &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
+            TabInProgress => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+                s.PickupRequestedAt != null &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
             _ => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
@@ -202,7 +236,11 @@ public sealed class AdminShippingService(
                         s.SellerReadyToShipAt,
                         s.SellerReadyToShipAt != null,
                         s.LabelUrl,
-                        s.LabelGeneratedAt))
+                        s.LabelGeneratedAt,
+                        s.PickupRequestedAt,
+                        s.PickupTokenNumber,
+                        s.TrackingStatus,
+                        s.TrackingStatusUpdatedAt))
                     .ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -231,7 +269,9 @@ public sealed class AdminShippingService(
             readyCount,
             assignAwbCount,
             labelCount,
-            labeledCount);
+            LabeledCount: pickupCount,
+            PickupCount: pickupCount,
+            InProgressCount: inProgressCount);
     }
 
     public async Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
@@ -519,6 +559,168 @@ public sealed class AdminShippingService(
             shipment.LabelGeneratedAt);
     }
 
+    /// <summary>
+    /// Calls Shiprocket <c>POST v1/external/courier/generate/pickup</c> with
+    /// <c>{ "shipment_id": [srShipmentId] }</c>, stores pickup token / timestamps,
+    /// and sets tracking to <see cref="ShipmentTrackingStatus.PickupRequested"/>.
+    /// </summary>
+    public async Task<RequestPickupResponse> RequestPickupAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureShiprocketConfigured();
+
+        var shipment = await db.OrderShiprocketShipments
+            .Include(s => s.Order)
+            .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+
+        var order = shipment.Order
+            ?? throw new InvalidOperationException("Order not found for shipment.");
+
+        if (string.IsNullOrWhiteSpace(shipment.ShiprocketShipmentId))
+        {
+            throw new InvalidOperationException("Shiprocket shipment_id is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(shipment.AwbCode))
+        {
+            throw new InvalidOperationException("Assign AWB before requesting pickup.");
+        }
+
+        if (string.IsNullOrWhiteSpace(shipment.LabelUrl))
+        {
+            throw new InvalidOperationException("Generate label before requesting pickup.");
+        }
+
+        if (shipment.PickupRequestedAt is not null)
+        {
+            throw new InvalidOperationException("Pickup already requested for this shipment.");
+        }
+
+        if (!long.TryParse(shipment.ShiprocketShipmentId.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var srShipmentId))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket shipment_id '{shipment.ShiprocketShipmentId}' is not numeric.");
+        }
+
+        var pickupResult = await GeneratePickupWithAuthRetryAsync(
+            srShipmentId, order.Id, shipment.Id, cancellationToken);
+
+        var now = DateTime.UtcNow;
+        shipment.PickupRequestedAt = now;
+        if (!string.IsNullOrWhiteSpace(pickupResult.PickupTokenNumber))
+        {
+            shipment.PickupTokenNumber = pickupResult.PickupTokenNumber.Trim();
+        }
+
+        shipment.ShippingStatus = StatusPickupRequested;
+        shipment.Status = StatusPickupRequested;
+        shipment.TrackingStatus = ShipmentTrackingStatus.PickupRequested;
+        shipment.TrackingStatusUpdatedAt = now;
+        shipment.UpdatedAt = now;
+        shipment.LastError = null;
+
+        if (string.IsNullOrWhiteSpace(order.ShiprocketShipmentId) ||
+            string.Equals(order.ShiprocketShipmentId, shipment.ShiprocketShipmentId, StringComparison.Ordinal))
+        {
+            order.ShiprocketStatus = StatusPickupRequested;
+        }
+
+        db.OrderShipmentTrackings.Add(new OrderShipmentTracking
+        {
+            OrderId = order.Id,
+            OrderShiprocketShipmentId = shipment.Id,
+            ShiprocketShipmentId = shipment.ShiprocketShipmentId,
+            AwbCode = shipment.AwbCode,
+            Status = ShipmentTrackingStatus.PickupRequested,
+            ChangedAtUtc = now,
+            Source = ShipmentTrackingStatus.SourceAdmin,
+            RawJson = Truncate(pickupResult.RawJson, 3900),
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Pickup requested for {OrderNumber}/{Pickup}: awb={Awb}, token={Token}.",
+            order.OrderNumber,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            shipment.PickupTokenNumber ?? "(none)");
+
+        return new RequestPickupResponse(
+            shipment.Id,
+            order.Id,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            shipment.PickupTokenNumber,
+            shipment.ShippingStatus!,
+            shipment.TrackingStatus,
+            shipment.PickupRequestedAt);
+    }
+
+    public async Task<bool> ApplyTrackingStatusAsync(
+        Guid shipmentId,
+        string trackingStatus,
+        string source,
+        string? rawJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(trackingStatus))
+        {
+            return false;
+        }
+
+        var normalized = trackingStatus.Trim().ToUpperInvariant();
+        var shipment = await db.OrderShiprocketShipments
+            .Include(s => s.Order)
+            .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken);
+        if (shipment is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(shipment.TrackingStatus, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        shipment.TrackingStatus = normalized;
+        shipment.TrackingStatusUpdatedAt = now;
+        shipment.UpdatedAt = now;
+
+        if (shipment.PickupRequestedAt is null &&
+            string.Equals(normalized, ShipmentTrackingStatus.PickupRequested, StringComparison.OrdinalIgnoreCase))
+        {
+            shipment.PickupRequestedAt = now;
+            shipment.ShippingStatus = StatusPickupRequested;
+            shipment.Status = StatusPickupRequested;
+        }
+
+        db.OrderShipmentTrackings.Add(new OrderShipmentTracking
+        {
+            OrderId = shipment.OrderId,
+            OrderShiprocketShipmentId = shipment.Id,
+            ShiprocketShipmentId = shipment.ShiprocketShipmentId,
+            AwbCode = shipment.AwbCode,
+            Status = normalized,
+            ChangedAtUtc = now,
+            Source = string.IsNullOrWhiteSpace(source) ? ShipmentTrackingStatus.SourceSystem : source.Trim(),
+            RawJson = Truncate(rawJson, 3900),
+        });
+
+        if (shipment.Order is not null &&
+            (string.IsNullOrWhiteSpace(shipment.Order.ShiprocketShipmentId) ||
+             string.Equals(shipment.Order.ShiprocketShipmentId, shipment.ShiprocketShipmentId, StringComparison.Ordinal)))
+        {
+            shipment.Order.ShiprocketStatus = normalized;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private void EnsureShiprocketConfigured()
     {
         if (!_options.Enabled)
@@ -545,7 +747,20 @@ public sealed class AdminShippingService(
         if (string.Equals(tab, TabLabel, StringComparison.OrdinalIgnoreCase)) return TabLabel;
         // Back-compat: old "awb" tab → Generate Label (AWB without label).
         if (string.Equals(tab, "awb", StringComparison.OrdinalIgnoreCase)) return TabLabel;
-        if (string.Equals(tab, TabLabeled, StringComparison.OrdinalIgnoreCase)) return TabLabeled;
+        if (string.Equals(tab, TabPickup, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, TabLabeled, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, "label-generated", StringComparison.OrdinalIgnoreCase))
+        {
+            return TabPickup;
+        }
+
+        if (string.Equals(tab, TabInProgress, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, "progress", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, "picked-up", StringComparison.OrdinalIgnoreCase))
+        {
+            return TabInProgress;
+        }
+
         return TabNew;
     }
 
@@ -1313,6 +1528,137 @@ public sealed class AdminShippingService(
         }
     }
 
+    private async Task<GeneratePickupApiResult> GeneratePickupWithAuthRetryAsync(
+        long shipmentId,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GeneratePickupOnceAsync(
+                shipmentId, forceLogin: false, orderId, baglyShipmentId, cancellationToken);
+        }
+        catch (ShiprocketAuthException)
+        {
+            tokenStore.Invalidate();
+            return await GeneratePickupOnceAsync(
+                shipmentId, forceLogin: true, orderId, baglyShipmentId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Shiprocket generate pickup:
+    /// POST https://apiv2.shiprocket.in/v1/external/courier/generate/pickup
+    /// Body: { "shipment_id": [123456] }  (array of Shiprocket shipment ids; one at a time)
+    /// </summary>
+    private async Task<GeneratePickupApiResult> GeneratePickupOnceAsync(
+        long shipmentId,
+        bool forceLogin,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        var token = forceLogin
+            ? await LoginAsync(cancellationToken)
+            : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
+
+        var body = new Dictionary<string, object>
+        {
+            ["shipment_id"] = new[] { shipmentId },
+        };
+        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        const string path = "v1/external/courier/generate/pickup";
+
+        var client = httpClientFactory.CreateClient("Shiprocket");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "GeneratePickup",
+            "POST",
+            path,
+            requestJson: requestJson,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: baglyShipmentId,
+            cancellationToken: cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            tokenStore.Invalidate();
+            throw new ShiprocketAuthException($"Shiprocket generate pickup returned 401. Body: {Truncate(raw)}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate pickup failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw, 480)}");
+        }
+
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
+        var root = doc.RootElement;
+
+        if (TryReadInt(root, "status_code") is int apiStatus && apiStatus >= 400)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate pickup rejected status_code={apiStatus}: {TryReadMessage(root) ?? Truncate(raw)}");
+        }
+
+        // pickup_status: 0 means Shiprocket did not schedule pickup.
+        if (TryReadInt(root, "pickup_status") is 0)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket pickup not created: {TryReadMessage(root) ?? Truncate(raw, 300)}");
+        }
+
+        var pickupToken = FindPickupToken(root);
+        return new GeneratePickupApiResult(pickupToken, raw);
+    }
+
+    private static string? FindPickupToken(JsonElement root)
+    {
+        foreach (var candidate in EnumeratePickupTokenCandidates(root))
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string?> EnumeratePickupTokenCandidates(JsonElement root)
+    {
+        yield return TryReadString(root, "pickup_token_number");
+        yield return TryReadString(root, "pickup_token");
+        yield return TryReadString(root, "token_number");
+
+        if (root.TryGetProperty("response", out var response) && response.ValueKind == JsonValueKind.Object)
+        {
+            yield return TryReadString(response, "pickup_token_number");
+            yield return TryReadString(response, "pickup_token");
+            yield return TryReadString(response, "token_number");
+            if (response.TryGetProperty("data", out var nested) && nested.ValueKind == JsonValueKind.Object)
+            {
+                yield return TryReadString(nested, "pickup_token_number");
+                yield return TryReadString(nested, "pickup_token");
+            }
+        }
+
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
+        {
+            yield return TryReadString(data, "pickup_token_number");
+            yield return TryReadString(data, "pickup_token");
+        }
+    }
+
     private async Task<string> LoginAsync(CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient("Shiprocket");
@@ -1528,6 +1874,10 @@ public sealed class AdminShippingService(
         int? CourierId,
         string? CourierName,
         decimal? FreightCharge);
+
+    private sealed record GeneratePickupApiResult(
+        string? PickupTokenNumber,
+        string? RawJson);
 
     private sealed class QueryStringBuilder
     {

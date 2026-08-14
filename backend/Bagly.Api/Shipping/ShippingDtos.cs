@@ -19,7 +19,11 @@ public record AdminShippingShipmentDto(
     DateTime? SellerReadyToShipAt = null,
     bool SellerReady = false,
     string? LabelUrl = null,
-    DateTime? LabelGeneratedAt = null
+    DateTime? LabelGeneratedAt = null,
+    DateTime? PickupRequestedAt = null,
+    string? PickupTokenNumber = null,
+    string? TrackingStatus = null,
+    DateTime? TrackingStatusUpdatedAt = null
 );
 
 public record AdminShippingOrderDto(
@@ -47,7 +51,9 @@ public record AdminShippingOrdersResult(
     int ReadyCount,
     int AssignAwbCount,
     int LabelCount,
-    int LabeledCount
+    int LabeledCount,
+    int PickupCount = 0,
+    int InProgressCount = 0
 );
 
 public record CourierOptionDto(
@@ -107,6 +113,17 @@ public record GenerateLabelResponse(
     string? LabelUrl,
     string ShippingStatus,
     DateTime? LabelGeneratedAt
+);
+
+public record RequestPickupResponse(
+    Guid ShipmentId,
+    Guid OrderId,
+    string PickupLocation,
+    string? AwbCode,
+    string? PickupTokenNumber,
+    string ShippingStatus,
+    string? TrackingStatus,
+    DateTime? PickupRequestedAt
 );
 
 public record ShiprocketApiLogDto(

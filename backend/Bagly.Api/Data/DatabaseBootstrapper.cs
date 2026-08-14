@@ -35,6 +35,7 @@ public static class DatabaseBootstrapper
         await EnsureProductsSchemaAsync(db, cancellationToken);
         await EnsureOrderShiprocketShipmentsSchemaAsync(db, cancellationToken);
         await EnsureOrderShiprocketShippingFieldsAsync(db, cancellationToken);
+        await EnsureShipmentTrackingSchemaAsync(db, cancellationToken);
         await EnsureShiprocketApiLogsSchemaAsync(db, cancellationToken);
         await EnsureSellerPickupLocationsSchemaAsync(db, cancellationToken);
         await DbSeeder.SeedAsync(db, adminOptions, shiprocketOptions);
@@ -125,16 +126,66 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "SellerReadyToShipAt" timestamp with time zone;
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "LabelUrl" character varying(1000);
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "LabelGeneratedAt" timestamp with time zone;
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "PickupRequestedAt" timestamp with time zone;
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "PickupTokenNumber" character varying(100);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "TrackingStatus" character varying(50);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "TrackingStatusUpdatedAt" timestamp with time zone;
                 CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_AwbCode"
                     ON "OrderShiprocketShipments" ("AwbCode");
                 CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_ShippingStatus"
                     ON "OrderShiprocketShipments" ("ShippingStatus");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_TrackingStatus"
+                    ON "OrderShiprocketShipments" ("TrackingStatus");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_PickupRequestedAt"
+                    ON "OrderShiprocketShipments" ("PickupRequestedAt");
                 """,
                 cancellationToken);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Database bootstrap step 'OrderShiprocketShippingFieldsSelfHeal' failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Self-heal OrderShipmentTrackings history table.</summary>
+    public static async Task EnsureShipmentTrackingSchemaAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE IF NOT EXISTS "OrderShipmentTrackings" (
+                    "Id" uuid NOT NULL,
+                    "OrderId" uuid NOT NULL,
+                    "OrderShiprocketShipmentId" uuid NOT NULL,
+                    "ShiprocketShipmentId" character varying(50),
+                    "AwbCode" character varying(50),
+                    "Status" character varying(50) NOT NULL,
+                    "ChangedAtUtc" timestamp with time zone NOT NULL,
+                    "Source" character varying(50) NOT NULL,
+                    "RawJson" character varying(4000),
+                    CONSTRAINT "PK_OrderShipmentTrackings" PRIMARY KEY ("Id"),
+                    CONSTRAINT "FK_OrderShipmentTrackings_Orders_OrderId"
+                        FOREIGN KEY ("OrderId") REFERENCES "Orders" ("Id") ON DELETE CASCADE,
+                    CONSTRAINT "FK_OrderShipmentTrackings_OrderShiprocketShipments_OrderShiprocketShipmentId"
+                        FOREIGN KEY ("OrderShiprocketShipmentId") REFERENCES "OrderShiprocketShipments" ("Id") ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS "IX_OrderShipmentTrackings_OrderId"
+                    ON "OrderShipmentTrackings" ("OrderId");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShipmentTrackings_OrderShiprocketShipmentId"
+                    ON "OrderShipmentTrackings" ("OrderShiprocketShipmentId");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShipmentTrackings_Status"
+                    ON "OrderShipmentTrackings" ("Status");
+                CREATE INDEX IF NOT EXISTS "IX_OrderShipmentTrackings_ChangedAtUtc"
+                    ON "OrderShipmentTrackings" ("ChangedAtUtc");
+                """,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step 'ShipmentTrackingSchemaSelfHeal' failed: {ex.Message}");
         }
     }
 
@@ -213,6 +264,7 @@ public static class DatabaseBootstrapper
         await db.Database.ExecuteSqlRawAsync(
             """
             TRUNCATE TABLE
+                "OrderShipmentTrackings",
                 "OrderShiprocketShipments",
                 "OrderItems",
                 "ShiprocketApiLogs",
@@ -243,6 +295,7 @@ public static class DatabaseBootstrapper
             ["Orders"] = await db.Orders.CountAsync(cancellationToken),
             ["OrderItems"] = await db.OrderItems.CountAsync(cancellationToken),
             ["OrderShiprocketShipments"] = await db.OrderShiprocketShipments.CountAsync(cancellationToken),
+            ["OrderShipmentTrackings"] = await db.OrderShipmentTrackings.CountAsync(cancellationToken),
             ["Carts"] = await db.Carts.CountAsync(cancellationToken),
             ["CartItems"] = await db.CartItems.CountAsync(cancellationToken),
             ["CustomerUsers"] = await db.CustomerUsers.CountAsync(cancellationToken),
