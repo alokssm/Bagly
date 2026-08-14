@@ -11,8 +11,9 @@ function formatDateTime(value) {
   }
 }
 
-function shippingPill(status, awb, labelUrl, trackingStatus, pickupRequestedAt) {
+function shippingPill(status, awb, labelUrl, trackingStatus, pickupRequestedAt, manifestUrl) {
   if (trackingStatus === 'DELIVERED') return 'admin-pill on'
+  if (manifestUrl) return 'admin-pill on'
   if (pickupRequestedAt || trackingStatus) return 'admin-pill'
   if (labelUrl) return 'admin-pill on'
   if (awb) return 'admin-pill'
@@ -34,8 +35,9 @@ function formatTrackingStatus(status) {
 
 function shipmentStatusLabel(shipment) {
   const tracking = formatTrackingStatus(shipment.trackingStatus)
+  if (shipment.manifestUrl) return tracking || 'Manifest generated'
   if (tracking) return tracking
-  if (shipment.pickupRequestedAt) return 'Pickup requested'
+  if (shipment.pickupRequestedAt) return 'Generate Manifest'
   if (shipment.labelUrl) return 'Request Pickup'
   if (shipment.awbCode) return 'Generate Label'
   return shipment.shippingStatus || shipment.status || 'Created'
@@ -44,7 +46,10 @@ function shipmentStatusLabel(shipment) {
 function shipmentMatchesTab(shipment, tab) {
   const sellerReady = !!(shipment.sellerReady || shipment.sellerReadyToShipAt)
   if (tab === 'in-progress' || tab === 'progress' || tab === 'picked-up') {
-    return !!shipment.pickupRequestedAt
+    return !!shipment.manifestUrl
+  }
+  if (tab === 'manifest' || tab === 'generate-manifest') {
+    return !!shipment.pickupRequestedAt && !shipment.manifestUrl
   }
   if (tab === 'pickup' || tab === 'labeled' || tab === 'label-generated') {
     return !!shipment.labelUrl && !shipment.pickupRequestedAt
@@ -102,6 +107,7 @@ export default function AdminShipping() {
     labelCount: 0,
     labeledCount: 0,
     pickupCount: 0,
+    manifestCount: 0,
     inProgressCount: 0,
   })
   const [loading, setLoading] = useState(true)
@@ -136,6 +142,7 @@ export default function AdminShipping() {
         labelCount: data.labelCount ?? data.awbCount ?? 0,
         labeledCount: data.labeledCount || data.pickupCount || 0,
         pickupCount: data.pickupCount ?? data.labeledCount ?? 0,
+        manifestCount: data.manifestCount || 0,
         inProgressCount: data.inProgressCount || 0,
       })
     } catch (err) {
@@ -311,12 +318,28 @@ export default function AdminShipping() {
     setActionError('')
     try {
       await api.adminShippingRequestPickup(shipment.id)
-      setTab('in-progress')
+      setTab('manifest')
       if (logsFilterShipmentId || logsOrderQuery) {
         await loadLogs(logsOrderQuery, logsFilterShipmentId)
       }
     } catch (err) {
       setActionError(err.message || 'Request Pickup failed.')
+    } finally {
+      setBusyShipmentId('')
+    }
+  }
+
+  const generateManifest = async (shipment) => {
+    setBusyShipmentId(shipment.id)
+    setActionError('')
+    try {
+      await api.adminShippingGenerateManifest(shipment.id)
+      setTab('in-progress')
+      if (logsFilterShipmentId || logsOrderQuery) {
+        await loadLogs(logsOrderQuery, logsFilterShipmentId)
+      }
+    } catch (err) {
+      setActionError(err.message || 'Generate Manifest failed.')
     } finally {
       setBusyShipmentId('')
     }
@@ -328,6 +351,7 @@ export default function AdminShipping() {
     { id: 'assign-awb', label: 'Assign AWB', count: result.assignAwbCount },
     { id: 'label', label: 'Generate Label', count: result.labelCount },
     { id: 'pickup', label: 'Request Pickup', count: result.pickupCount },
+    { id: 'manifest', label: 'Generate Manifest', count: result.manifestCount },
     { id: 'in-progress', label: 'In Progress', count: result.inProgressCount },
   ]
 
@@ -346,7 +370,8 @@ export default function AdminShipping() {
           <p className="eyebrow">Fulfillment</p>
           <h1>Shipping</h1>
           <p className="admin-subtitle">
-            Per-pickup Shiprocket shipments. Ready to Ship → Assign AWB → Generate Label → Request Pickup → tracking.
+            Per-pickup Shiprocket shipments. Ready to Ship → Assign AWB → Generate Label → Request Pickup →
+            Generate Manifest → tracking.
           </p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
@@ -417,6 +442,7 @@ export default function AdminShipping() {
                   !!shipment.shiprocketShipmentId && !shipment.awbCode && !sellerReady
                 const canGenerateLabel = !!shipment.awbCode && !shipment.labelUrl
                 const canRequestPickup = !!shipment.labelUrl && !shipment.pickupRequestedAt
+                const canGenerateManifest = !!shipment.pickupRequestedAt && !shipment.manifestUrl
                 const showCourierPanel =
                   canRefreshCouriers && (couriersLoaded || courierLoading || !!courierError)
 
@@ -454,6 +480,7 @@ export default function AdminShipping() {
                             shipment.labelUrl,
                             shipment.trackingStatus,
                             shipment.pickupRequestedAt,
+                            shipment.manifestUrl,
                           )}
                         >
                           {shipmentStatusLabel(shipment)}
@@ -488,6 +515,17 @@ export default function AdminShipping() {
                                   rel="noopener noreferrer"
                                 >
                                   Open label
+                                </a>
+                              </div>
+                            ) : null}
+                            {shipment.manifestUrl ? (
+                              <div className="admin-muted admin-shipping-meta">
+                                <a
+                                  href={shipment.manifestUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Open manifest
                                 </a>
                               </div>
                             ) : null}
@@ -548,6 +586,16 @@ export default function AdminShipping() {
                             onClick={() => requestPickup(shipment)}
                           >
                             {busy ? 'Requesting…' : 'Request Pickup'}
+                          </button>
+                        ) : null}
+                        {canGenerateManifest ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy}
+                            onClick={() => generateManifest(shipment)}
+                          >
+                            {busy ? 'Generating…' : 'Generate Manifest'}
                           </button>
                         ) : null}
                         <button

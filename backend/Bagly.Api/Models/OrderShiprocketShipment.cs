@@ -18,7 +18,7 @@ public class OrderShiprocketShipment
     /// <summary>Shiprocket create status (e.g. NEW) or last API status string.</summary>
     public string? Status { get; set; }
     /// <summary>
-    /// Admin shipping workflow: ReadyToShip → AwbAssigned → LabelGenerated → PickupRequested
+    /// Admin shipping workflow: ReadyToShip → AwbAssigned → LabelGenerated → PickupRequested → ManifestGenerated
     /// (null until Ready to Ship).
     /// </summary>
     public string? ShippingStatus { get; set; }
@@ -45,6 +45,10 @@ public class OrderShiprocketShipment
     public DateTime? PickupRequestedAt { get; set; }
     /// <summary>Shiprocket pickup_token_number (or similar) when returned by generate/pickup.</summary>
     public string? PickupTokenNumber { get; set; }
+
+    /// <summary>Shiprocket manifest PDF / download URL from manifests/generate.</summary>
+    public string? ManifestUrl { get; set; }
+    public DateTime? ManifestGeneratedAt { get; set; }
 
     /// <summary>
     /// Current courier tracking status for quick queries

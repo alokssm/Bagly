@@ -564,7 +564,10 @@ public class SellerOrdersController(
             !string.IsNullOrWhiteSpace(s.LabelUrl),
             s.PickupRequestedAt,
             s.TrackingStatus,
-            s.TrackingStatusUpdatedAt);
+            s.TrackingStatusUpdatedAt,
+            s.ManifestUrl,
+            s.ManifestGeneratedAt,
+            !string.IsNullOrWhiteSpace(s.ManifestUrl));
 
     private static string MaskCustomerName(string first, string last)
     {
@@ -644,7 +647,10 @@ public record SellerShipmentDto(
     bool CanDownloadLabel = false,
     DateTime? PickupRequestedAt = null,
     string? TrackingStatus = null,
-    DateTime? TrackingStatusUpdatedAt = null);
+    DateTime? TrackingStatusUpdatedAt = null,
+    string? ManifestUrl = null,
+    DateTime? ManifestGeneratedAt = null,
+    bool CanDownloadManifest = false);
 
 public record SellerOrderDto(
     Guid Id,

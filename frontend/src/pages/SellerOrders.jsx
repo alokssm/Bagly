@@ -38,6 +38,10 @@ function shipmentLabel(shipment) {
     const awb = shipment.awbCode ? `AWB ${shipment.awbCode}` : null
     return awb ? `${awb} · ${tracking}` : tracking
   }
+  if (shipment.manifestUrl || shipment.canDownloadManifest) {
+    const awb = shipment.awbCode ? `AWB ${shipment.awbCode}` : null
+    return awb ? `${awb} · Manifest ready` : 'Manifest ready'
+  }
   if (shipment.pickupRequestedAt) return shipment.awbCode ? `AWB ${shipment.awbCode} · Pickup requested` : 'Pickup requested'
   if (shipment.labelUrl || shipment.canDownloadLabel) return `AWB ${shipment.awbCode || '—'}`
   if (shipment.awbCode) return `AWB ${shipment.awbCode}`
@@ -61,6 +65,10 @@ function formatTrackingStatus(status) {
 
 function canDownloadLabel(shipment) {
   return !!(shipment.canDownloadLabel || shipment.labelUrl)
+}
+
+function canDownloadManifest(shipment) {
+  return !!(shipment.canDownloadManifest || shipment.manifestUrl)
 }
 
 function lineTotalOf(item) {
@@ -275,6 +283,16 @@ export default function SellerOrders() {
                                     Download Label
                                   </a>
                                 ) : null}
+                                {canDownloadManifest(s) ? (
+                                  <a
+                                    className="seller-order-label-link"
+                                    href={s.manifestUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Download Manifest
+                                  </a>
+                                ) : null}
                               </div>
                             ))
                           )}
@@ -329,6 +347,24 @@ export default function SellerOrders() {
                                 }
                               >
                                 Download Label
+                              </a>
+                            ))}
+                          {(order.shipments || [])
+                            .filter((s) => canDownloadManifest(s))
+                            .map((s) => (
+                              <a
+                                key={`manifest-${s.id}`}
+                                className="btn btn-secondary btn-sm"
+                                href={s.manifestUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={
+                                  (order.shipments || []).filter((x) => canDownloadManifest(x)).length > 1
+                                    ? `Download Manifest · ${s.pickupLocation}`
+                                    : undefined
+                                }
+                              >
+                                Download Manifest
                               </a>
                             ))}
                           {actionableShipments.length === 0 &&

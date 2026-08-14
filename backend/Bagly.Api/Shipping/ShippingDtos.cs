@@ -23,7 +23,9 @@ public record AdminShippingShipmentDto(
     DateTime? PickupRequestedAt = null,
     string? PickupTokenNumber = null,
     string? TrackingStatus = null,
-    DateTime? TrackingStatusUpdatedAt = null
+    DateTime? TrackingStatusUpdatedAt = null,
+    string? ManifestUrl = null,
+    DateTime? ManifestGeneratedAt = null
 );
 
 public record AdminShippingOrderDto(
@@ -53,6 +55,7 @@ public record AdminShippingOrdersResult(
     int LabelCount,
     int LabeledCount,
     int PickupCount = 0,
+    int ManifestCount = 0,
     int InProgressCount = 0
 );
 
@@ -124,6 +127,16 @@ public record RequestPickupResponse(
     string ShippingStatus,
     string? TrackingStatus,
     DateTime? PickupRequestedAt
+);
+
+public record GenerateManifestResponse(
+    Guid ShipmentId,
+    Guid OrderId,
+    string PickupLocation,
+    string? AwbCode,
+    string? ManifestUrl,
+    string ShippingStatus,
+    DateTime? ManifestGeneratedAt
 );
 
 public record ShiprocketApiLogDto(

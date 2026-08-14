@@ -33,6 +33,10 @@ public interface IAdminShippingService
         Guid shipmentId,
         CancellationToken cancellationToken = default);
 
+    Task<GenerateManifestResponse> GenerateManifestAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
         Guid? orderId,
         Guid? shipmentId,
@@ -68,7 +72,9 @@ public sealed class AdminShippingService(
     public const string TabLabel = "label";
     /// <summary>Label URL stored; courier pickup not yet requested.</summary>
     public const string TabPickup = "pickup";
-    /// <summary>Pickup requested (and later in-transit / delivered via tracking).</summary>
+    /// <summary>Pickup requested; manifest not yet generated.</summary>
+    public const string TabManifest = "manifest";
+    /// <summary>Manifest generated (tracking may advance later).</summary>
     public const string TabInProgress = "in-progress";
     /// <summary>Back-compat alias for <see cref="TabPickup"/>.</summary>
     public const string TabLabeled = "labeled";
@@ -77,6 +83,7 @@ public sealed class AdminShippingService(
     public const string StatusAwbAssigned = "AwbAssigned";
     public const string StatusLabelGenerated = "LabelGenerated";
     public const string StatusPickupRequested = "PickupRequested";
+    public const string StatusManifestGenerated = "ManifestGenerated";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -152,10 +159,19 @@ public sealed class AdminShippingService(
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
-        // In Progress: pickup requested (tracking may advance later).
-        var inProgressCount = await baseQuery.CountAsync(
+        // Generate Manifest: pickup requested, manifest URL not yet stored.
+        var manifestCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.PickupRequestedAt != null &&
+                (s.ManifestUrl == null || s.ManifestUrl == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
+            cancellationToken);
+
+        // In Progress: manifest generated (tracking may advance later).
+        var inProgressCount = await baseQuery.CountAsync(
+            o => o.ShiprocketShipments.Any(s =>
+                s.ManifestUrl != null && s.ManifestUrl != "" &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
@@ -183,8 +199,13 @@ public sealed class AdminShippingService(
                 s.PickupRequestedAt == null &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
-            TabInProgress => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+            TabManifest => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.PickupRequestedAt != null &&
+                (s.ManifestUrl == null || s.ManifestUrl == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
+            TabInProgress => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+                s.ManifestUrl != null && s.ManifestUrl != "" &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
             _ => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
@@ -240,7 +261,9 @@ public sealed class AdminShippingService(
                         s.PickupRequestedAt,
                         s.PickupTokenNumber,
                         s.TrackingStatus,
-                        s.TrackingStatusUpdatedAt))
+                        s.TrackingStatusUpdatedAt,
+                        s.ManifestUrl,
+                        s.ManifestGeneratedAt))
                     .ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -271,6 +294,7 @@ public sealed class AdminShippingService(
             labelCount,
             LabeledCount: pickupCount,
             PickupCount: pickupCount,
+            ManifestCount: manifestCount,
             InProgressCount: inProgressCount);
     }
 
@@ -659,6 +683,86 @@ public sealed class AdminShippingService(
             shipment.PickupRequestedAt);
     }
 
+    /// <summary>
+    /// Calls Shiprocket <c>POST v1/external/manifests/generate</c> with
+    /// <c>{ "shipment_id": [srShipmentId] }</c>, stores <see cref="OrderShiprocketShipment.ManifestUrl"/>.
+    /// </summary>
+    public async Task<GenerateManifestResponse> GenerateManifestAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureShiprocketConfigured();
+
+        var shipment = await db.OrderShiprocketShipments
+            .Include(s => s.Order)
+            .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+
+        var order = shipment.Order
+            ?? throw new InvalidOperationException("Order not found for shipment.");
+
+        if (string.IsNullOrWhiteSpace(shipment.ShiprocketShipmentId))
+        {
+            throw new InvalidOperationException("Shiprocket shipment_id is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(shipment.AwbCode))
+        {
+            throw new InvalidOperationException("Assign AWB before generating a manifest.");
+        }
+
+        if (shipment.PickupRequestedAt is null)
+        {
+            throw new InvalidOperationException("Request pickup before generating a manifest.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(shipment.ManifestUrl))
+        {
+            throw new InvalidOperationException("Manifest already generated for this shipment.");
+        }
+
+        if (!long.TryParse(shipment.ShiprocketShipmentId.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var srShipmentId))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket shipment_id '{shipment.ShiprocketShipmentId}' is not numeric.");
+        }
+
+        var manifestUrl = await GenerateManifestWithAuthRetryAsync(
+            srShipmentId, order.Id, shipment.Id, cancellationToken);
+
+        var now = DateTime.UtcNow;
+        shipment.ManifestUrl = manifestUrl;
+        shipment.ManifestGeneratedAt = now;
+        shipment.ShippingStatus = StatusManifestGenerated;
+        shipment.Status = StatusManifestGenerated;
+        shipment.UpdatedAt = now;
+        shipment.LastError = null;
+
+        if (string.IsNullOrWhiteSpace(order.ShiprocketShipmentId) ||
+            string.Equals(order.ShiprocketShipmentId, shipment.ShiprocketShipmentId, StringComparison.Ordinal))
+        {
+            order.ShiprocketStatus = StatusManifestGenerated;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Manifest generated for {OrderNumber}/{Pickup}: awb={Awb}, url={Url}.",
+            order.OrderNumber,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            Truncate(shipment.ManifestUrl, 120));
+
+        return new GenerateManifestResponse(
+            shipment.Id,
+            order.Id,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            shipment.ManifestUrl,
+            shipment.ShippingStatus!,
+            shipment.ManifestGeneratedAt);
+    }
+
     public async Task<bool> ApplyTrackingStatusAsync(
         Guid shipmentId,
         string trackingStatus,
@@ -752,6 +856,12 @@ public sealed class AdminShippingService(
             string.Equals(tab, "label-generated", StringComparison.OrdinalIgnoreCase))
         {
             return TabPickup;
+        }
+
+        if (string.Equals(tab, TabManifest, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, "generate-manifest", StringComparison.OrdinalIgnoreCase))
+        {
+            return TabManifest;
         }
 
         if (string.Equals(tab, TabInProgress, StringComparison.OrdinalIgnoreCase) ||
@@ -1619,6 +1729,186 @@ public sealed class AdminShippingService(
 
         var pickupToken = FindPickupToken(root);
         return new GeneratePickupApiResult(pickupToken, raw);
+    }
+
+    private async Task<string> GenerateManifestWithAuthRetryAsync(
+        long shipmentId,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GenerateManifestOnceAsync(
+                shipmentId, forceLogin: false, orderId, baglyShipmentId, cancellationToken);
+        }
+        catch (ShiprocketAuthException)
+        {
+            tokenStore.Invalidate();
+            return await GenerateManifestOnceAsync(
+                shipmentId, forceLogin: true, orderId, baglyShipmentId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Shiprocket generate manifest:
+    /// POST https://apiv2.shiprocket.in/v1/external/manifests/generate
+    /// Body: { "shipment_id": [123456] }  (array of Shiprocket shipment ids)
+    /// Response often includes manifest_url / url — parsed via <see cref="FindManifestUrl"/>.
+    /// </summary>
+    private async Task<string> GenerateManifestOnceAsync(
+        long shipmentId,
+        bool forceLogin,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        var token = forceLogin
+            ? await LoginAsync(cancellationToken)
+            : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
+
+        var body = new Dictionary<string, object>
+        {
+            ["shipment_id"] = new[] { shipmentId },
+        };
+        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        const string path = "v1/external/manifests/generate";
+
+        var client = httpClientFactory.CreateClient("Shiprocket");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "GenerateManifest",
+            "POST",
+            path,
+            requestJson: requestJson,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: baglyShipmentId,
+            cancellationToken: cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            tokenStore.Invalidate();
+            throw new ShiprocketAuthException($"Shiprocket generate manifest returned 401. Body: {Truncate(raw)}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate manifest failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw, 480)}");
+        }
+
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
+        var root = doc.RootElement;
+
+        if (TryReadInt(root, "status_code") is int apiStatus && apiStatus >= 400)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate manifest rejected status_code={apiStatus}: {TryReadMessage(root) ?? Truncate(raw)}");
+        }
+
+        // status: 0 (or message "Manifest not generated") means Shiprocket did not create a manifest.
+        if (TryReadInt(root, "status") is 0)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket manifest not generated: {TryReadMessage(root) ?? Truncate(raw, 300)}");
+        }
+
+        var message = TryReadMessage(root);
+        if (!string.IsNullOrWhiteSpace(message) &&
+            message.Contains("not generated", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket manifest not generated: {Truncate(message, 300)}");
+        }
+
+        var manifestUrl = FindManifestUrl(root);
+        if (string.IsNullOrWhiteSpace(manifestUrl))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate manifest succeeded but manifest_url was missing. Body: {Truncate(raw, 480)}");
+        }
+
+        return manifestUrl.Trim();
+    }
+
+    /// <summary>
+    /// Robustly finds a manifest PDF/download URL from common Shiprocket response shapes:
+    /// manifest_url, url, pdf_url, or nested under data / response.
+    /// </summary>
+    private static string? FindManifestUrl(JsonElement root)
+    {
+        foreach (var candidate in EnumerateManifestUrlCandidates(root))
+        {
+            if (!string.IsNullOrWhiteSpace(candidate) &&
+                (candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                return candidate.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string?> EnumerateManifestUrlCandidates(JsonElement root)
+    {
+        yield return TryReadString(root, "manifest_url");
+        yield return TryReadString(root, "pdf_url");
+        yield return TryReadString(root, "url");
+
+        if (root.TryGetProperty("data", out var data))
+        {
+            if (data.ValueKind == JsonValueKind.Object)
+            {
+                yield return TryReadString(data, "manifest_url");
+                yield return TryReadString(data, "pdf_url");
+                yield return TryReadString(data, "url");
+            }
+            else if (data.ValueKind == JsonValueKind.String)
+            {
+                yield return data.GetString();
+            }
+            else if (data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                        yield return item.GetString();
+                    else if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        yield return TryReadString(item, "manifest_url");
+                        yield return TryReadString(item, "url");
+                    }
+                }
+            }
+        }
+
+        if (root.TryGetProperty("response", out var response) && response.ValueKind == JsonValueKind.Object)
+        {
+            yield return TryReadString(response, "manifest_url");
+            yield return TryReadString(response, "pdf_url");
+            yield return TryReadString(response, "url");
+            if (response.TryGetProperty("data", out var nested))
+            {
+                if (nested.ValueKind == JsonValueKind.Object)
+                {
+                    yield return TryReadString(nested, "manifest_url");
+                    yield return TryReadString(nested, "url");
+                }
+                else if (nested.ValueKind == JsonValueKind.String)
+                {
+                    yield return nested.GetString();
+                }
+            }
+        }
     }
 
     private static string? FindPickupToken(JsonElement root)

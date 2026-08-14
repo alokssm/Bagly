@@ -128,6 +128,8 @@ public static class DatabaseBootstrapper
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "LabelGeneratedAt" timestamp with time zone;
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "PickupRequestedAt" timestamp with time zone;
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "PickupTokenNumber" character varying(100);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ManifestUrl" character varying(1000);
+                ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "ManifestGeneratedAt" timestamp with time zone;
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "TrackingStatus" character varying(50);
                 ALTER TABLE "OrderShiprocketShipments" ADD COLUMN IF NOT EXISTS "TrackingStatusUpdatedAt" timestamp with time zone;
                 CREATE INDEX IF NOT EXISTS "IX_OrderShiprocketShipments_AwbCode"

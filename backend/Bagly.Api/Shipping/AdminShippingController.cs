@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bagly.Api.Shipping;
 
-/// <summary>Admin shipping workflow: serviceability, AWB, label, and courier pickup request.</summary>
+/// <summary>Admin shipping workflow: serviceability, AWB, label, pickup, and manifest.</summary>
 [ApiController]
 [Route("api/admin/shipping")]
 [Authorize(Roles = "Admin")]
@@ -13,7 +13,7 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
 {
     /// <summary>
     /// Orders with Shiprocket shipments.
-    /// Tabs: new | ready | assign-awb (alias: assign) | label (alias: awb) | pickup (alias: labeled) | in-progress.
+    /// Tabs: new | ready | assign-awb (alias: assign) | label (alias: awb) | pickup (alias: labeled) | manifest | in-progress.
     /// </summary>
     [HttpGet("orders")]
     public async Task<ActionResult<AdminShippingOrdersResult>> ListOrders(
@@ -155,6 +155,26 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
         try
         {
             var result = await shipping.RequestPickupAsync(shipmentId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate manifest via Shiprocket (<c>POST v1/external/manifests/generate</c>)
+    /// and store the manifest URL on the shipment.
+    /// </summary>
+    [HttpPost("shipments/{shipmentId:guid}/generate-manifest")]
+    public async Task<ActionResult<GenerateManifestResponse>> GenerateManifest(
+        Guid shipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await shipping.GenerateManifestAsync(shipmentId, cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

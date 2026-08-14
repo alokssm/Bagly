@@ -536,6 +536,11 @@ export const api = {
       method: 'POST',
       auth: true,
     }),
+  adminShippingGenerateManifest: (shipmentId) =>
+    request(`/admin/shipping/shipments/${encodeURIComponent(shipmentId)}/generate-manifest`, {
+      method: 'POST',
+      auth: true,
+    }),
   adminGetShippingApiLogs: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {

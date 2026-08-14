@@ -10,7 +10,7 @@ public class ShiprocketApiLog
     /// <summary>Bagly <see cref="OrderShiprocketShipment"/> Id when known.</summary>
     public Guid? ShipmentId { get; set; }
 
-    /// <summary>e.g. Serviceability, AssignAwb, GenerateLabel, GeneratePickup, CreateAdhoc, PickupList.</summary>
+    /// <summary>e.g. Serviceability, AssignAwb, GenerateLabel, GeneratePickup, GenerateManifest, CreateAdhoc, PickupList.</summary>
     public string Action { get; set; } = string.Empty;
 
     public string HttpMethod { get; set; } = string.Empty;
