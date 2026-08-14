@@ -42,7 +42,7 @@ public sealed class ShiprocketWebhookLogService(
         try
         {
             entry.HttpMethod = Truncate(entry.HttpMethod, 10) ?? "POST";
-            entry.Path = Truncate(entry.Path, MaxPathChars) ?? "/api/webhooks/shiprocket";
+            entry.Path = Truncate(entry.Path, MaxPathChars) ?? "/api/webhooks/shipping-status";
             entry.HeadersJson = Truncate(entry.HeadersJson, MaxHeadersChars);
             entry.RequestBody = TruncateBody(entry.RequestBody);
             entry.ResponseBody = TruncateBody(entry.ResponseBody);

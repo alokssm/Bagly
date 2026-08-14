@@ -22,10 +22,11 @@ public class ShiprocketOptions
     public string BaseUrl { get; set; } = "https://apiv2.shiprocket.in";
 
     /// <summary>
-    /// Optional shared secret for <c>POST /api/webhooks/shiprocket</c>.
-    /// When set (and not a SET_VIA_ENV placeholder), requests must send the same value in
+    /// Optional shared secret for shipping webhook POSTs
+    /// (<c>/api/webhooks/shipping-status</c> or legacy <c>/api/webhooks/shiprocket</c>).
+    /// When set (and not a SET_VIA_ENV placeholder), non-empty webhook payloads must send the same value in
     /// <c>x-api-key</c>, <c>X-Shiprocket-Webhook-Secret</c>, or <c>Authorization: Bearer …</c>
-    /// (Shiprocket panel “API key” / security token).
+    /// (Shiprocket panel “API key” / security token). Empty panel probes are accepted without the secret.
     /// </summary>
     public string WebhookSecret { get; set; } = string.Empty;
 

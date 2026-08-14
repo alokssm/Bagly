@@ -2,7 +2,8 @@ namespace Bagly.Api.Models;
 
 /// <summary>
 /// Append-only log of every inbound Shiprocket webhook HTTP request/response
-/// (<c>POST /api/webhooks/shiprocket</c>), including auth/parse/no-match failures.
+/// (<c>POST /api/webhooks/shipping-status</c> or legacy <c>/api/webhooks/shiprocket</c>),
+/// including auth/parse/no-match failures.
 /// </summary>
 public class ShiprocketWebhookLog
 {
@@ -12,7 +13,7 @@ public class ShiprocketWebhookLog
 
     public string HttpMethod { get; set; } = "POST";
 
-    public string Path { get; set; } = "/api/webhooks/shiprocket";
+    public string Path { get; set; } = "/api/webhooks/shipping-status";
 
     /// <summary>Request headers as JSON; secret header values are masked.</summary>
     public string? HeadersJson { get; set; }

@@ -12,12 +12,13 @@ namespace Bagly.Api.Shipping;
 
 /// <summary>
 /// Inbound Shiprocket tracking webhooks.
-/// Configure in Shiprocket panel → Settings → API → Webhooks to POST here.
-/// Maps courier statuses into <see cref="OrderShiprocketShipment.TrackingStatus"/>
-/// and appends <see cref="OrderShipmentTracking"/> history rows (one row per forward change).
+/// Prefer <c>POST /api/webhooks/shipping-status</c> in the Shiprocket panel (path avoids blocked words).
+/// Legacy <c>POST /api/webhooks/shiprocket</c> remains supported.
+/// GET/HEAD on either path return a quick health payload for panel probes.
 /// Every request/response is persisted to <see cref="ShiprocketWebhookLog"/>.
 /// </summary>
 [ApiController]
+[Route("api/webhooks/shipping-status")]
 [Route("api/webhooks/shiprocket")]
 [AllowAnonymous]
 public class ShiprocketWebhookController(
@@ -34,14 +35,23 @@ public class ShiprocketWebhookController(
 
     private readonly ShiprocketOptions _options = options.Value;
 
+    /// <summary>Panel / uptime probe — must stay fast and unauthenticated.</summary>
+    [HttpGet]
+    [HttpHead]
+    public IActionResult Health()
+    {
+        return Ok(new { ok = true, service = "shipping-webhook" });
+    }
+
     [HttpPost]
     public async Task<IActionResult> Receive(CancellationToken cancellationToken)
     {
+        var path = Request.Path.HasValue ? Request.Path.Value! : "/api/webhooks/shipping-status";
         var log = new ShiprocketWebhookLog
         {
             ReceivedAtUtc = DateTime.UtcNow,
             HttpMethod = Request.Method,
-            Path = Request.Path.HasValue ? Request.Path.Value! : "/api/webhooks/shiprocket",
+            Path = path,
             HeadersJson = ShiprocketWebhookLogService.BuildHeadersJson(Request.Headers),
         };
 
@@ -51,9 +61,27 @@ public class ShiprocketWebhookController(
             requestBody = await ReadBodyAsync(cancellationToken);
             log.RequestBody = requestBody;
 
+            var isEmptyProbe = string.IsNullOrWhiteSpace(requestBody) ||
+                               string.Equals(requestBody.Trim(), "{}", StringComparison.Ordinal);
+
             if (!IsWebhookAuthorized())
             {
-                logger.LogWarning("Shiprocket webhook rejected: missing or invalid webhook secret.");
+                // Shiprocket panel often probes without the shared secret; empty bodies must still 200.
+                if (isEmptyProbe)
+                {
+                    logger.LogInformation(
+                        "Shipping webhook probe accepted without secret (empty body) on {Path}.",
+                        path);
+                    return await FinishAsync(
+                        log,
+                        StatusCodes.Status200OK,
+                        new { ok = true, received = true, probe = true, service = "shipping-webhook" },
+                        processedOk: true,
+                        errorMessage: null,
+                        cancellationToken);
+                }
+
+                logger.LogWarning("Shipping webhook rejected: missing or invalid webhook secret.");
                 return await FinishAsync(
                     log,
                     StatusCodes.Status401Unauthorized,
@@ -70,12 +98,13 @@ public class ShiprocketWebhookController(
             }
             catch (JsonException ex)
             {
-                logger.LogWarning(ex, "Shiprocket webhook: invalid JSON body.");
+                // Keep panel/test clients happy: log and acknowledge instead of 400/500.
+                logger.LogWarning(ex, "Shipping webhook: invalid JSON body; acknowledging as probe.");
                 return await FinishAsync(
                     log,
-                    StatusCodes.Status400BadRequest,
-                    new { message = "Invalid JSON body." },
-                    processedOk: false,
+                    StatusCodes.Status200OK,
+                    new { ok = true, received = true, updated = false, reason = "invalid_json" },
+                    processedOk: true,
                     errorMessage: Truncate(ex.Message, 500),
                     cancellationToken);
             }
@@ -92,11 +121,25 @@ public class ShiprocketWebhookController(
                 var srOrderId = ReadString(root, "sr_order_id", "shiprocket_order_id")
                                 ?? ReadNestedString(root, "data", "sr_order_id");
 
+                if (isEmptyProbe ||
+                    (string.IsNullOrWhiteSpace(awb) &&
+                     string.IsNullOrWhiteSpace(srShipmentId) &&
+                     string.IsNullOrWhiteSpace(srOrderId)))
+                {
+                    return await FinishAsync(
+                        log,
+                        StatusCodes.Status200OK,
+                        new { ok = true, received = true, updated = false, reason = "empty_or_test_payload" },
+                        processedOk: true,
+                        errorMessage: null,
+                        cancellationToken);
+                }
+
                 var shipment = await FindShipmentAsync(awb, srShipmentId, srOrderId, cancellationToken);
                 if (shipment is null)
                 {
                     logger.LogWarning(
-                        "Shiprocket webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, srOrder={SrOrder}.",
+                        "Shipping webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, srOrder={SrOrder}.",
                         awb,
                         srShipmentId,
                         srOrderId);
@@ -119,7 +162,7 @@ public class ShiprocketWebhookController(
                     var currentStatus = ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
                                         ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status");
                     logger.LogInformation(
-                        "Shiprocket webhook ignored (unmapped/non-forward status={Status}, awb={Awb}, srShipment={Sr}, current={Current}).",
+                        "Shipping webhook ignored (unmapped/non-forward status={Status}, awb={Awb}, srShipment={Sr}, current={Current}).",
                         currentStatus,
                         awb,
                         srShipmentId,
@@ -170,12 +213,13 @@ public class ShiprocketWebhookController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Shiprocket webhook processing failed.");
+            // Never fail panel save / delivery retries with 500 — log and acknowledge.
+            logger.LogError(ex, "Shipping webhook processing failed; acknowledging with 200.");
             log.RequestBody ??= requestBody;
             return await FinishAsync(
                 log,
-                StatusCodes.Status500InternalServerError,
-                new { message = "Webhook processing failed." },
+                StatusCodes.Status200OK,
+                new { ok = true, received = true, updated = false, reason = "processing_error" },
                 processedOk: false,
                 errorMessage: Truncate(ex.Message, 500),
                 cancellationToken);
