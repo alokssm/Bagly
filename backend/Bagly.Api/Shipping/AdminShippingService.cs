@@ -306,7 +306,11 @@ public sealed class AdminShippingService(
         shipment.AwbCode = assignResult.AwbCode;
         shipment.CourierId = assignResult.CourierId ?? courierId;
         shipment.CourierName = assignResult.CourierName;
-        shipment.ActualShippingCharge = rate ?? assignResult.FreightCharge;
+        shipment.ActualShippingCharge = rate is decimal r
+            ? RoundMoney(r)
+            : assignResult.FreightCharge is decimal f
+                ? RoundMoney(f)
+                : null;
         shipment.ShippingStatus = StatusAwbAssigned;
         shipment.AwbAssignedAt = DateTime.UtcNow;
         shipment.ReadyToShipAt ??= DateTime.UtcNow;
@@ -715,7 +719,7 @@ public sealed class AdminShippingService(
     /// <summary>
     /// Panel-aligned shipping charge: Freight + Coverage + WhatsApp [+ COD].
     /// Declared/order value is an API input only — never added into the rate.
-    /// Prefer Shiprocket <c>rate</c> when it already equals the component sum.
+    /// Always sum fee components as decimal (never truncate to int); round to 2 dp.
     /// </summary>
     private static (decimal Rate, decimal Freight, decimal Coverage, decimal WhatsApp, decimal Cod)
         ComputeCourierShippingCharge(JsonElement item)
@@ -734,32 +738,26 @@ public sealed class AdminShippingService(
                         ?? TryReadDecimal(item, "cod_charge")
                         ?? 0m;
 
-        var componentSum = freight + coverage + whatsapp + codCharge;
-        var panelRate = TryReadDecimal(item, "rate")
-                        ?? TryReadDecimal(item, "total_charge")
-                        ?? TryReadDecimal(item, "total_charges");
+        // Keep component decimals (e.g. freight 138.36); only round the money total.
+        var componentSum = RoundMoney(freight + coverage + whatsapp + codCharge);
+        var panelRate = RoundMoney(
+            TryReadDecimal(item, "rate")
+            ?? TryReadDecimal(item, "total_charge")
+            ?? TryReadDecimal(item, "total_charges")
+            ?? 0m);
 
-        // Prefer panel total when it matches the fee sum (within 1 paise).
-        if (panelRate is decimal pr && Math.Abs(pr - componentSum) <= 0.01m)
-        {
-            return (pr, freight, coverage, whatsapp, codCharge);
-        }
-
-        // If components are all zero but panel rate exists, use panel rate.
-        if (componentSum == 0 && panelRate is decimal fallback && fallback > 0)
-        {
-            return (fallback, freight, coverage, whatsapp, codCharge);
-        }
-
-        // If panel rate is higher and components miss something, still prefer explicit sum
-        // when we have any fee component; otherwise fall back to panel rate.
-        if (componentSum > 0)
+        // Prefer explicit fee sum so a truncated panel <c>rate</c> (e.g. 242) cannot
+        // replace 138.36+99+5=242.36.
+        if (componentSum > 0m)
         {
             return (componentSum, freight, coverage, whatsapp, codCharge);
         }
 
-        return (panelRate ?? 0m, freight, coverage, whatsapp, codCharge);
+        return (panelRate, freight, coverage, whatsapp, codCharge);
     }
+
+    private static decimal RoundMoney(decimal value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private static string FormatDim(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);
@@ -994,17 +992,47 @@ public sealed class AdminShippingService(
         return null;
     }
 
+    /// <summary>
+    /// Reads a JSON number/string as decimal. Never uses int conversion (would drop .36 from 138.36).
+    /// </summary>
     private static decimal? TryReadDecimal(JsonElement obj, string name)
     {
         if (!obj.TryGetProperty(name, out var el)) return null;
-        if (el.ValueKind == JsonValueKind.Number && el.TryGetDecimal(out var d)) return d;
-        if (el.ValueKind == JsonValueKind.String &&
-            decimal.TryParse(el.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return parsed;
-        }
 
-        return null;
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Number:
+                if (el.TryGetDecimal(out var d)) return d;
+                // Raw text preserves fractional digits if TryGetDecimal fails.
+                if (decimal.TryParse(
+                        el.GetRawText(),
+                        NumberStyles.Number,
+                        CultureInfo.InvariantCulture,
+                        out var fromRaw))
+                {
+                    return fromRaw;
+                }
+
+                if (el.TryGetDouble(out var dbl) && !double.IsNaN(dbl) && !double.IsInfinity(dbl))
+                {
+                    return Convert.ToDecimal(dbl);
+                }
+
+                return null;
+
+            case JsonValueKind.String:
+                var s = el.GetString();
+                if (string.IsNullOrWhiteSpace(s)) return null;
+                if (decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+                {
+                    return parsed;
+                }
+
+                return null;
+
+            default:
+                return null;
+        }
     }
 
     private static string Truncate(string? value, int max = 240)

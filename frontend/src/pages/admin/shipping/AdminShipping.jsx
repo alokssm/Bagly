@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../../api/client'
-import { formatPrice } from '../../../utils/format'
+import { formatPrice, formatShippingPrice } from '../../../utils/format'
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -28,16 +28,16 @@ function truncate(text, max = 120) {
   return text.length <= max ? text : `${text.slice(0, max)}…`
 }
 
-function courierRateBreakdown(courier, currency) {
+function courierRateBreakdown(courier) {
   const freight = Number(courier.freightCharge ?? 0)
   const coverage = Number(courier.coverageCharge ?? 0)
   const whatsapp = Number(courier.whatsAppCharge ?? courier.whatsappCharge ?? 0)
   const cod = Number(courier.codCharge ?? 0)
   const parts = [
-    freight ? `Freight ${formatPrice(freight, currency)}` : null,
-    coverage ? `Coverage ${formatPrice(coverage, currency)}` : null,
-    whatsapp ? `WhatsApp ${formatPrice(whatsapp, currency)}` : null,
-    cod ? `COD ${formatPrice(cod, currency)}` : null,
+    freight ? `Freight ${formatShippingPrice(freight)}` : null,
+    coverage ? `Coverage ${formatShippingPrice(coverage)}` : null,
+    whatsapp ? `WhatsApp ${formatShippingPrice(whatsapp)}` : null,
+    cod ? `COD ${formatShippingPrice(cod)}` : null,
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : null
 }
@@ -277,7 +277,7 @@ export default function AdminShipping() {
                           </div>
                           <div>
                             {shipment.actualShippingCharge != null
-                              ? formatPrice(shipment.actualShippingCharge, order.currency)
+                              ? formatShippingPrice(shipment.actualShippingCharge)
                               : '—'}
                           </div>
                         </>
@@ -329,12 +329,12 @@ export default function AdminShipping() {
                             </thead>
                             <tbody>
                               {couriers.map((c) => {
-                                const breakdown = courierRateBreakdown(c, order.currency)
+                                const breakdown = courierRateBreakdown(c)
                                 return (
                                   <tr key={c.courierId}>
                                     <td>{c.courierName}</td>
                                     <td>
-                                      <strong>{formatPrice(c.rate, order.currency)}</strong>
+                                      <strong>{formatShippingPrice(c.rate)}</strong>
                                       {breakdown ? (
                                         <div
                                           className="admin-muted"

@@ -1,10 +1,21 @@
 /** Bagly prices are Indian Rupees only — always formatted as ₹ / en-IN. */
-export function formatPrice(value) {
+export function formatPrice(value, options = {}) {
+  const fractionDigits =
+    typeof options === 'object' && options != null && Number.isFinite(options.fractionDigits)
+      ? options.fractionDigits
+      : 0
+
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(Number(value) || 0)
+}
+
+/** Shipping / courier money — keep paise (e.g. ₹242.36). */
+export function formatShippingPrice(value) {
+  return formatPrice(value, { fractionDigits: 2 })
 }
 
 export function mapCartFromApi(cart) {
