@@ -152,3 +152,17 @@ public record ShiprocketApiLogDto(
     DateTime CreatedAtUtc,
     string? AdminEmail
 );
+
+public record ShipmentStatusLogDto(
+    long Id,
+    Guid OrderId,
+    Guid OrderShiprocketShipmentId,
+    string? AwbCode,
+    string? ShiprocketShipmentId,
+    string? FromStatus,
+    string ToStatus,
+    string Source,
+    string? Message,
+    string? RawJson,
+    DateTime CreatedAtUtc
+);

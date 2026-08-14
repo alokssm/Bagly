@@ -198,6 +198,27 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
         var logs = await shipping.ListApiLogsAsync(orderId, shipmentId, orderNumber, take, cancellationToken);
         return Ok(logs);
     }
+
+    /// <summary>
+    /// Append-only tracking status audit log for a shipment
+    /// (PICKUP_REQUESTED → … → DELIVERED), newest first.
+    /// </summary>
+    [HttpGet("shipments/{shipmentId:guid}/status-logs")]
+    public async Task<ActionResult<IReadOnlyList<ShipmentStatusLogDto>>> ListStatusLogs(
+        Guid shipmentId,
+        [FromQuery] int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var exists = await db.OrderShiprocketShipments.AsNoTracking()
+            .AnyAsync(s => s.Id == shipmentId, cancellationToken);
+        if (!exists)
+        {
+            return NotFound(new { message = "Shipment not found." });
+        }
+
+        var logs = await shipping.ListStatusLogsAsync(shipmentId, take, cancellationToken);
+        return Ok(logs);
+    }
 }
 
 public record ReadyToShipOrderRequest(Guid? ShipmentId = null);

@@ -44,6 +44,11 @@ public interface IAdminShippingService
         int take = 50,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ShipmentStatusLogDto>> ListStatusLogsAsync(
+        Guid shipmentId,
+        int take = 100,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Applies a tracking status change (webhook / system). Returns true when status changed.
     /// </summary>
@@ -320,6 +325,32 @@ public sealed class AdminShippingService(
         }
 
         return await apiLogs.ListAsync(orderId, shipmentId, take, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ShipmentStatusLogDto>> ListStatusLogsAsync(
+        Guid shipmentId,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var limit = Math.Clamp(take, 1, 500);
+        return await db.ShipmentStatusLogs.AsNoTracking()
+            .Where(l => l.OrderShiprocketShipmentId == shipmentId)
+            .OrderByDescending(l => l.CreatedAtUtc)
+            .ThenByDescending(l => l.Id)
+            .Take(limit)
+            .Select(l => new ShipmentStatusLogDto(
+                l.Id,
+                l.OrderId,
+                l.OrderShiprocketShipmentId,
+                l.AwbCode,
+                l.ShiprocketShipmentId,
+                l.FromStatus,
+                l.ToStatus,
+                l.Source,
+                l.Message,
+                l.RawJson,
+                l.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ReadyToShipResponse> ReadyToShipAsync(
@@ -632,6 +663,7 @@ public sealed class AdminShippingService(
             srShipmentId, order.Id, shipment.Id, cancellationToken);
 
         var now = DateTime.UtcNow;
+        var fromStatus = shipment.TrackingStatus;
         shipment.PickupRequestedAt = now;
         if (!string.IsNullOrWhiteSpace(pickupResult.PickupTokenNumber))
         {
@@ -651,6 +683,7 @@ public sealed class AdminShippingService(
             order.ShiprocketStatus = StatusPickupRequested;
         }
 
+        var rawJson = Truncate(pickupResult.RawJson, 3900);
         db.OrderShipmentTrackings.Add(new OrderShipmentTracking
         {
             OrderId = order.Id,
@@ -660,7 +693,21 @@ public sealed class AdminShippingService(
             Status = ShipmentTrackingStatus.PickupRequested,
             ChangedAtUtc = now,
             Source = ShipmentTrackingStatus.SourceAdmin,
-            RawJson = Truncate(pickupResult.RawJson, 3900),
+            RawJson = rawJson,
+        });
+
+        db.ShipmentStatusLogs.Add(new ShipmentStatusLog
+        {
+            OrderId = order.Id,
+            OrderShiprocketShipmentId = shipment.Id,
+            AwbCode = shipment.AwbCode,
+            ShiprocketShipmentId = shipment.ShiprocketShipmentId,
+            FromStatus = fromStatus,
+            ToStatus = ShipmentTrackingStatus.PickupRequested,
+            Source = ShipmentTrackingStatus.SourceAdmin,
+            Message = "Pickup requested via admin shipping.",
+            RawJson = rawJson,
+            CreatedAtUtc = now,
         });
 
         await db.SaveChangesAsync(cancellationToken);
@@ -807,6 +854,12 @@ public sealed class AdminShippingService(
         }
 
         var now = DateTime.UtcNow;
+        var fromStatus = shipment.TrackingStatus;
+        var resolvedSource = string.IsNullOrWhiteSpace(source)
+            ? ShipmentTrackingStatus.SourceSystem
+            : source.Trim();
+        var truncatedRaw = Truncate(rawJson, 3900);
+
         shipment.TrackingStatus = normalized;
         shipment.TrackingStatusUpdatedAt = now;
         shipment.UpdatedAt = now;
@@ -827,8 +880,24 @@ public sealed class AdminShippingService(
             AwbCode = shipment.AwbCode,
             Status = normalized,
             ChangedAtUtc = now,
-            Source = string.IsNullOrWhiteSpace(source) ? ShipmentTrackingStatus.SourceSystem : source.Trim(),
-            RawJson = Truncate(rawJson, 3900),
+            Source = resolvedSource,
+            RawJson = truncatedRaw,
+        });
+
+        db.ShipmentStatusLogs.Add(new ShipmentStatusLog
+        {
+            OrderId = shipment.OrderId,
+            OrderShiprocketShipmentId = shipment.Id,
+            AwbCode = shipment.AwbCode,
+            ShiprocketShipmentId = shipment.ShiprocketShipmentId,
+            FromStatus = fromStatus,
+            ToStatus = normalized,
+            Source = resolvedSource,
+            Message = string.IsNullOrWhiteSpace(fromStatus)
+                ? $"Status set to {normalized}."
+                : $"Status changed {fromStatus} → {normalized}.",
+            RawJson = truncatedRaw,
+            CreatedAtUtc = now,
         });
 
         if (shipment.Order is not null &&

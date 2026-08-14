@@ -13,6 +13,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderShiprocketShipment> OrderShiprocketShipments => Set<OrderShiprocketShipment>();
     public DbSet<OrderShipmentTracking> OrderShipmentTrackings => Set<OrderShipmentTracking>();
+    public DbSet<ShipmentStatusLog> ShipmentStatusLogs => Set<ShipmentStatusLog>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<SellerUser> SellerUsers => Set<SellerUser>();
@@ -195,6 +196,32 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.OrderShiprocketShipmentId);
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.ChangedAtUtc);
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.OrderShiprocketShipment)
+                .WithMany()
+                .HasForeignKey(x => x.OrderShiprocketShipmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ShipmentStatusLog>(entity =>
+        {
+            entity.ToTable("ShipmentStatusLogs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedOnAdd();
+            entity.Property(x => x.AwbCode).HasMaxLength(50);
+            entity.Property(x => x.ShiprocketShipmentId).HasMaxLength(50);
+            entity.Property(x => x.FromStatus).HasMaxLength(50);
+            entity.Property(x => x.ToStatus).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Source).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Message).HasMaxLength(500);
+            entity.Property(x => x.RawJson).HasMaxLength(4000);
+            entity.HasIndex(x => x.OrderId);
+            entity.HasIndex(x => x.OrderShiprocketShipmentId);
+            entity.HasIndex(x => x.ToStatus);
+            entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasOne(x => x.Order)
                 .WithMany()
                 .HasForeignKey(x => x.OrderId)
