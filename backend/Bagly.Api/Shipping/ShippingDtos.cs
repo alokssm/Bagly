@@ -17,7 +17,9 @@ public record AdminShippingShipmentDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     DateTime? SellerReadyToShipAt = null,
-    bool SellerReady = false
+    bool SellerReady = false,
+    string? LabelUrl = null,
+    DateTime? LabelGeneratedAt = null
 );
 
 public record AdminShippingOrderDto(
@@ -43,7 +45,8 @@ public record AdminShippingOrdersResult(
     string Tab,
     int NewCount,
     int ReadyCount,
-    int AwbCount
+    int LabelCount,
+    int LabeledCount
 );
 
 public record CourierOptionDto(
@@ -93,6 +96,16 @@ public record AssignAwbResponse(
     decimal? ActualShippingCharge,
     string ShippingStatus,
     DateTime? AwbAssignedAt
+);
+
+public record GenerateLabelResponse(
+    Guid ShipmentId,
+    Guid OrderId,
+    string PickupLocation,
+    string? AwbCode,
+    string? LabelUrl,
+    string ShippingStatus,
+    DateTime? LabelGeneratedAt
 );
 
 public record ShiprocketApiLogDto(

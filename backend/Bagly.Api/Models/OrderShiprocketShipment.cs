@@ -17,7 +17,10 @@ public class OrderShiprocketShipment
     public string? ShiprocketShipmentId { get; set; }
     /// <summary>Shiprocket create status (e.g. NEW) or last API status string.</summary>
     public string? Status { get; set; }
-    /// <summary>Admin shipping workflow: ReadyToShip / AwbAssigned (null until Ready to Ship).</summary>
+    /// <summary>
+    /// Admin shipping workflow: ReadyToShip → AwbAssigned (awaiting label) → LabelGenerated
+    /// (null until Ready to Ship).
+    /// </summary>
     public string? ShippingStatus { get; set; }
     /// <summary>Last skip/API error for this group (never credentials).</summary>
     public string? LastError { get; set; }
@@ -29,6 +32,9 @@ public class OrderShiprocketShipment
     public decimal? ActualShippingCharge { get; set; }
     public DateTime? ReadyToShipAt { get; set; }
     public DateTime? AwbAssignedAt { get; set; }
+    /// <summary>Shiprocket label PDF / download URL from generate/label.</summary>
+    public string? LabelUrl { get; set; }
+    public DateTime? LabelGeneratedAt { get; set; }
     /// <summary>
     /// When the marketplace seller marked this pickup shipment ready.
     /// Admin Ready to Ship (courier serviceability) stays disabled until set.

@@ -33,11 +33,16 @@ function formatWhen(value) {
 }
 
 function shipmentLabel(shipment) {
+  if (shipment.labelUrl || shipment.canDownloadLabel) return `AWB ${shipment.awbCode || '—'}`
   if (shipment.awbCode) return `AWB ${shipment.awbCode}`
   if (shipment.shippingStatus === 'Cancelled' || shipment.status === 'Cancelled') return 'Cancelled'
   if (shipment.sellerReady) return 'Seller ready'
   if (shipment.shiprocketShipmentId) return 'Awaiting ready'
   return 'Pending Shiprocket'
+}
+
+function canDownloadLabel(shipment) {
+  return !!(shipment.canDownloadLabel || shipment.labelUrl)
 }
 
 function lineTotalOf(item) {
@@ -242,6 +247,16 @@ export default function SellerOrders() {
                               <div key={s.id} className="seller-order-ship-row">
                                 <strong>{s.pickupLocation}</strong>
                                 <span>{shipmentLabel(s)}</span>
+                                {canDownloadLabel(s) ? (
+                                  <a
+                                    className="seller-order-label-link"
+                                    href={s.labelUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Download Label
+                                  </a>
+                                ) : null}
                               </div>
                             ))
                           )}
@@ -280,6 +295,24 @@ export default function SellerOrders() {
                               </button>
                             )
                           })}
+                          {(order.shipments || [])
+                            .filter((s) => canDownloadLabel(s))
+                            .map((s) => (
+                              <a
+                                key={`label-${s.id}`}
+                                className="btn btn-secondary btn-sm"
+                                href={s.labelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={
+                                  (order.shipments || []).filter((x) => canDownloadLabel(x)).length > 1
+                                    ? `Download Label · ${s.pickupLocation}`
+                                    : undefined
+                                }
+                              >
+                                Download Label
+                              </a>
+                            ))}
                           {actionableShipments.length === 0 &&
                           (order.shipments || []).some((s) => s.sellerReady && !s.awbCode) ? (
                             <span className="seller-order-hint">Marked ready</span>

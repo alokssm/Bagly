@@ -335,7 +335,9 @@ public record OrderShiprocketShipmentDto(
     string? CourierName = null,
     decimal? ActualShippingCharge = null,
     DateTime? ReadyToShipAt = null,
-    DateTime? AwbAssignedAt = null
+    DateTime? AwbAssignedAt = null,
+    string? LabelUrl = null,
+    DateTime? LabelGeneratedAt = null
 );
 
 public record OrderDto(

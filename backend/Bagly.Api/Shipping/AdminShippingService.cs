@@ -25,6 +25,10 @@ public interface IAdminShippingService
         decimal? rate,
         CancellationToken cancellationToken = default);
 
+    Task<GenerateLabelResponse> GenerateLabelAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
         Guid? orderId,
         Guid? shipmentId,
@@ -43,10 +47,14 @@ public sealed class AdminShippingService(
 {
     public const string TabNew = "new";
     public const string TabReady = "ready";
-    public const string TabAwb = "awb";
+    /// <summary>AWB assigned, waiting for label generation.</summary>
+    public const string TabLabel = "label";
+    /// <summary>Label URL stored (done).</summary>
+    public const string TabLabeled = "labeled";
 
     public const string StatusReadyToShip = "ReadyToShip";
     public const string StatusAwbAssigned = "AwbAssigned";
+    public const string StatusLabelGenerated = "LabelGenerated";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -91,9 +99,18 @@ public sealed class AdminShippingService(
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
-        var awbCount = await baseQuery.CountAsync(
+        // Generate Label: AWB set, label URL not yet stored.
+        var labelCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.AwbCode != null && s.AwbCode != "" &&
+                (s.LabelUrl == null || s.LabelUrl == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
+            cancellationToken);
+
+        var labeledCount = await baseQuery.CountAsync(
+            o => o.ShiprocketShipments.Any(s =>
+                s.LabelUrl != null && s.LabelUrl != "" &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
@@ -105,8 +122,13 @@ public sealed class AdminShippingService(
                 (s.AwbCode == null || s.AwbCode == "") &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
-            TabAwb => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+            TabLabel => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.AwbCode != null && s.AwbCode != "" &&
+                (s.LabelUrl == null || s.LabelUrl == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
+            TabLabeled => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+                s.LabelUrl != null && s.LabelUrl != "" &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
             _ => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
@@ -155,7 +177,9 @@ public sealed class AdminShippingService(
                         s.CreatedAt,
                         s.UpdatedAt,
                         s.SellerReadyToShipAt,
-                        s.SellerReadyToShipAt != null))
+                        s.SellerReadyToShipAt != null,
+                        s.LabelUrl,
+                        s.LabelGeneratedAt))
                     .ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -182,7 +206,8 @@ public sealed class AdminShippingService(
             normalizedTab,
             newCount,
             readyCount,
-            awbCount);
+            labelCount,
+            labeledCount);
     }
 
     public async Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
@@ -396,6 +421,80 @@ public sealed class AdminShippingService(
             shipment.AwbAssignedAt);
     }
 
+    /// <summary>
+    /// Calls Shiprocket <c>POST v1/external/courier/generate/label</c> with
+    /// <c>{ "shipment_id": [srShipmentId] }</c>, stores <see cref="OrderShiprocketShipment.LabelUrl"/>.
+    /// </summary>
+    public async Task<GenerateLabelResponse> GenerateLabelAsync(
+        Guid shipmentId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureShiprocketConfigured();
+
+        var shipment = await db.OrderShiprocketShipments
+            .Include(s => s.Order)
+            .FirstOrDefaultAsync(s => s.Id == shipmentId, cancellationToken)
+            ?? throw new InvalidOperationException("Shipment not found.");
+
+        var order = shipment.Order
+            ?? throw new InvalidOperationException("Order not found for shipment.");
+
+        if (string.IsNullOrWhiteSpace(shipment.ShiprocketShipmentId))
+        {
+            throw new InvalidOperationException("Shiprocket shipment_id is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(shipment.AwbCode))
+        {
+            throw new InvalidOperationException("Assign AWB before generating a label.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(shipment.LabelUrl))
+        {
+            throw new InvalidOperationException("Label already generated for this shipment.");
+        }
+
+        if (!long.TryParse(shipment.ShiprocketShipmentId.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var srShipmentId))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket shipment_id '{shipment.ShiprocketShipmentId}' is not numeric.");
+        }
+
+        var labelUrl = await GenerateLabelWithAuthRetryAsync(
+            srShipmentId, order.Id, shipment.Id, cancellationToken);
+
+        shipment.LabelUrl = labelUrl;
+        shipment.LabelGeneratedAt = DateTime.UtcNow;
+        shipment.ShippingStatus = StatusLabelGenerated;
+        shipment.Status = StatusLabelGenerated;
+        shipment.UpdatedAt = DateTime.UtcNow;
+        shipment.LastError = null;
+
+        if (string.IsNullOrWhiteSpace(order.ShiprocketShipmentId) ||
+            string.Equals(order.ShiprocketShipmentId, shipment.ShiprocketShipmentId, StringComparison.Ordinal))
+        {
+            order.ShiprocketStatus = StatusLabelGenerated;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Label generated for {OrderNumber}/{Pickup}: awb={Awb}, url={Url}.",
+            order.OrderNumber,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            Truncate(shipment.LabelUrl, 120));
+
+        return new GenerateLabelResponse(
+            shipment.Id,
+            order.Id,
+            shipment.PickupLocation,
+            shipment.AwbCode,
+            shipment.LabelUrl,
+            shipment.ShippingStatus!,
+            shipment.LabelGeneratedAt);
+    }
+
     private void EnsureShiprocketConfigured()
     {
         if (!_options.Enabled)
@@ -413,7 +512,10 @@ public sealed class AdminShippingService(
     private static string NormalizeTab(string? tab)
     {
         if (string.Equals(tab, TabReady, StringComparison.OrdinalIgnoreCase)) return TabReady;
-        if (string.Equals(tab, TabAwb, StringComparison.OrdinalIgnoreCase)) return TabAwb;
+        if (string.Equals(tab, TabLabel, StringComparison.OrdinalIgnoreCase)) return TabLabel;
+        // Back-compat: old "awb" tab → Generate Label (AWB without label).
+        if (string.Equals(tab, "awb", StringComparison.OrdinalIgnoreCase)) return TabLabel;
+        if (string.Equals(tab, TabLabeled, StringComparison.OrdinalIgnoreCase)) return TabLabeled;
         return TabNew;
     }
 
@@ -999,6 +1101,186 @@ public sealed class AdminShippingService(
         }
 
         return new AssignAwbApiResult(awb.Trim(), responseCourierId, courierName, freight);
+    }
+
+    private async Task<string> GenerateLabelWithAuthRetryAsync(
+        long shipmentId,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GenerateLabelOnceAsync(
+                shipmentId, forceLogin: false, orderId, baglyShipmentId, cancellationToken);
+        }
+        catch (ShiprocketAuthException)
+        {
+            tokenStore.Invalidate();
+            return await GenerateLabelOnceAsync(
+                shipmentId, forceLogin: true, orderId, baglyShipmentId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Shiprocket generate label:
+    /// POST https://apiv2.shiprocket.in/v1/external/courier/generate/label
+    /// Body: { "shipment_id": [123456] }  (array of Shiprocket shipment ids)
+    /// Response often includes label_url / nested PDF URL — parsed via <see cref="FindLabelUrl"/>.
+    /// </summary>
+    private async Task<string> GenerateLabelOnceAsync(
+        long shipmentId,
+        bool forceLogin,
+        Guid orderId,
+        Guid baglyShipmentId,
+        CancellationToken cancellationToken)
+    {
+        var token = forceLogin
+            ? await LoginAsync(cancellationToken)
+            : tokenStore.GetValidToken() ?? await LoginAsync(cancellationToken);
+
+        // Shiprocket expects shipment_id as an array (unlike assign/awb which takes a scalar).
+        var body = new Dictionary<string, object>
+        {
+            ["shipment_id"] = new[] { shipmentId },
+        };
+        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        const string path = "v1/external/courier/generate/label";
+
+        var client = httpClientFactory.CreateClient("Shiprocket");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        await apiLogs.LogAsync(
+            "GenerateLabel",
+            "POST",
+            path,
+            requestJson: requestJson,
+            responseStatus: (int)response.StatusCode,
+            responseJson: raw,
+            orderId: orderId,
+            shipmentId: baglyShipmentId,
+            cancellationToken: cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            tokenStore.Invalidate();
+            throw new ShiprocketAuthException($"Shiprocket generate label returned 401. Body: {Truncate(raw)}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate label failed HTTP {(int)response.StatusCode}. Body: {Truncate(raw, 480)}");
+        }
+
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
+        var root = doc.RootElement;
+
+        if (TryReadInt(root, "status_code") is int apiStatus && apiStatus >= 400)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate label rejected status_code={apiStatus}: {TryReadMessage(root) ?? Truncate(raw)}");
+        }
+
+        // label_created: 0 means Shiprocket did not create a label for the shipment(s).
+        if (TryReadInt(root, "label_created") is 0)
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket label not created: {TryReadMessage(root) ?? Truncate(raw, 300)}");
+        }
+
+        var labelUrl = FindLabelUrl(root);
+        if (string.IsNullOrWhiteSpace(labelUrl))
+        {
+            throw new InvalidOperationException(
+                $"Shiprocket generate label succeeded but label_url was missing. Body: {Truncate(raw, 480)}");
+        }
+
+        return labelUrl.Trim();
+    }
+
+    /// <summary>
+    /// Robustly finds a label PDF/download URL from common Shiprocket response shapes:
+    /// label_url, label_download, pdf_url, or nested under data / response / label_data.
+    /// </summary>
+    private static string? FindLabelUrl(JsonElement root)
+    {
+        foreach (var candidate in EnumerateLabelUrlCandidates(root))
+        {
+            if (!string.IsNullOrWhiteSpace(candidate) &&
+                (candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                return candidate.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string?> EnumerateLabelUrlCandidates(JsonElement root)
+    {
+        yield return TryReadString(root, "label_url");
+        yield return TryReadString(root, "label_download");
+        yield return TryReadString(root, "pdf_url");
+        yield return TryReadString(root, "url");
+
+        if (root.TryGetProperty("label_data", out var labelData) && labelData.ValueKind == JsonValueKind.Object)
+        {
+            yield return TryReadString(labelData, "label_url");
+            yield return TryReadString(labelData, "url");
+        }
+
+        if (root.TryGetProperty("data", out var data))
+        {
+            if (data.ValueKind == JsonValueKind.Object)
+            {
+                yield return TryReadString(data, "label_url");
+                yield return TryReadString(data, "label_download");
+                yield return TryReadString(data, "pdf_url");
+                yield return TryReadString(data, "url");
+            }
+            else if (data.ValueKind == JsonValueKind.String)
+            {
+                yield return data.GetString();
+            }
+            else if (data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                        yield return item.GetString();
+                    else if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        yield return TryReadString(item, "label_url");
+                        yield return TryReadString(item, "url");
+                    }
+                }
+            }
+        }
+
+        if (root.TryGetProperty("response", out var response) && response.ValueKind == JsonValueKind.Object)
+        {
+            yield return TryReadString(response, "label_url");
+            yield return TryReadString(response, "url");
+            if (response.TryGetProperty("data", out var nested))
+            {
+                if (nested.ValueKind == JsonValueKind.Object)
+                {
+                    yield return TryReadString(nested, "label_url");
+                    yield return TryReadString(nested, "url");
+                }
+                else if (nested.ValueKind == JsonValueKind.String)
+                {
+                    yield return nested.GetString();
+                }
+            }
+        }
     }
 
     private async Task<string> LoginAsync(CancellationToken cancellationToken)

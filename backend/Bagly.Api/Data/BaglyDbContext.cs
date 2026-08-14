@@ -168,6 +168,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.Property(x => x.AwbCode).HasMaxLength(50);
             entity.Property(x => x.CourierName).HasMaxLength(100);
             entity.Property(x => x.ActualShippingCharge).HasColumnType("decimal(18,2)");
+            entity.Property(x => x.LabelUrl).HasMaxLength(1000);
             entity.HasIndex(x => x.OrderId);
             entity.HasIndex(x => new { x.OrderId, x.PickupLocation }).IsUnique();
             entity.HasIndex(x => x.ShiprocketOrderId);

@@ -11,14 +11,16 @@ function formatDateTime(value) {
   }
 }
 
-function shippingPill(status, awb) {
-  if (awb) return 'admin-pill on'
+function shippingPill(status, awb, labelUrl) {
+  if (labelUrl) return 'admin-pill on'
+  if (awb) return 'admin-pill'
   if ((status || '').toLowerCase() === 'readytoship') return 'admin-pill'
   return 'admin-pill off'
 }
 
 function shipmentMatchesTab(shipment, tab) {
-  if (tab === 'awb') return !!shipment.awbCode
+  if (tab === 'labeled') return !!shipment.labelUrl
+  if (tab === 'label' || tab === 'awb') return !!shipment.awbCode && !shipment.labelUrl
   if (tab === 'ready') return !!shipment.readyToShipAt && !shipment.awbCode
   return !!shipment.shiprocketShipmentId && !shipment.readyToShipAt && !shipment.awbCode
 }
@@ -66,7 +68,8 @@ export default function AdminShipping() {
     tab: 'new',
     newCount: 0,
     readyCount: 0,
-    awbCount: 0,
+    labelCount: 0,
+    labeledCount: 0,
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -96,7 +99,8 @@ export default function AdminShipping() {
         tab: data.tab || tab,
         newCount: data.newCount || 0,
         readyCount: data.readyCount || 0,
-        awbCount: data.awbCount || 0,
+        labelCount: data.labelCount ?? data.awbCount ?? 0,
+        labeledCount: data.labeledCount || 0,
       })
     } catch (err) {
       setError(err.message || 'Unable to load shipping orders.')
@@ -246,10 +250,27 @@ export default function AdminShipping() {
     }
   }
 
+  const generateLabel = async (shipment) => {
+    setBusyShipmentId(shipment.id)
+    setActionError('')
+    try {
+      await api.adminShippingGenerateLabel(shipment.id)
+      await load()
+      if (logsFilterShipmentId || logsOrderQuery) {
+        await loadLogs(logsOrderQuery, logsFilterShipmentId)
+      }
+    } catch (err) {
+      setActionError(err.message || 'Generate Label failed.')
+    } finally {
+      setBusyShipmentId('')
+    }
+  }
+
   const tabs = [
     { id: 'new', label: 'New', count: result.newCount },
     { id: 'ready', label: 'Ready to Ship', count: result.readyCount },
-    { id: 'awb', label: 'AWB Assigned', count: result.awbCount },
+    { id: 'label', label: 'Generate Label', count: result.labelCount },
+    { id: 'labeled', label: 'Label Generated', count: result.labeledCount },
   ]
 
   const rows = []
@@ -267,7 +288,7 @@ export default function AdminShipping() {
           <p className="eyebrow">Fulfillment</p>
           <h1>Shipping</h1>
           <p className="admin-subtitle">
-            Per-pickup Shiprocket shipments (home/work). Ready to Ship loads couriers; Assign AWB stores AWB + charge.
+            Per-pickup Shiprocket shipments. Ready to Ship → Assign AWB → Generate Label → download for sellers.
           </p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
@@ -331,6 +352,7 @@ export default function AdminShipping() {
                   !!shipment.shiprocketShipmentId && !shipment.awbCode && sellerReady
                 const waitingForSeller =
                   !!shipment.shiprocketShipmentId && !shipment.awbCode && !sellerReady
+                const canGenerateLabel = !!shipment.awbCode && !shipment.labelUrl
                 const showCourierPanel = couriersLoaded || courierLoading || !!courierError
 
                 return (
@@ -360,10 +382,18 @@ export default function AdminShipping() {
                         ) : null}
                       </td>
                       <td>
-                        <span className={shippingPill(shipment.shippingStatus, shipment.awbCode)}>
-                          {shipment.awbCode
-                            ? 'AWB Assigned'
-                            : shipment.shippingStatus || shipment.status || 'Created'}
+                        <span
+                          className={shippingPill(
+                            shipment.shippingStatus,
+                            shipment.awbCode,
+                            shipment.labelUrl,
+                          )}
+                        >
+                          {shipment.labelUrl
+                            ? 'Label Generated'
+                            : shipment.awbCode
+                              ? 'Generate Label'
+                              : shipment.shippingStatus || shipment.status || 'Created'}
                         </span>
                         {shipment.lastError ? (
                           <div className="admin-error admin-shipping-error">{shipment.lastError}</div>
@@ -382,6 +412,17 @@ export default function AdminShipping() {
                                 ? formatShippingPrice(shipment.actualShippingCharge)
                                 : '—'}
                             </div>
+                            {shipment.labelUrl ? (
+                              <div className="admin-muted admin-shipping-meta">
+                                <a
+                                  href={shipment.labelUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Open label
+                                </a>
+                              </div>
+                            ) : null}
                           </>
                         ) : (
                           <span className="admin-muted">—</span>
@@ -409,6 +450,16 @@ export default function AdminShipping() {
                             title="Waiting for seller to mark Ready to Ship"
                           >
                             Waiting for seller
+                          </button>
+                        ) : null}
+                        {canGenerateLabel ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy}
+                            onClick={() => generateLabel(shipment)}
+                          >
+                            {busy ? 'Generating…' : 'Generate Label'}
                           </button>
                         ) : null}
                         <button

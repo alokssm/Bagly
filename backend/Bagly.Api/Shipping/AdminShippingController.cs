@@ -5,14 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bagly.Api.Shipping;
 
-/// <summary>Admin shipping workflow: serviceability couriers + AWB assignment (per Shiprocket shipment).</summary>
+/// <summary>Admin shipping workflow: serviceability couriers, AWB assignment, and label generation.</summary>
 [ApiController]
 [Route("api/admin/shipping")]
 [Authorize(Roles = "Admin")]
 public class AdminShippingController(IAdminShippingService shipping, BaglyDbContext db) : ControllerBase
 {
     /// <summary>
-    /// Orders with Shiprocket shipments. Tabs: new | ready | awb.
+    /// Orders with Shiprocket shipments. Tabs: new | ready | label | labeled.
     /// </summary>
     [HttpGet("orders")]
     public async Task<ActionResult<AdminShippingOrdersResult>> ListOrders(
@@ -114,6 +114,26 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
                 request.CourierId,
                 request.Rate,
                 cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate shipping label via Shiprocket (<c>POST v1/external/courier/generate/label</c>)
+    /// and store the label URL on the shipment.
+    /// </summary>
+    [HttpPost("shipments/{shipmentId:guid}/generate-label")]
+    public async Task<ActionResult<GenerateLabelResponse>> GenerateLabel(
+        Guid shipmentId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await shipping.GenerateLabelAsync(shipmentId, cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

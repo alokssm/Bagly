@@ -260,7 +260,9 @@ public class OrdersController(
                     s.CourierName,
                     s.ActualShippingCharge,
                     s.ReadyToShipAt,
-                    s.AwbAssignedAt))
+                    s.AwbAssignedAt,
+                    s.LabelUrl,
+                    s.LabelGeneratedAt))
                 .ToList()
         );
 

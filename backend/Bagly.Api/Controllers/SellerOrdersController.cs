@@ -558,7 +558,10 @@ public class SellerOrdersController(
             s.SellerReadyToShipAt != null,
             s.ReadyToShipAt,
             s.AwbAssignedAt,
-            s.CreatedAt);
+            s.CreatedAt,
+            s.LabelUrl,
+            s.LabelGeneratedAt,
+            !string.IsNullOrWhiteSpace(s.LabelUrl));
 
     private static string MaskCustomerName(string first, string last)
     {
@@ -632,7 +635,10 @@ public record SellerShipmentDto(
     bool SellerReady,
     DateTime? ReadyToShipAt,
     DateTime? AwbAssignedAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? LabelUrl = null,
+    DateTime? LabelGeneratedAt = null,
+    bool CanDownloadLabel = false);
 
 public record SellerOrderDto(
     Guid Id,

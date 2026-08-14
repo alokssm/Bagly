@@ -526,6 +526,11 @@ export const api = {
       body: payload,
       auth: true,
     }),
+  adminShippingGenerateLabel: (shipmentId) =>
+    request(`/admin/shipping/shipments/${encodeURIComponent(shipmentId)}/generate-label`, {
+      method: 'POST',
+      auth: true,
+    }),
   adminGetShippingApiLogs: (params = {}) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {
