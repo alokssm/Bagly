@@ -16,9 +16,14 @@ public static class DbSeeder
 
     private const string SchoolBagsCategoryId = "school-bags";
     private const string StationeryCategoryId = "stationery";
+    private const string SeedHomeProductId = "seed-home-1";
+    private const string SeedWorkProductId = "seed-work-1";
     private static readonly string[] LegacyCategoryIds = ["tote", "backpack", "crossbody", "travel", "work"];
 
-    public static async Task SeedAsync(BaglyDbContext db, AdminOptions? adminOptions = null)
+    public static async Task SeedAsync(
+        BaglyDbContext db,
+        AdminOptions? adminOptions = null,
+        ShiprocketOptions? shiprocketOptions = null)
     {
         if (!await db.Categories.AnyAsync())
         {
@@ -45,6 +50,7 @@ public static class DbSeeder
         // calling POST /api/setup/seed again on a non-empty Azure/Render database still syncs it.
         await EnsureSchoolBagsCatalogAsync(db);
         await EnsureStationeryCatalogAsync(db);
+        await EnsurePickupDemoProductsAsync(db, shiprocketOptions);
 
         await SeedAdminUserAsync(db, adminOptions);
 
@@ -267,6 +273,165 @@ public static class DbSeeder
             db.Products.AddRange(newSchoolBagProducts);
             await db.SaveChangesAsync();
         }
+    }
+
+    /// <summary>
+    /// Ensures two platform demo products exist with distinct Shiprocket pickup nicknames
+    /// (typically <c>home</c> and <c>work</c> from <c>Shiprocket:PickupLocations</c>).
+    /// Idempotent by id (<c>seed-home-1</c>, <c>seed-work-1</c>): inserts when missing,
+    /// otherwise syncs pickup nickname / active / package defaults.
+    /// </summary>
+    private static async Task EnsurePickupDemoProductsAsync(
+        BaglyDbContext db,
+        ShiprocketOptions? shiprocketOptions)
+    {
+        var (homePickup, workPickup) = ResolveDemoPickupNicknames(shiprocketOptions);
+
+        var categoryId = await ResolvePickupDemoCategoryIdAsync(db);
+        var specs = new[]
+        {
+            (
+                Id: SeedHomeProductId,
+                Name: "Sample Bag — Home pickup",
+                Pickup: homePickup,
+                Image: SchoolBagImage(0, 0),
+                GalleryOffset: 1
+            ),
+            (
+                Id: SeedWorkProductId,
+                Name: "Sample Bag — Work pickup",
+                Pickup: workPickup,
+                Image: SchoolBagImage(3, 2),
+                GalleryOffset: 4
+            ),
+        };
+
+        var ids = specs.Select(s => s.Id).ToArray();
+        var existing = await db.Products
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var spec in specs)
+        {
+            var gallery = new[] { spec.Image, SchoolBagImage(spec.GalleryOffset, 0) };
+            var colors = new[] { "Navy", "Charcoal" };
+            var features = new[]
+            {
+                "Shiprocket multi-pickup demo",
+                "Platform catalog product",
+                "Uses default package size",
+                "Assigned to School Bags when available",
+            };
+            var shortDescription =
+                $"Demo school bag fulfilled from Shiprocket pickup \"{spec.Pickup}\".";
+            var description =
+                $"{spec.Name} is a seeded platform product for admin shipping demos. " +
+                $"It ships from the \"{spec.Pickup}\" pickup nickname configured in Shiprocket.";
+
+            if (existing.TryGetValue(spec.Id, out var product))
+            {
+                product.Name = spec.Name;
+                product.Category = categoryId;
+                product.SubCategoryId = null;
+                product.ShiprocketPickupLocation = spec.Pickup;
+                product.IsActive = true;
+                product.UseDefaultPackageSize = true;
+                product.WeightKg = null;
+                product.LengthCm = null;
+                product.BreadthCm = null;
+                product.HeightCm = null;
+                product.SellerId = null;
+                product.Price = product.Price > 0 ? product.Price : 1499m;
+                product.StockQuantity = product.StockQuantity > 0 ? product.StockQuantity : 50;
+                if (string.IsNullOrWhiteSpace(product.Image))
+                {
+                    product.Image = spec.Image;
+                }
+
+                continue;
+            }
+
+            db.Products.Add(new Product
+            {
+                Id = spec.Id,
+                Name = spec.Name,
+                Category = categoryId,
+                SubCategoryId = null,
+                Price = 1499m,
+                CompareAt = 1999m,
+                Material = "Durable Polyester",
+                Rating = 4.8,
+                Reviews = 12,
+                Badge = "New",
+                ShortDescription = shortDescription,
+                Description = description,
+                Image = spec.Image,
+                ColorsJson = JsonSerializer.Serialize(colors, JsonOptions),
+                FeaturesJson = JsonSerializer.Serialize(features, JsonOptions),
+                GalleryJson = JsonSerializer.Serialize(gallery, JsonOptions),
+                IsActive = true,
+                StockQuantity = 50,
+                CreatedAt = DateTime.UtcNow,
+                Slug = spec.Id,
+                SeoTitle = $"{spec.Name} | Bagly",
+                SeoDescription = shortDescription,
+                SeoKeywords = "sample bag, shiprocket, pickup demo, bagly",
+                SellerId = null,
+                ShiprocketPickupLocation = spec.Pickup,
+                UseDefaultPackageSize = true,
+            });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static (string Home, string Work) ResolveDemoPickupNicknames(ShiprocketOptions? shiprocketOptions)
+    {
+        var preferred = (shiprocketOptions?.GetPickupLocationChoices() ?? Array.Empty<string>())
+            .Where(c => !ShiprocketOptions.IsPlaceholderPickup(c))
+            .ToList();
+
+        string? Find(string name) =>
+            preferred.FirstOrDefault(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+
+        var home = Find("home");
+        var work = Find("work");
+
+        if (home is not null && work is not null)
+        {
+            return (home, work);
+        }
+
+        // Config may use custom nicknames — take the first two distinct choices when available.
+        if (preferred.Count >= 2)
+        {
+            home ??= preferred[0];
+            work ??= preferred.First(c => !string.Equals(c, home, StringComparison.OrdinalIgnoreCase));
+            if (!string.Equals(home, work, StringComparison.OrdinalIgnoreCase))
+            {
+                return (home!, work!);
+            }
+        }
+
+        return (home ?? "home", work ?? "work");
+    }
+
+    private static async Task<string> ResolvePickupDemoCategoryIdAsync(BaglyDbContext db)
+    {
+        var schoolBags = await db.Categories.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == SchoolBagsCategoryId && c.IsActive);
+        if (schoolBags is not null)
+        {
+            return SchoolBagsCategoryId;
+        }
+
+        var firstActive = await db.Categories.AsNoTracking()
+            .Where(c => c.IsActive && c.Id != "all")
+            .OrderBy(c => c.SortOrder)
+            .Select(c => c.Id)
+            .FirstOrDefaultAsync();
+
+        return string.IsNullOrWhiteSpace(firstActive) ? SchoolBagsCategoryId : firstActive;
     }
 
     /// <summary>

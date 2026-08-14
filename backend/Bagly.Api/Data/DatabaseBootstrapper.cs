@@ -17,6 +17,7 @@ public static class DatabaseBootstrapper
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
         var adminOptions = scope.ServiceProvider.GetRequiredService<IOptions<AdminOptions>>().Value;
+        var shiprocketOptions = scope.ServiceProvider.GetRequiredService<IOptions<ShiprocketOptions>>().Value;
 
         try
         {
@@ -36,7 +37,7 @@ public static class DatabaseBootstrapper
         await EnsureOrderShiprocketShippingFieldsAsync(db, cancellationToken);
         await EnsureShiprocketApiLogsSchemaAsync(db, cancellationToken);
         await EnsureSellerPickupLocationsSchemaAsync(db, cancellationToken);
-        await DbSeeder.SeedAsync(db, adminOptions);
+        await DbSeeder.SeedAsync(db, adminOptions, shiprocketOptions);
     }
 
     /// <summary>
@@ -182,7 +183,8 @@ public static class DatabaseBootstrapper
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BaglyDbContext>();
         var adminOptions = scope.ServiceProvider.GetRequiredService<IOptions<AdminOptions>>().Value;
-        await DbSeeder.SeedAsync(db, adminOptions);
+        var shiprocketOptions = scope.ServiceProvider.GetRequiredService<IOptions<ShiprocketOptions>>().Value;
+        await DbSeeder.SeedAsync(db, adminOptions, shiprocketOptions);
         return (
             await db.Categories.CountAsync(cancellationToken),
             await db.Products.CountAsync(cancellationToken),
