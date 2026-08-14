@@ -219,6 +219,18 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
         var logs = await shipping.ListStatusLogsAsync(shipmentId, take, cancellationToken);
         return Ok(logs);
     }
+
+    /// <summary>
+    /// Inbound Shiprocket webhook request/response logs (headers redacted of secrets), newest first.
+    /// </summary>
+    [HttpGet("webhook-logs")]
+    public async Task<ActionResult<IReadOnlyList<ShiprocketWebhookLogDto>>> ListWebhookLogs(
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var logs = await shipping.ListWebhookLogsAsync(take, cancellationToken);
+        return Ok(logs);
+    }
 }
 
 public record ReadyToShipOrderRequest(Guid? ShipmentId = null);

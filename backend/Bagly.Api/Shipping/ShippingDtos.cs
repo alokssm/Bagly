@@ -166,3 +166,19 @@ public record ShipmentStatusLogDto(
     string? RawJson,
     DateTime CreatedAtUtc
 );
+
+public record ShiprocketWebhookLogDto(
+    long Id,
+    DateTime ReceivedAtUtc,
+    string HttpMethod,
+    string Path,
+    string? HeadersJson,
+    string? RequestBody,
+    int ResponseStatusCode,
+    string? ResponseBody,
+    bool ProcessedOk,
+    string? ErrorMessage,
+    Guid? MatchedOrderId,
+    Guid? MatchedShipmentId,
+    string? MappedStatus
+);

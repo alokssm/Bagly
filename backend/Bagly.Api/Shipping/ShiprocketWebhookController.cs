@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Bagly.Api.Data;
 using Bagly.Api.Models;
@@ -14,6 +15,7 @@ namespace Bagly.Api.Shipping;
 /// Configure in Shiprocket panel → Settings → API → Webhooks to POST here.
 /// Maps courier statuses into <see cref="OrderShiprocketShipment.TrackingStatus"/>
 /// and appends <see cref="OrderShipmentTracking"/> history rows (one row per forward change).
+/// Every request/response is persisted to <see cref="ShiprocketWebhookLog"/>.
 /// </summary>
 [ApiController]
 [Route("api/webhooks/shiprocket")]
@@ -21,82 +23,198 @@ namespace Bagly.Api.Shipping;
 public class ShiprocketWebhookController(
     BaglyDbContext db,
     IAdminShippingService shipping,
+    IShiprocketWebhookLogService webhookLogs,
     IOptions<ShiprocketOptions> options,
     ILogger<ShiprocketWebhookController> logger) : ControllerBase
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     private readonly ShiprocketOptions _options = options.Value;
 
     [HttpPost]
     public async Task<IActionResult> Receive(CancellationToken cancellationToken)
     {
-        if (!IsWebhookAuthorized())
+        var log = new ShiprocketWebhookLog
         {
-            logger.LogWarning("Shiprocket webhook rejected: missing or invalid webhook secret.");
-            return Unauthorized(new { message = "Invalid webhook secret." });
-        }
+            ReceivedAtUtc = DateTime.UtcNow,
+            HttpMethod = Request.Method,
+            Path = Request.Path.HasValue ? Request.Path.Value! : "/api/webhooks/shiprocket",
+            HeadersJson = ShiprocketWebhookLogService.BuildHeadersJson(Request.Headers),
+        };
 
-        using var doc = await JsonDocument.ParseAsync(Request.Body, cancellationToken: cancellationToken);
-        var root = doc.RootElement;
-        var raw = Truncate(root.GetRawText(), 3900);
-
-        var awb = ReadString(root, "awb", "awb_code", "awbno")
-                  ?? ReadNestedString(root, "data", "awb", "awb_code");
-        var srShipmentId = ReadString(root, "shipment_id", "sr_shipment_id", "shiprocket_shipment_id")
-                           ?? ReadNestedString(root, "data", "shipment_id", "sr_shipment_id");
-        var srOrderId = ReadString(root, "sr_order_id", "shiprocket_order_id")
-                        ?? ReadNestedString(root, "data", "sr_order_id");
-
-        var shipment = await FindShipmentAsync(awb, srShipmentId, srOrderId, cancellationToken);
-        if (shipment is null)
+        string? requestBody = null;
+        try
         {
-            logger.LogWarning(
-                "Shiprocket webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, srOrder={SrOrder}.",
-                awb,
-                srShipmentId,
-                srOrderId);
-            return Ok(new { received = true, updated = false, reason = "shipment_not_found" });
-        }
+            requestBody = await ReadBodyAsync(cancellationToken);
+            log.RequestBody = requestBody;
 
-        // Collect forward statuses from top-level fields + scans (chronological).
-        var pipeline = CollectForwardStatuses(root, shipment.TrackingStatus);
-        if (pipeline.Count == 0)
-        {
-            var currentStatus = ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
-                                ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status");
-            logger.LogInformation(
-                "Shiprocket webhook ignored (unmapped/non-forward status={Status}, awb={Awb}, srShipment={Sr}, current={Current}).",
-                currentStatus,
-                awb,
-                srShipmentId,
-                shipment.TrackingStatus);
-            return Ok(new { received = true, updated = false, reason = "unmapped_or_non_forward_status" });
-        }
-
-        var anyUpdated = false;
-        string? lastApplied = shipment.TrackingStatus;
-        foreach (var status in pipeline)
-        {
-            var updated = await shipping.ApplyTrackingStatusAsync(
-                shipment.Id,
-                status,
-                ShipmentTrackingStatus.SourceShiprocketWebhook,
-                raw,
-                cancellationToken);
-            if (updated)
+            if (!IsWebhookAuthorized())
             {
-                anyUpdated = true;
-                lastApplied = status;
+                logger.LogWarning("Shiprocket webhook rejected: missing or invalid webhook secret.");
+                return await FinishAsync(
+                    log,
+                    StatusCodes.Status401Unauthorized,
+                    new { message = "Invalid webhook secret." },
+                    processedOk: false,
+                    errorMessage: "Invalid webhook secret.",
+                    cancellationToken);
+            }
+
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(requestBody) ? "{}" : requestBody);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Shiprocket webhook: invalid JSON body.");
+                return await FinishAsync(
+                    log,
+                    StatusCodes.Status400BadRequest,
+                    new { message = "Invalid JSON body." },
+                    processedOk: false,
+                    errorMessage: Truncate(ex.Message, 500),
+                    cancellationToken);
+            }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+                var raw = Truncate(root.GetRawText(), 3900);
+
+                var awb = ReadString(root, "awb", "awb_code", "awbno")
+                          ?? ReadNestedString(root, "data", "awb", "awb_code");
+                var srShipmentId = ReadString(root, "shipment_id", "sr_shipment_id", "shiprocket_shipment_id")
+                                   ?? ReadNestedString(root, "data", "shipment_id", "sr_shipment_id");
+                var srOrderId = ReadString(root, "sr_order_id", "shiprocket_order_id")
+                                ?? ReadNestedString(root, "data", "sr_order_id");
+
+                var shipment = await FindShipmentAsync(awb, srShipmentId, srOrderId, cancellationToken);
+                if (shipment is null)
+                {
+                    logger.LogWarning(
+                        "Shiprocket webhook: no Bagly shipment for awb={Awb}, srShipment={Sr}, srOrder={SrOrder}.",
+                        awb,
+                        srShipmentId,
+                        srOrderId);
+                    return await FinishAsync(
+                        log,
+                        StatusCodes.Status200OK,
+                        new { received = true, updated = false, reason = "shipment_not_found" },
+                        processedOk: true,
+                        errorMessage: null,
+                        cancellationToken);
+                }
+
+                log.MatchedOrderId = shipment.OrderId;
+                log.MatchedShipmentId = shipment.Id;
+
+                // Collect forward statuses from top-level fields + scans (chronological).
+                var pipeline = CollectForwardStatuses(root, shipment.TrackingStatus);
+                if (pipeline.Count == 0)
+                {
+                    var currentStatus = ReadString(root, "current_status", "shipment_status", "status", "current_status_code")
+                                        ?? ReadNestedString(root, "data", "current_status", "shipment_status", "status");
+                    logger.LogInformation(
+                        "Shiprocket webhook ignored (unmapped/non-forward status={Status}, awb={Awb}, srShipment={Sr}, current={Current}).",
+                        currentStatus,
+                        awb,
+                        srShipmentId,
+                        shipment.TrackingStatus);
+                    log.MappedStatus = shipment.TrackingStatus;
+                    return await FinishAsync(
+                        log,
+                        StatusCodes.Status200OK,
+                        new { received = true, updated = false, reason = "unmapped_or_non_forward_status" },
+                        processedOk: true,
+                        errorMessage: null,
+                        cancellationToken);
+                }
+
+                var anyUpdated = false;
+                string? lastApplied = shipment.TrackingStatus;
+                foreach (var status in pipeline)
+                {
+                    var updated = await shipping.ApplyTrackingStatusAsync(
+                        shipment.Id,
+                        status,
+                        ShipmentTrackingStatus.SourceShiprocketWebhook,
+                        raw,
+                        cancellationToken);
+                    if (updated)
+                    {
+                        anyUpdated = true;
+                        lastApplied = status;
+                    }
+                }
+
+                log.MappedStatus = lastApplied ?? pipeline[^1];
+                return await FinishAsync(
+                    log,
+                    StatusCodes.Status200OK,
+                    new
+                    {
+                        received = true,
+                        updated = anyUpdated,
+                        shipmentId = shipment.Id,
+                        trackingStatus = lastApplied,
+                        applied = pipeline,
+                    },
+                    processedOk: true,
+                    errorMessage: null,
+                    cancellationToken);
             }
         }
-
-        return Ok(new
+        catch (Exception ex)
         {
-            received = true,
-            updated = anyUpdated,
-            shipmentId = shipment.Id,
-            trackingStatus = lastApplied,
-            applied = pipeline,
-        });
+            logger.LogError(ex, "Shiprocket webhook processing failed.");
+            log.RequestBody ??= requestBody;
+            return await FinishAsync(
+                log,
+                StatusCodes.Status500InternalServerError,
+                new { message = "Webhook processing failed." },
+                processedOk: false,
+                errorMessage: Truncate(ex.Message, 500),
+                cancellationToken);
+        }
+    }
+
+    private async Task<IActionResult> FinishAsync(
+        ShiprocketWebhookLog log,
+        int statusCode,
+        object responseBody,
+        bool processedOk,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        log.ResponseStatusCode = statusCode;
+        log.ProcessedOk = processedOk;
+        log.ErrorMessage = errorMessage;
+        try
+        {
+            log.ResponseBody = JsonSerializer.Serialize(responseBody, JsonOptions);
+        }
+        catch
+        {
+            log.ResponseBody = null;
+        }
+
+        await webhookLogs.PersistAsync(log, cancellationToken);
+
+        return StatusCode(statusCode, responseBody);
+    }
+
+    private async Task<string> ReadBodyAsync(CancellationToken cancellationToken)
+    {
+        Request.EnableBuffering();
+        Request.Body.Position = 0;
+        using var reader = new StreamReader(Request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var body = await reader.ReadToEndAsync(cancellationToken);
+        Request.Body.Position = 0;
+        return ShiprocketWebhookLogService.TruncateBody(body);
     }
 
     private bool IsWebhookAuthorized()

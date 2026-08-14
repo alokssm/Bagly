@@ -124,6 +124,7 @@ try
     builder.Services.AddScoped<Bagly.Api.Shipping.IAdminShippingService, Bagly.Api.Shipping.AdminShippingService>();
     builder.Services.AddScoped<Bagly.Api.Shipping.ISellerPickupService, Bagly.Api.Shipping.SellerPickupService>();
     builder.Services.AddScoped<Bagly.Api.Shipping.IShiprocketApiLogService, Bagly.Api.Shipping.ShiprocketApiLogService>();
+    builder.Services.AddScoped<Bagly.Api.Shipping.IShiprocketWebhookLogService, Bagly.Api.Shipping.ShiprocketWebhookLogService>();
     builder.Services.AddSingleton<IShiprocketOrderDispatcher, ShiprocketOrderDispatcher>();
     builder.Services.AddHostedService(sp => (ShiprocketOrderDispatcher)sp.GetRequiredService<IShiprocketOrderDispatcher>());
     builder.Services.AddScoped<IStockAlertNotifier, StockAlertNotifier>();

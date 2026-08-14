@@ -49,6 +49,10 @@ public interface IAdminShippingService
         int take = 100,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ShiprocketWebhookLogDto>> ListWebhookLogsAsync(
+        int take = 50,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Applies a tracking status change (webhook / system). Returns true when status changed.
     /// </summary>
@@ -66,6 +70,7 @@ public sealed class AdminShippingService(
     ShiprocketTokenStore tokenStore,
     IOptions<ShiprocketOptions> options,
     IShiprocketApiLogService apiLogs,
+    IShiprocketWebhookLogService webhookLogs,
     ILogger<AdminShippingService> logger) : IAdminShippingService
 {
     public const string TabNew = "new";
@@ -351,6 +356,13 @@ public sealed class AdminShippingService(
                 l.RawJson,
                 l.CreatedAtUtc))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ShiprocketWebhookLogDto>> ListWebhookLogsAsync(
+        int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        return await webhookLogs.ListAsync(take, cancellationToken);
     }
 
     public async Task<ReadyToShipResponse> ReadyToShipAsync(
