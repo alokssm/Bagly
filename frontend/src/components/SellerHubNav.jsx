@@ -7,6 +7,7 @@ export default function SellerHubNav() {
         Profile
       </NavLink>
       <NavLink to="/seller/products">Products</NavLink>
+      <NavLink to="/seller/pickups">Pickups</NavLink>
     </nav>
   )
 }

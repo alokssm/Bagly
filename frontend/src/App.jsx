@@ -27,6 +27,7 @@ import BusinessLogin from './pages/BusinessLogin'
 import SellerDashboard from './pages/SellerDashboard'
 import SellerProducts from './pages/SellerProducts'
 import SellerProductForm from './pages/SellerProductForm'
+import SellerPickups from './pages/SellerPickups'
 import SellerRoute from './components/SellerRoute'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -131,6 +132,14 @@ export default function App() {
                     element={
                       <SellerRoute>
                         <SellerProductForm />
+                      </SellerRoute>
+                    }
+                  />
+                  <Route
+                    path="/seller/pickups"
+                    element={
+                      <SellerRoute>
+                        <SellerPickups />
                       </SellerRoute>
                     }
                   />

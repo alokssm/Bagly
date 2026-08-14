@@ -257,6 +257,9 @@ export const api = {
   sellerUploadImage: (file) => requestUpload('/seller/uploads/image', file, { auth: 'seller' }),
   sellerGetShiprocketPickupLocations: () =>
     request('/seller/shiprocket/pickup-locations', { auth: 'seller' }),
+  sellerGetPickups: () => request('/seller/pickups', { auth: 'seller' }),
+  sellerCreatePickup: (payload) =>
+    request('/seller/pickups', { method: 'POST', body: payload, auth: 'seller' }),
 
   customerLogin: (email, password) =>
     request('/auth/customer/login', {

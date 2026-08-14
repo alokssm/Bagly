@@ -35,6 +35,7 @@ public static class DatabaseBootstrapper
         await EnsureOrderShiprocketShipmentsSchemaAsync(db, cancellationToken);
         await EnsureOrderShiprocketShippingFieldsAsync(db, cancellationToken);
         await EnsureShiprocketApiLogsSchemaAsync(db, cancellationToken);
+        await EnsureSellerPickupLocationsSchemaAsync(db, cancellationToken);
         await DbSeeder.SeedAsync(db, adminOptions);
     }
 
@@ -210,6 +211,7 @@ public static class DatabaseBootstrapper
                 "OrderShiprocketShipments",
                 "OrderItems",
                 "ShiprocketApiLogs",
+                "SellerPickupLocations",
                 "PaymentLogs",
                 "ProductReviews",
                 "StockAlerts",
@@ -240,6 +242,7 @@ public static class DatabaseBootstrapper
             ["CartItems"] = await db.CartItems.CountAsync(cancellationToken),
             ["CustomerUsers"] = await db.CustomerUsers.CountAsync(cancellationToken),
             ["SellerUsers"] = await db.SellerUsers.CountAsync(cancellationToken),
+            ["SellerPickupLocations"] = await db.SellerPickupLocations.CountAsync(cancellationToken),
             ["ProductReviews"] = await db.ProductReviews.CountAsync(cancellationToken),
             ["ShippingAddresses"] = await db.ShippingAddresses.CountAsync(cancellationToken),
             ["StockAlerts"] = await db.StockAlerts.CountAsync(cancellationToken),
@@ -257,6 +260,51 @@ public static class DatabaseBootstrapper
             $"CustomerUsers={counts["CustomerUsers"]}.");
 
         return counts;
+    }
+
+    /// <summary>Self-heal seller-owned Shiprocket pickup locations table.</summary>
+    public static async Task EnsureSellerPickupLocationsSchemaAsync(
+        BaglyDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE IF NOT EXISTS "SellerPickupLocations" (
+                    "Id" uuid NOT NULL,
+                    "SellerUserId" uuid NOT NULL,
+                    "PickupLocation" character varying(36) NOT NULL,
+                    "Name" character varying(100) NOT NULL,
+                    "Email" character varying(100) NOT NULL,
+                    "Phone" character varying(15) NOT NULL,
+                    "Address" character varying(80) NOT NULL,
+                    "Address2" character varying(80),
+                    "City" character varying(50) NOT NULL,
+                    "State" character varying(50) NOT NULL,
+                    "Country" character varying(50) NOT NULL,
+                    "PinCode" character varying(12) NOT NULL,
+                    "Lat" character varying(30),
+                    "Long" character varying(30),
+                    "Gstin" character varying(20),
+                    "ShiprocketSuccess" boolean NOT NULL,
+                    "ShiprocketPickupId" character varying(50),
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    CONSTRAINT "PK_SellerPickupLocations" PRIMARY KEY ("Id"),
+                    CONSTRAINT "FK_SellerPickupLocations_SellerUsers_SellerUserId"
+                        FOREIGN KEY ("SellerUserId") REFERENCES "SellerUsers" ("Id") ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS "IX_SellerPickupLocations_SellerUserId"
+                    ON "SellerPickupLocations" ("SellerUserId");
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_SellerPickupLocations_SellerUserId_PickupLocation"
+                    ON "SellerPickupLocations" ("SellerUserId", "PickupLocation");
+                """,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Database bootstrap step 'SellerPickupLocationsSchemaSelfHeal' failed: {ex.Message}");
+        }
     }
 
     /// <summary>Re-applies the Products table's SubCategoryId + SEO columns using Postgres'

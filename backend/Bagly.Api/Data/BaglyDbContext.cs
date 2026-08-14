@@ -15,6 +15,7 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<SellerUser> SellerUsers => Set<SellerUser>();
+    public DbSet<SellerPickupLocation> SellerPickupLocations => Set<SellerPickupLocation>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
@@ -221,6 +222,32 @@ public class BaglyDbContext(DbContextOptions<BaglyDbContext> options) : DbContex
             entity.HasIndex(x => x.Email).IsUnique();
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.IsActive);
+        });
+
+        modelBuilder.Entity<SellerPickupLocation>(entity =>
+        {
+            entity.ToTable("SellerPickupLocations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.PickupLocation).HasMaxLength(36).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(15).IsRequired();
+            entity.Property(x => x.Address).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Address2).HasMaxLength(80);
+            entity.Property(x => x.City).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.State).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Country).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.PinCode).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.Lat).HasMaxLength(30);
+            entity.Property(x => x.Long).HasMaxLength(30);
+            entity.Property(x => x.Gstin).HasMaxLength(20);
+            entity.Property(x => x.ShiprocketPickupId).HasMaxLength(50);
+            entity.HasOne(x => x.SellerUser)
+                .WithMany()
+                .HasForeignKey(x => x.SellerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => x.SellerUserId);
+            entity.HasIndex(x => new { x.SellerUserId, x.PickupLocation }).IsUnique();
         });
 
         modelBuilder.Entity<AuditLog>(entity =>
