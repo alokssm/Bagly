@@ -5,6 +5,7 @@ using Bagly.Api.Mapping;
 using Bagly.Api.Models;
 using Bagly.Api.Models.Dtos;
 using Bagly.Api.Services;
+using Bagly.Api.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +22,8 @@ namespace Bagly.Api.Controllers;
 public class SellerProductsController(
     BaglyDbContext db,
     IAuditLogService auditLog,
-    IStockAlertNotificationDispatcher stockAlertDispatcher) : ControllerBase
+    IStockAlertNotificationDispatcher stockAlertDispatcher,
+    ISellerPickupService pickupService) : ControllerBase
 {
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 100;
@@ -114,6 +116,9 @@ public class SellerProductsController(
         var validationError = Validate(request);
         if (validationError is not null) return BadRequest(new { message = validationError });
 
+        var pickupError = await ValidateSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
+        if (pickupError is not null) return pickupError;
+
         if (!await db.Categories.AnyAsync(c => c.Id == request.Category && c.Id != "all", cancellationToken))
         {
             return BadRequest(new { message = $"Category '{request.Category}' does not exist." });
@@ -193,6 +198,9 @@ public class SellerProductsController(
                 message = "You can only update your own products.",
             });
         }
+
+        var pickupError = await ValidateSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
+        if (pickupError is not null) return pickupError;
 
         if (!await db.Categories.AnyAsync(c => c.Id == request.Category && c.Id != "all", cancellationToken))
         {
@@ -320,6 +328,44 @@ public class SellerProductsController(
             request.LengthCm,
             request.BreadthCm,
             request.HeightCm);
+    }
+
+    /// <summary>
+    /// Sellers must assign a pickup nickname they own (SellerPickupLocations).
+    /// Platform config defaults are not accepted unless saved as that seller's pickup.
+    /// </summary>
+    private async Task<ActionResult?> ValidateSellerPickupAsync(
+        Guid sellerUserId,
+        string? shiprocketPickupLocation,
+        CancellationToken cancellationToken)
+    {
+        var nickname = ProductMapper.NormalizePickupNickname(shiprocketPickupLocation);
+        if (string.IsNullOrWhiteSpace(nickname))
+        {
+            return BadRequest(new
+            {
+                message = "Pickup location is required. Add a pickup address under Seller → Pickups first.",
+            });
+        }
+
+        var nicknames = await pickupService.ListNicknamesAsync(sellerUserId, cancellationToken);
+        if (nicknames.Count == 0)
+        {
+            return BadRequest(new
+            {
+                message = "You have no pickup locations. Add one under Seller → Pickups before saving a product.",
+            });
+        }
+
+        if (!nicknames.Any(n => string.Equals(n, nickname, StringComparison.OrdinalIgnoreCase)))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "Pickup location must be one of your saved pickup nicknames.",
+            });
+        }
+
+        return null;
     }
 
     private async Task<string> GenerateUniqueSlugAsync(string baseSlug, string? excludeId, CancellationToken cancellationToken)

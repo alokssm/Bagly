@@ -1,26 +1,24 @@
 using Bagly.Api.Data;
 using Bagly.Api.Models;
-using Bagly.Api.Options;
 using Bagly.Api.Shipping;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Bagly.Api.Controllers;
 
-/// <summary>Seller-facing Shiprocket helpers (config + seller-owned nicknames — no credentials).</summary>
+/// <summary>Seller-facing Shiprocket helpers (seller-owned nicknames — no credentials).</summary>
 [ApiController]
 [Route("api/seller/shiprocket")]
 [Authorize(Roles = "Seller")]
 public class SellerShiprocketController(
     BaglyDbContext db,
-    IOptions<ShiprocketOptions> options,
     ISellerPickupService pickupService) : ControllerBase
 {
     /// <summary>
-    /// Pickup nicknames for the product form dropdown:
-    /// configured <c>Shiprocket:PickupLocations</c> plus this seller's saved nicknames.
+    /// Seller-owned pickup nicknames only (from <c>SellerPickupLocations</c>).
+    /// Does not include platform config defaults such as global home/work.
+    /// Prefer <c>GET /api/seller/pickups</c> for full address details on the product form.
     /// </summary>
     [HttpGet("pickup-locations")]
     public async Task<ActionResult<object>> GetConfiguredPickupLocations(CancellationToken cancellationToken)
@@ -28,17 +26,21 @@ public class SellerShiprocketController(
         var seller = await LoadCurrentSellerAsync(cancellationToken);
         if (seller is null) return Unauthorized(new { message = "Seller session is invalid." });
 
-        var set = new HashSet<string>(options.Value.GetPickupLocationChoices(), StringComparer.Ordinal);
-        if (string.Equals(seller.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(seller.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var nick in await pickupService.ListNicknamesAsync(seller.Id, cancellationToken))
+            return StatusCode(StatusCodes.Status403Forbidden, new
             {
-                if (!string.IsNullOrWhiteSpace(nick))
-                    set.Add(nick.Trim());
-            }
+                message = "Your seller account must be approved before you can list pickup locations.",
+            });
         }
 
-        var locations = set.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var locations = (await pickupService.ListNicknamesAsync(seller.Id, cancellationToken))
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         return Ok(new { locations });
     }
 

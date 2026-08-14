@@ -78,8 +78,8 @@ export default function SellerProductForm() {
 
   const [form, setForm] = useState(emptyForm)
   const [categories, setCategories] = useState([])
-  const [pickupChoices, setPickupChoices] = useState(['home', 'work'])
-  const [pickupCustom, setPickupCustom] = useState(false)
+  const [pickupChoices, setPickupChoices] = useState([])
+  const [pickupsLoaded, setPickupsLoaded] = useState(false)
   const [loading, setLoading] = useState(isEdit && approved)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -94,28 +94,45 @@ export default function SellerProductForm() {
       try {
         const [cats, pickupRes] = await Promise.all([
           api.getCategories(),
-          api.sellerGetShiprocketPickupLocations().catch(() => ({ locations: ['home', 'work'] })),
+          api.sellerGetPickups().catch(() => ({ items: [] })),
         ])
         if (cancelled) return
         const usable = (cats || []).filter((c) => c.id !== 'all')
         setCategories(usable)
-        const locations = (pickupRes?.locations || []).filter(Boolean)
-        const choices = locations.length ? locations : ['home', 'work']
+
+        // Seller-owned nicknames only — never merge platform home/work defaults.
+        const choices = (pickupRes?.items || [])
+          .map((row) => String(row?.pickupLocation || '').trim())
+          .filter(Boolean)
         setPickupChoices(choices)
+        setPickupsLoaded(true)
+
+        const autoPickup = choices.length === 1 ? choices[0] : ''
 
         if (isEdit) {
           const product = await api.sellerGetProduct(id)
           if (!cancelled) {
             const next = toForm(product)
-            setForm(next)
-            if (next.shiprocketPickupLocation && !choices.includes(next.shiprocketPickupLocation)) {
-              setPickupCustom(true)
+            const saved = String(next.shiprocketPickupLocation || '').trim()
+            if (choices.length === 1) {
+              next.shiprocketPickupLocation = choices[0]
+            } else if (saved && choices.includes(saved)) {
+              next.shiprocketPickupLocation = saved
+            } else if (choices.length > 1) {
+              next.shiprocketPickupLocation = ''
+            } else {
+              next.shiprocketPickupLocation = ''
             }
+            setForm(next)
           }
         } else {
           const defaultCategory = usable.find((c) => !c.parentId)
-          if (defaultCategory && !cancelled) {
-            setForm((prev) => ({ ...prev, category: defaultCategory.id }))
+          if (!cancelled) {
+            setForm((prev) => ({
+              ...prev,
+              category: defaultCategory?.id || prev.category,
+              shiprocketPickupLocation: autoPickup,
+            }))
           }
         }
       } catch (err) {
@@ -171,10 +188,24 @@ export default function SellerProductForm() {
     }
   }
 
+  const hasPickups = pickupChoices.length > 0
+  const canSubmit = hasPickups && Boolean(String(form.shiprocketPickupLocation || '').trim())
+
   const onSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError('')
+
+    if (!hasPickups) {
+      setError('Add a pickup location before saving a product.')
+      setSaving(false)
+      return
+    }
+    if (!String(form.shiprocketPickupLocation || '').trim()) {
+      setError('Select where this product is available.')
+      setSaving(false)
+      return
+    }
 
     const payload = buildUpsertProductPayload(form, { includeId: !isEdit })
 
@@ -297,56 +328,51 @@ export default function SellerProductForm() {
                 Active (visible in store)
               </label>
 
-              <div className="form-field">
-                <label htmlFor="shiprocketPickupLocation">Shiprocket pickup</label>
-                {pickupCustom ? (
-                  <input
-                    id="shiprocketPickupLocation"
-                    name="shiprocketPickupLocation"
-                    value={form.shiprocketPickupLocation}
-                    onChange={onChange}
-                    placeholder="Exact Shiprocket nickname"
-                  />
+              <div className="form-field full">
+                <label htmlFor="shiprocketPickupLocation">Where is this product available?</label>
+                {!pickupsLoaded ? (
+                  <p className="admin-muted" style={{ margin: 0 }}>
+                    Loading pickup locations…
+                  </p>
+                ) : !hasPickups ? (
+                  <p className="admin-muted" style={{ margin: 0 }}>
+                    Add a pickup location before creating products.{' '}
+                    <Link to="/seller/pickups">Go to Pickups</Link>
+                  </p>
+                ) : pickupChoices.length === 1 ? (
+                  <>
+                    <input
+                      id="shiprocketPickupLocation"
+                      name="shiprocketPickupLocation"
+                      value={form.shiprocketPickupLocation || pickupChoices[0]}
+                      readOnly
+                    />
+                    <small>Your only pickup location is selected automatically.</small>
+                  </>
                 ) : (
-                  <select
-                    id="shiprocketPickupLocation"
-                    name="shiprocketPickupLocation"
-                    value={form.shiprocketPickupLocation}
-                    onChange={(e) => {
-                      if (e.target.value === '__custom__') {
-                        setPickupCustom(true)
-                        setForm((prev) => ({ ...prev, shiprocketPickupLocation: '' }))
-                        return
-                      }
-                      onChange(e)
-                    }}
-                  >
-                    <option value="">Platform default</option>
-                    {pickupChoices.map((nick) => (
-                      <option key={nick} value={nick}>
-                        {nick}
-                      </option>
-                    ))}
-                    <option value="__custom__">Other nickname…</option>
-                  </select>
+                  <>
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="shiprocketPickupLocation"
+                      style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+                    >
+                      {pickupChoices.map((nick) => (
+                        <label key={nick} className="admin-check" style={{ margin: 0 }}>
+                          <input
+                            type="radio"
+                            name="shiprocketPickupLocation"
+                            value={nick}
+                            checked={form.shiprocketPickupLocation === nick}
+                            onChange={onChange}
+                            required
+                          />
+                          {nick}
+                        </label>
+                      ))}
+                    </div>
+                    <small>Choose one of your saved pickup locations.</small>
+                  </>
                 )}
-                <small>
-                  Exact nickname from Shiprocket → Settings → Pickup Addresses (e.g. home, work). Empty uses the
-                  platform default.
-                </small>
-                {pickupCustom ? (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ marginTop: '0.35rem' }}
-                    onClick={() => {
-                      setPickupCustom(false)
-                      setForm((prev) => ({ ...prev, shiprocketPickupLocation: '' }))
-                    }}
-                  >
-                    Use list instead
-                  </button>
-                ) : null}
               </div>
 
               <label className="admin-check full">
@@ -562,7 +588,7 @@ export default function SellerProductForm() {
           </details>
 
           <div className="seller-form-actions">
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <button type="submit" className="btn btn-primary" disabled={saving || !canSubmit}>
               {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create product'}
             </button>
             <Link to="/seller/products" className="btn btn-ghost">
