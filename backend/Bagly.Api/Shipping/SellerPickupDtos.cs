@@ -46,10 +46,16 @@ public sealed class CreateSellerPickupRequest
     [MaxLength(15)]
     public string Phone { get; set; } = string.Empty;
 
+    /// <summary>House / Flat / Road / Plot / Shop number (required by Shiprocket in address line 1).</summary>
+    [MaxLength(40)]
+    public string? HouseNo { get; set; }
+
+    /// <summary>Street / locality address (combined with HouseNo into Shiprocket <c>address</c>, max 80).</summary>
     [Required]
     [MaxLength(80)]
     public string Address { get; set; } = string.Empty;
 
+    /// <summary>Landmark / area — maps to Shiprocket <c>address_2</c>.</summary>
     [MaxLength(80)]
     public string? Address2 { get; set; }
 

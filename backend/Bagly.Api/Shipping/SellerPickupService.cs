@@ -43,6 +43,11 @@ public sealed class SellerPickupService(
     private static readonly Regex PhoneDigits = new(@"^\d{10}$", RegexOptions.Compiled);
     private static readonly Regex PinDigits = new(@"^\d{6}$", RegexOptions.Compiled);
 
+    /// <summary>Shiprocket requires house/flat/road (etc.) number hints in address line 1.</summary>
+    private static readonly Regex AddressHouseHint = new(
+        @"\b(house|flat|road|plot|shop|apt|apartment|building|wing|floor|door|no\.?|number|#)\b|\d",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private readonly ShiprocketOptions _options = options.Value;
 
     public async Task<SellerPickupListResponse> ListAsync(
@@ -90,6 +95,7 @@ public sealed class SellerPickupService(
         var phone = DigitsOnly(request.Phone);
         var pinCode = DigitsOnly(request.PinCode);
         var country = string.IsNullOrWhiteSpace(request.Country) ? "India" : request.Country.Trim();
+        var address = ComposeShiprocketAddress(request.HouseNo, request.Address);
         var address2 = string.IsNullOrWhiteSpace(request.Address2) ? string.Empty : request.Address2.Trim();
         var lat = string.IsNullOrWhiteSpace(request.Lat) ? null : request.Lat.Trim();
         var lng = string.IsNullOrWhiteSpace(request.Long) ? null : request.Long.Trim();
@@ -121,7 +127,7 @@ public sealed class SellerPickupService(
             Name = request.Name.Trim(),
             Email = request.Email.Trim(),
             Phone = phone,
-            Address = request.Address.Trim(),
+            Address = address,
             Address2 = address2,
             City = request.City.Trim(),
             State = request.State.Trim(),
@@ -292,11 +298,22 @@ public sealed class SellerPickupService(
         if (!PhoneDigits.IsMatch(DigitsOnly(request.Phone)))
             return "Phone must be a 10-digit Indian mobile number.";
         if (string.IsNullOrWhiteSpace(request.Address))
-            return "Address is required.";
-        if (request.Address.Trim().Length > 80)
-            return "Address must be at most 80 characters.";
+            return "Street address is required.";
+
+        string composed;
+        try
+        {
+            composed = ComposeShiprocketAddress(request.HouseNo, request.Address);
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
+
+        if (!AddressHouseHint.IsMatch(composed))
+            return "Address must include a house/flat/road/plot/shop number (Shiprocket requirement).";
         if (!string.IsNullOrWhiteSpace(request.Address2) && request.Address2.Trim().Length > 80)
-            return "Address line 2 must be at most 80 characters.";
+            return "Address line 2 (landmark/area) must be at most 80 characters.";
         if (string.IsNullOrWhiteSpace(request.City))
             return "City is required.";
         if (string.IsNullOrWhiteSpace(request.State))
@@ -304,6 +321,45 @@ public sealed class SellerPickupService(
         if (string.IsNullOrWhiteSpace(request.PinCode) || !PinDigits.IsMatch(DigitsOnly(request.PinCode)))
             return "Pin code must be a 6-digit number.";
         return null;
+    }
+
+    /// <summary>
+    /// Builds Shiprocket address line 1 as <c>House No. {houseNo}, {street}</c> when needed.
+    /// If street already contains a house/flat/road hint and no separate houseNo is needed, it is used as-is.
+    /// </summary>
+    internal static string ComposeShiprocketAddress(string? houseNo, string streetAddress)
+    {
+        var street = (streetAddress ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(street))
+            throw new ArgumentException("Street address is required.");
+
+        var house = (houseNo ?? string.Empty).Trim();
+        string composed;
+
+        if (!string.IsNullOrWhiteSpace(house))
+        {
+            if (street.Contains(house, StringComparison.OrdinalIgnoreCase) && AddressHouseHint.IsMatch(street))
+                composed = street;
+            else
+                composed = $"House No. {house}, {street}";
+        }
+        else if (AddressHouseHint.IsMatch(street))
+        {
+            composed = street;
+        }
+        else
+        {
+            throw new ArgumentException(
+                "House / Flat / Road no. is required. Shiprocket needs it in address line 1.");
+        }
+
+        if (composed.Length > 80)
+        {
+            throw new ArgumentException(
+                "House/flat/road no. + street address must be at most 80 characters total.");
+        }
+
+        return composed;
     }
 
     private static string DigitsOnly(string? value)
@@ -333,6 +389,19 @@ public sealed class SellerPickupService(
     private static string BuildShiprocketError(string prefix, string raw, JsonElement? root = null)
     {
         var message = root is JsonElement el ? TryReadMessage(el) : null;
+        if (message is null && !string.IsNullOrWhiteSpace(raw))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                message = TryReadMessage(doc.RootElement);
+            }
+            catch (JsonException)
+            {
+                // fall through
+            }
+        }
+
         message ??= Truncate(raw, 400);
         return string.IsNullOrWhiteSpace(message) ? prefix : $"{prefix}: {message}";
     }
@@ -359,13 +428,72 @@ public sealed class SellerPickupService(
             if (!root.TryGetProperty(key, out var el)) continue;
             return el.ValueKind switch
             {
-                JsonValueKind.String => el.GetString(),
-                JsonValueKind.Object or JsonValueKind.Array => Truncate(el.GetRawText(), 300),
+                JsonValueKind.String => FormatFieldErrorsMessage(el.GetString()),
+                JsonValueKind.Object => FormatFieldErrorsObject(el),
+                JsonValueKind.Array => Truncate(el.GetRawText(), 300),
                 _ => null,
             };
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Shiprocket often returns <c>message</c> as a JSON string of field errors, e.g.
+    /// <c>{"address":["Address line 1 should have House no / Flat no / Road no."]}</c>.
+    /// </summary>
+    private static string? FormatFieldErrorsMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return message;
+
+        var trimmed = message.Trim();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    return FormatFieldErrorsObject(doc.RootElement) ?? trimmed;
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    return Truncate(doc.RootElement.GetRawText(), 300);
+            }
+            catch (JsonException)
+            {
+                return trimmed;
+            }
+        }
+
+        return trimmed;
+    }
+
+    private static string? FormatFieldErrorsObject(JsonElement obj)
+    {
+        var parts = new List<string>();
+        foreach (var prop in obj.EnumerateObject())
+        {
+            var field = prop.Name;
+            if (prop.Value.ValueKind == JsonValueKind.Array)
+            {
+                var msgs = prop.Value.EnumerateArray()
+                    .Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() : x.GetRawText())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .ToList();
+                if (msgs.Count > 0)
+                    parts.Add($"{field}: {string.Join("; ", msgs!)}");
+            }
+            else if (prop.Value.ValueKind == JsonValueKind.String)
+            {
+                var s = prop.Value.GetString();
+                if (!string.IsNullOrWhiteSpace(s))
+                    parts.Add($"{field}: {s}");
+            }
+            else
+            {
+                parts.Add($"{field}: {prop.Value.GetRawText()}");
+            }
+        }
+
+        return parts.Count == 0 ? null : Truncate(string.Join(" | ", parts), 400);
     }
 
     private static string? TryReadPickupId(JsonElement root)

@@ -5,12 +5,14 @@ import SellerHubNav from '../components/SellerHubNav'
 import { useSellerAuth } from '../context/SellerAuthContext'
 
 const MAX_PICKUPS = 2
+const ADDRESS_MAX = 80
 
 const emptyForm = {
   pickupLocation: '',
   name: '',
   email: '',
   phone: '',
+  houseNo: '',
   address: '',
   address2: '',
   city: '',
@@ -26,6 +28,16 @@ function digitsOnly(value) {
   return String(value || '').replace(/\D/g, '')
 }
 
+/** Shiprocket address line 1: House No. {houseNo}, {street} (max 80). */
+function composeShiprocketAddress(houseNo, streetAddress) {
+  const street = String(streetAddress || '').trim()
+  const house = String(houseNo || '').trim()
+  if (!street) return ''
+  if (!house) return street
+  if (street.toLowerCase().includes(house.toLowerCase())) return street
+  return `House No. ${house}, ${street}`
+}
+
 function validateForm(form) {
   const nickname = form.pickupLocation.trim()
   if (!nickname) return 'Pickup nickname is required.'
@@ -34,9 +46,15 @@ function validateForm(form) {
   if (!form.email.trim()) return 'Email is required.'
   const phone = digitsOnly(form.phone)
   if (!/^\d{10}$/.test(phone)) return 'Phone must be a 10-digit Indian mobile number.'
-  if (!form.address.trim()) return 'Address is required.'
-  if (form.address.trim().length > 80) return 'Address must be at most 80 characters.'
-  if (form.address2.trim().length > 80) return 'Address line 2 must be at most 80 characters.'
+  if (!form.houseNo.trim()) return 'House / Flat / Road no. is required.'
+  if (!form.address.trim()) return 'Street address is required.'
+  const composed = composeShiprocketAddress(form.houseNo, form.address)
+  if (composed.length > ADDRESS_MAX) {
+    return `House/flat/road no. + street address must be at most ${ADDRESS_MAX} characters (currently ${composed.length}).`
+  }
+  if (form.address2.trim().length > ADDRESS_MAX) {
+    return 'Address line 2 (landmark/area) must be at most 80 characters.'
+  }
   if (!form.city.trim()) return 'City is required.'
   if (!form.state.trim()) return 'State is required.'
   const pin = digitsOnly(form.pinCode)
@@ -57,6 +75,7 @@ export default function SellerPickups() {
   const [success, setSuccess] = useState('')
 
   const atMax = count >= maxAllowed
+  const addressPreview = composeShiprocketAddress(form.houseNo, form.address)
 
   const load = useCallback(async () => {
     if (!approved) {
@@ -127,6 +146,7 @@ export default function SellerPickups() {
         name: form.name.trim(),
         email: form.email.trim(),
         phone: digitsOnly(form.phone),
+        houseNo: form.houseNo.trim(),
         address: form.address.trim(),
         address2: form.address2.trim() || null,
         city: form.city.trim(),
@@ -143,6 +163,7 @@ export default function SellerPickups() {
         name: prev.name,
         email: prev.email,
         phone: prev.phone,
+        houseNo: prev.houseNo,
         address: prev.address,
         address2: prev.address2,
         city: prev.city,
@@ -300,23 +321,49 @@ export default function SellerPickups() {
                       placeholder="9876543210"
                     />
                   </div>
+                  <div className="form-field">
+                    <label htmlFor="pickup-houseno">House / Flat / Road no.</label>
+                    <input
+                      id="pickup-houseno"
+                      required
+                      maxLength={40}
+                      value={form.houseNo}
+                      onChange={onChange('houseNo')}
+                      placeholder="e.g. 12A, Flat 301, Plot 45"
+                    />
+                    <p className="admin-muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+                      Shiprocket requires house/flat/road number in address line 1.
+                    </p>
+                  </div>
                   <div className="form-field full">
-                    <label htmlFor="pickup-address">Address (max 80)</label>
+                    <label htmlFor="pickup-address">Street address</label>
                     <input
                       id="pickup-address"
                       required
-                      maxLength={80}
+                      maxLength={ADDRESS_MAX}
                       value={form.address}
                       onChange={onChange('address')}
+                      placeholder="e.g. MG Road, Koramangala"
                     />
+                    {addressPreview ? (
+                      <p className="admin-muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+                        Sent as address: {addressPreview}
+                        {addressPreview.length > ADDRESS_MAX ? (
+                          <span className="admin-error"> ({addressPreview.length}/{ADDRESS_MAX} — too long)</span>
+                        ) : (
+                          <span> ({addressPreview.length}/{ADDRESS_MAX})</span>
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="form-field full">
-                    <label htmlFor="pickup-address2">Address line 2 (optional)</label>
+                    <label htmlFor="pickup-address2">Landmark / area (optional)</label>
                     <input
                       id="pickup-address2"
-                      maxLength={80}
+                      maxLength={ADDRESS_MAX}
                       value={form.address2}
                       onChange={onChange('address2')}
+                      placeholder="e.g. Near Metro Station, 5th Block"
                     />
                   </div>
                   <div className="form-field">
