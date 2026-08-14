@@ -45,6 +45,7 @@ public record AdminShippingOrdersResult(
     string Tab,
     int NewCount,
     int ReadyCount,
+    int AssignAwbCount,
     int LabelCount,
     int LabeledCount
 );

@@ -12,7 +12,7 @@ namespace Bagly.Api.Shipping;
 public class AdminShippingController(IAdminShippingService shipping, BaglyDbContext db) : ControllerBase
 {
     /// <summary>
-    /// Orders with Shiprocket shipments. Tabs: new | ready | label | labeled.
+    /// Orders with Shiprocket shipments. Tabs: new | ready | assign-awb (alias: assign) | label (alias: awb) | labeled.
     /// </summary>
     [HttpGet("orders")]
     public async Task<ActionResult<AdminShippingOrdersResult>> ListOrders(

@@ -19,10 +19,12 @@ function shippingPill(status, awb, labelUrl) {
 }
 
 function shipmentMatchesTab(shipment, tab) {
+  const sellerReady = !!(shipment.sellerReady || shipment.sellerReadyToShipAt)
   if (tab === 'labeled') return !!shipment.labelUrl
   if (tab === 'label' || tab === 'awb') return !!shipment.awbCode && !shipment.labelUrl
-  if (tab === 'ready') return !!shipment.readyToShipAt && !shipment.awbCode
-  return !!shipment.shiprocketShipmentId && !shipment.readyToShipAt && !shipment.awbCode
+  if (tab === 'assign-awb' || tab === 'assign') return !!shipment.readyToShipAt && !shipment.awbCode
+  if (tab === 'ready') return sellerReady && !shipment.readyToShipAt && !shipment.awbCode
+  return !!shipment.shiprocketShipmentId && !shipment.readyToShipAt && !shipment.awbCode && !sellerReady
 }
 
 function truncate(text, max = 120) {
@@ -68,6 +70,7 @@ export default function AdminShipping() {
     tab: 'new',
     newCount: 0,
     readyCount: 0,
+    assignAwbCount: 0,
     labelCount: 0,
     labeledCount: 0,
   })
@@ -99,6 +102,7 @@ export default function AdminShipping() {
         tab: data.tab || tab,
         newCount: data.newCount || 0,
         readyCount: data.readyCount || 0,
+        assignAwbCount: data.assignAwbCount || 0,
         labelCount: data.labelCount ?? data.awbCount ?? 0,
         labeledCount: data.labeledCount || 0,
       })
@@ -174,7 +178,7 @@ export default function AdminShipping() {
     setLogsError('')
   }
 
-  const readyToShip = async (shipment) => {
+  const readyToShip = async (shipment, { switchToAssignTab = false } = {}) => {
     setBusyShipmentId(shipment.id)
     setCourierLoadingId(shipment.id)
     setActionError('')
@@ -202,7 +206,11 @@ export default function AdminShipping() {
           cod: data.cod,
         },
       }))
-      await load()
+      if (switchToAssignTab) {
+        setTab('assign-awb')
+      } else {
+        await load()
+      }
       if (logsFilterShipmentId || logsOrderQuery) {
         await loadLogs(logsOrderQuery, logsFilterShipmentId)
       }
@@ -269,6 +277,7 @@ export default function AdminShipping() {
   const tabs = [
     { id: 'new', label: 'New', count: result.newCount },
     { id: 'ready', label: 'Ready to Ship', count: result.readyCount },
+    { id: 'assign-awb', label: 'Assign AWB', count: result.assignAwbCount },
     { id: 'label', label: 'Generate Label', count: result.labelCount },
     { id: 'labeled', label: 'Label Generated', count: result.labeledCount },
   ]
@@ -349,11 +358,17 @@ export default function AdminShipping() {
                 const busy = busyShipmentId === shipment.id
                 const sellerReady = !!(shipment.sellerReady || shipment.sellerReadyToShipAt)
                 const canReady =
-                  !!shipment.shiprocketShipmentId && !shipment.awbCode && sellerReady
+                  !!shipment.shiprocketShipmentId &&
+                  !shipment.awbCode &&
+                  sellerReady &&
+                  !shipment.readyToShipAt
+                const canRefreshCouriers =
+                  !!shipment.shiprocketShipmentId && !shipment.awbCode && !!shipment.readyToShipAt
                 const waitingForSeller =
                   !!shipment.shiprocketShipmentId && !shipment.awbCode && !sellerReady
                 const canGenerateLabel = !!shipment.awbCode && !shipment.labelUrl
-                const showCourierPanel = couriersLoaded || courierLoading || !!courierError
+                const showCourierPanel =
+                  canRefreshCouriers && (couriersLoaded || courierLoading || !!courierError)
 
                 return (
                   <Fragment key={shipment.id}>
@@ -434,13 +449,18 @@ export default function AdminShipping() {
                             type="button"
                             className="btn btn-primary btn-sm"
                             disabled={busy}
+                            onClick={() => readyToShip(shipment, { switchToAssignTab: true })}
+                          >
+                            {courierLoading ? 'Loading…' : 'Ready to Ship'}
+                          </button>
+                        ) : canRefreshCouriers ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={busy}
                             onClick={() => readyToShip(shipment)}
                           >
-                            {courierLoading
-                              ? 'Loading…'
-                              : shipment.readyToShipAt
-                                ? 'Refresh Couriers'
-                                : 'Ready to Ship'}
+                            {courierLoading ? 'Loading…' : 'Refresh Couriers'}
                           </button>
                         ) : waitingForSeller ? (
                           <button

@@ -46,7 +46,10 @@ public sealed class AdminShippingService(
     ILogger<AdminShippingService> logger) : IAdminShippingService
 {
     public const string TabNew = "new";
+    /// <summary>Seller marked ready; admin can run serviceability (Ready to Ship).</summary>
     public const string TabReady = "ready";
+    /// <summary>Admin ReadyToShipAt set; couriers / Assign AWB.</summary>
+    public const string TabAssignAwb = "assign-awb";
     /// <summary>AWB assigned, waiting for label generation.</summary>
     public const string TabLabel = "label";
     /// <summary>Label URL stored (done).</summary>
@@ -81,17 +84,30 @@ public sealed class AdminShippingService(
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")));
 
+        // New: Shiprocket created, waiting on seller (not seller-ready, not admin-ready).
         var newCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.ShiprocketShipmentId != null &&
                 s.ShiprocketShipmentId != "" &&
                 (s.AwbCode == null || s.AwbCode == "") &&
                 s.ReadyToShipAt == null &&
+                s.SellerReadyToShipAt == null &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
             cancellationToken);
 
+        // Ready to Ship: seller ready; admin has not run serviceability yet.
         var readyCount = await baseQuery.CountAsync(
+            o => o.ShiprocketShipments.Any(s =>
+                s.SellerReadyToShipAt != null &&
+                s.ReadyToShipAt == null &&
+                (s.AwbCode == null || s.AwbCode == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled")),
+            cancellationToken);
+
+        // Assign AWB: admin ReadyToShipAt set, AWB not yet assigned.
+        var assignAwbCount = await baseQuery.CountAsync(
             o => o.ShiprocketShipments.Any(s =>
                 s.ReadyToShipAt != null &&
                 (s.AwbCode == null || s.AwbCode == "") &&
@@ -118,6 +134,12 @@ public sealed class AdminShippingService(
         var filtered = normalizedTab switch
         {
             TabReady => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
+                s.SellerReadyToShipAt != null &&
+                s.ReadyToShipAt == null &&
+                (s.AwbCode == null || s.AwbCode == "") &&
+                (s.Status == null || s.Status != "Cancelled") &&
+                (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
+            TabAssignAwb => baseQuery.Where(o => o.ShiprocketShipments.Any(s =>
                 s.ReadyToShipAt != null &&
                 (s.AwbCode == null || s.AwbCode == "") &&
                 (s.Status == null || s.Status != "Cancelled") &&
@@ -136,6 +158,7 @@ public sealed class AdminShippingService(
                 s.ShiprocketShipmentId != "" &&
                 (s.AwbCode == null || s.AwbCode == "") &&
                 s.ReadyToShipAt == null &&
+                s.SellerReadyToShipAt == null &&
                 (s.Status == null || s.Status != "Cancelled") &&
                 (s.ShippingStatus == null || s.ShippingStatus != "Cancelled"))),
         };
@@ -206,6 +229,7 @@ public sealed class AdminShippingService(
             normalizedTab,
             newCount,
             readyCount,
+            assignAwbCount,
             labelCount,
             labeledCount);
     }
@@ -512,6 +536,12 @@ public sealed class AdminShippingService(
     private static string NormalizeTab(string? tab)
     {
         if (string.Equals(tab, TabReady, StringComparison.OrdinalIgnoreCase)) return TabReady;
+        if (string.Equals(tab, TabAssignAwb, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tab, "assign", StringComparison.OrdinalIgnoreCase))
+        {
+            return TabAssignAwb;
+        }
+
         if (string.Equals(tab, TabLabel, StringComparison.OrdinalIgnoreCase)) return TabLabel;
         // Back-compat: old "awb" tab → Generate Label (AWB without label).
         if (string.Equals(tab, "awb", StringComparison.OrdinalIgnoreCase)) return TabLabel;
