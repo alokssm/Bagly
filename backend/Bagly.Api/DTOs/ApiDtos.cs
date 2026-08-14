@@ -316,7 +316,8 @@ public record OrderItemDto(
     string ProductName,
     string Color,
     decimal UnitPrice,
-    int Quantity
+    int Quantity,
+    decimal LineTotal
 );
 
 public record OrderShiprocketShipmentDto(
@@ -370,6 +371,7 @@ public record CustomerOrderItemDto(
     string Color,
     decimal UnitPrice,
     int Quantity,
+    decimal LineTotal,
     string? Image
 );
 

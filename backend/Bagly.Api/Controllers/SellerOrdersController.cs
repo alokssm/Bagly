@@ -85,15 +85,20 @@ public class SellerOrdersController(
         {
             var sellerItems = o.Items
                 .Where(i => visibleProductSet.Contains(i.ProductId))
-                .Select(i => new SellerOrderItemDto(
-                    i.ProductId,
-                    i.ProductName,
-                    i.Color,
-                    i.UnitPrice,
-                    i.Quantity))
+                .Select(i =>
+                {
+                    var lineTotal = i.UnitPrice * i.Quantity;
+                    return new SellerOrderItemDto(
+                        i.ProductId,
+                        i.ProductName,
+                        i.Color,
+                        i.UnitPrice,
+                        i.Quantity,
+                        lineTotal);
+                })
                 .ToList();
 
-            var sellerSubtotal = sellerItems.Sum(i => i.UnitPrice * i.Quantity);
+            var subtotal = sellerItems.Sum(i => i.LineTotal);
             var pickupNicknames = ResolveSellerPickupNicknames(
                 sellerItems.Select(i => i.ProductId).Where(id => ownedSet.Contains(id)),
                 productPickups,
@@ -113,7 +118,10 @@ public class SellerOrdersController(
                 o.PaymentStatus,
                 o.PaymentProvider,
                 o.Currency ?? "INR",
-                sellerSubtotal,
+                subtotal,
+                o.Subtotal,
+                o.Shipping,
+                o.Total,
                 o.CreatedAt,
                 MaskCustomerName(o.FirstName, o.LastName),
                 o.City,
@@ -322,13 +330,21 @@ public class SellerOrdersController(
             order.PaymentProvider,
             order.Currency ?? "INR",
             sellerItems.Sum(i => i.UnitPrice * i.Quantity),
+            order.Subtotal,
+            order.Shipping,
+            order.Total,
             order.CreatedAt,
             MaskCustomerName(order.FirstName, order.LastName),
             order.City,
             order.State,
             order.Zip,
             sellerItems.Select(i => new SellerOrderItemDto(
-                i.ProductId, i.ProductName, i.Color, i.UnitPrice, i.Quantity)).ToList(),
+                i.ProductId,
+                i.ProductName,
+                i.Color,
+                i.UnitPrice,
+                i.Quantity,
+                i.UnitPrice * i.Quantity)).ToList(),
             sellerShipments.Select(MapShipment).ToList());
 
         return Ok(dto);
@@ -534,7 +550,8 @@ public record SellerOrderItemDto(
     string ProductName,
     string Color,
     decimal UnitPrice,
-    int Quantity);
+    int Quantity,
+    decimal LineTotal);
 
 public record SellerShipmentDto(
     Guid Id,
@@ -559,7 +576,10 @@ public record SellerOrderDto(
     string PaymentStatus,
     string? PaymentProvider,
     string Currency,
-    decimal SellerSubtotal,
+    decimal Subtotal,
+    decimal OrderSubtotal,
+    decimal Shipping,
+    decimal OrderTotal,
     DateTime CreatedAt,
     string CustomerName,
     string? City,

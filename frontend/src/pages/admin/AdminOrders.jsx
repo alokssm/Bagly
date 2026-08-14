@@ -4,6 +4,7 @@ import { formatPrice } from '../../utils/format'
 
 const PAGE_SIZE = 50
 const emptyResult = { items: [], totalCount: 0, totalPages: 0, page: 1, pageSize: PAGE_SIZE, todayCount: 0 }
+const money = (value) => formatPrice(value, { fractionDigits: 2 })
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -19,6 +20,11 @@ function statusClass(status) {
   if (s === 'confirmed') return 'admin-pill on'
   if (s === 'awaitingpayment' || s === 'pending') return 'admin-pill'
   return 'admin-pill off'
+}
+
+function lineTotalOf(item) {
+  if (Number.isFinite(Number(item.lineTotal))) return Number(item.lineTotal)
+  return (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)
 }
 
 export default function AdminOrders() {
@@ -256,7 +262,7 @@ export default function AdminOrders() {
                     <td>{order.customerName || '—'}</td>
                     <td>{order.email}</td>
                     <td>{order.itemCount}</td>
-                    <td>{formatPrice(order.total)}</td>
+                    <td>{money(order.total)}</td>
                     <td>
                       <span className={statusClass(order.status)}>{order.status}</span>
                     </td>
@@ -381,6 +387,16 @@ export default function AdminOrders() {
                                   </p>
                                 )
                               })()}
+                              <p>
+                                <strong>Subtotal:</strong> {money(details[order.id].subtotal)}
+                                {' · '}
+                                <strong>Shipping:</strong>{' '}
+                                {Number(details[order.id].shipping) === 0
+                                  ? 'Free'
+                                  : money(details[order.id].shipping)}
+                                {' · '}
+                                <strong>Total:</strong> {money(details[order.id].total)}
+                              </p>
                               <table className="admin-table">
                                 <thead>
                                   <tr>
@@ -397,8 +413,8 @@ export default function AdminOrders() {
                                       <td>{item.productName}</td>
                                       <td>{item.color}</td>
                                       <td>{item.quantity}</td>
-                                      <td>{formatPrice(item.unitPrice)}</td>
-                                      <td>{formatPrice(item.unitPrice * item.quantity)}</td>
+                                      <td>{money(item.unitPrice)}</td>
+                                      <td>{money(lineTotalOf(item))}</td>
                                     </tr>
                                   ))}
                                 </tbody>

@@ -235,7 +235,8 @@ public class OrdersController(
                 i.ProductName,
                 i.Color,
                 i.UnitPrice,
-                i.Quantity
+                i.Quantity,
+                i.UnitPrice * i.Quantity
             )).ToList(),
             order.Phone,
             order.ShiprocketOrderId,

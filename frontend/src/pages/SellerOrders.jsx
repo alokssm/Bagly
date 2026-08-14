@@ -6,6 +6,7 @@ import { formatPrice } from '../utils/format'
 
 const PAGE_SIZE = 50
 const emptyResult = { items: [], totalCount: 0, totalPages: 0, page: 1, pageSize: PAGE_SIZE }
+const money = (value) => formatPrice(value, { fractionDigits: 2 })
 
 function formatWhen(value) {
   if (!value) return '—'
@@ -28,6 +29,11 @@ function shipmentLabel(shipment) {
   if (shipment.sellerReady) return 'Seller ready'
   if (shipment.shiprocketShipmentId) return 'Awaiting ready'
   return 'Pending Shiprocket'
+}
+
+function lineTotalOf(item) {
+  if (Number.isFinite(Number(item.lineTotal))) return Number(item.lineTotal)
+  return (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)
 }
 
 export default function SellerOrders() {
@@ -177,6 +183,12 @@ export default function SellerOrders() {
                   })
                   const cancelBusy = busyKey === `${order.id}:cancel`
                   const menuOpen = openMenuId === order.id
+                  const yourSubtotal = Number.isFinite(Number(order.subtotal))
+                    ? Number(order.subtotal)
+                    : Number(order.sellerSubtotal) || 0
+                  const orderTotal = Number(order.orderTotal)
+                  const showOrderTotal =
+                    Number.isFinite(orderTotal) && Math.abs(orderTotal - yourSubtotal) > 0.005
 
                   return (
                     <article key={order.id} className="seller-order-card">
@@ -198,7 +210,7 @@ export default function SellerOrders() {
                                 {item.color ? ` · ${item.color}` : ''}
                               </span>
                               <span>
-                                ×{item.quantity} · {formatPrice(item.unitPrice * item.quantity, order.currency)}
+                                {money(item.unitPrice)} × {item.quantity} = {money(lineTotalOf(item))}
                               </span>
                             </li>
                           ))}
@@ -216,7 +228,15 @@ export default function SellerOrders() {
                           )}
                         </div>
                         <div className="seller-order-total">
-                          Your lines: {formatPrice(order.sellerSubtotal, order.currency)}
+                          <div>Your items subtotal: {money(yourSubtotal)}</div>
+                          {showOrderTotal ? (
+                            <div className="seller-order-total-note">
+                              Order total: {money(orderTotal)}
+                              {Number.isFinite(Number(order.shipping)) && Number(order.shipping) > 0
+                                ? ` (incl. shipping ${money(order.shipping)})`
+                                : ''}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 

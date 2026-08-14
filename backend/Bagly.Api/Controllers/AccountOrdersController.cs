@@ -114,6 +114,7 @@ public class AccountOrdersController(BaglyDbContext db) : ControllerBase
                 i.Color,
                 i.UnitPrice,
                 i.Quantity,
+                i.UnitPrice * i.Quantity,
                 images.TryGetValue(i.ProductId, out var image) ? image : null
             )).ToList()
         );
