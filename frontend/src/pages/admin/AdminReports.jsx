@@ -118,17 +118,28 @@ export default function AdminReports() {
   const to = Math.min(result.page * result.pageSize, result.totalCount)
 
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-reports">
       <div className="admin-page-head">
         <div>
           <p className="eyebrow">Monitoring</p>
           <h1>Reports &amp; logs</h1>
           <p className="admin-subtitle">Admin-only view of audit and system logs (50 per page).</p>
         </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            loadSummary()
+            loadLogs()
+          }}
+          disabled={loading}
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
       {summary ? (
-        <div className="admin-stats">
+        <div className="admin-stats admin-stats-4">
           <div className="admin-stat">
             <span>Audit logs</span>
             <strong>{summary.auditLogCount}</strong>
@@ -148,9 +159,11 @@ export default function AdminReports() {
         </div>
       ) : null}
 
-      <div className="admin-tabs">
+      <div className="admin-tabs" role="tablist">
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === 'audit'}
           className={tab === 'audit' ? 'admin-tab active' : 'admin-tab'}
           onClick={() => switchTab('audit')}
         >
@@ -158,6 +171,8 @@ export default function AdminReports() {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === 'system'}
           className={tab === 'system' ? 'admin-tab active' : 'admin-tab'}
           onClick={() => switchTab('system')}
         >
@@ -165,7 +180,10 @@ export default function AdminReports() {
         </button>
       </div>
 
-      <form className="admin-filters" onSubmit={applyFilters}>
+      <form
+        className={`admin-filters admin-reports-filters${tab === 'system' ? ' admin-reports-filters--system' : ''}`}
+        onSubmit={applyFilters}
+      >
         <label>
           Search
           <input
@@ -218,10 +236,10 @@ export default function AdminReports() {
           </>
         ) : null}
         <div className="admin-filters-actions">
-          <button type="submit" className="btn btn-primary">
+          <button type="submit" className="btn btn-primary btn-sm">
             Apply
           </button>
-          <button type="button" className="btn btn-secondary" onClick={clearFilters}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}>
             Clear
           </button>
         </div>
@@ -231,9 +249,9 @@ export default function AdminReports() {
 
       <div className="admin-table-wrap">
         {loading ? (
-          <p className="admin-muted">Loading logs…</p>
+          <p className="admin-muted admin-reports-empty">Loading logs…</p>
         ) : result.items.length === 0 ? (
-          <p className="admin-muted">No logs found for the current filters.</p>
+          <p className="admin-muted admin-reports-empty">No logs found for the current filters.</p>
         ) : tab === 'audit' ? (
           <table className="admin-table admin-logs-table">
             <thead>
@@ -362,7 +380,7 @@ export default function AdminReports() {
         <div className="admin-pagination-controls">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-sm"
             disabled={page <= 1 || loading}
             onClick={() => {
               setExpandedId(null)
@@ -376,7 +394,7 @@ export default function AdminReports() {
           </span>
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-sm"
             disabled={page >= result.totalPages || loading || result.totalPages === 0}
             onClick={() => {
               setExpandedId(null)

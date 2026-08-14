@@ -3184,6 +3184,9 @@ a.order-item-row__name:hover {
 .admin-stats-2 {
   grid-template-columns: repeat(2, 1fr);
 }
+.admin-stats-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
 
 .analytics-bars {
   display: grid;
@@ -3569,6 +3572,56 @@ a.order-item-row__name:hover {
   font-size: 0.72rem;
 }
 
+/* Admin Reports — denser log monitoring layout */
+.admin-reports {
+  width: min(1280px, 100%);
+}
+
+.admin-reports .admin-stat {
+  padding: 0.55rem 0.7rem;
+}
+.admin-reports .admin-stat strong {
+  font-size: 1.35rem;
+}
+
+.admin-reports-filters {
+  padding: 0.55rem 0.65rem;
+  grid-template-columns: 1.5fr repeat(3, minmax(7rem, 0.75fr)) auto;
+}
+.admin-reports-filters--system {
+  grid-template-columns: 1.5fr minmax(8rem, 0.85fr) auto;
+}
+.admin-reports-filters .admin-filters-actions {
+  padding-bottom: 1px;
+}
+
+.admin-reports-empty {
+  margin: 0;
+  padding: 0.85rem 0.75rem;
+  font-size: var(--admin-fs-sm, 0.78rem);
+}
+
+.admin-reports .admin-logs-table th,
+.admin-reports .admin-logs-table td {
+  padding: 0.4rem 0.55rem;
+}
+.admin-reports .log-detail {
+  gap: 0.22rem;
+  font-size: var(--admin-fs-sm, 0.78rem);
+}
+.admin-reports .log-detail p {
+  margin: 0;
+}
+.admin-reports .log-detail pre {
+  padding: 0.45rem 0.55rem;
+  max-height: 180px;
+  font-size: var(--admin-fs-xs, 0.72rem);
+}
+.admin-reports .admin-pagination {
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+}
+
 .admin-pagination {
   display: flex;
   justify-content: space-between;
@@ -3600,10 +3653,13 @@ a.order-item-row__name:hover {
   .admin-sidebar { position: sticky; top: 0; z-index: 5; }
   .admin-stats,
   .admin-stats-2,
+  .admin-stats-4,
   .admin-form-grid,
   .pf-grid,
   .admin-split,
-  .admin-filters { grid-template-columns: 1fr; }
+  .admin-filters,
+  .admin-reports-filters,
+  .admin-reports-filters--system { grid-template-columns: 1fr; }
   .admin-main { padding: 1rem; }
   .analytics-bar-row { grid-template-columns: 5.5rem 1fr 2.5rem; }
 }
