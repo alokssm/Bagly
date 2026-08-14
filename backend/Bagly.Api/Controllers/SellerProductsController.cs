@@ -116,8 +116,8 @@ public class SellerProductsController(
         var validationError = Validate(request);
         if (validationError is not null) return BadRequest(new { message = validationError });
 
-        var pickupError = await ValidateSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
-        if (pickupError is not null) return pickupError;
+        var pickupResolve = await ResolveSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
+        if (pickupResolve.Error is not null) return pickupResolve.Error;
 
         if (!await db.Categories.AnyAsync(c => c.Id == request.Category && c.Id != "all", cancellationToken))
         {
@@ -150,6 +150,9 @@ public class SellerProductsController(
             CreatedAt = DateTime.UtcNow,
         };
         ProductMapper.ApplyUpsert(product, request);
+        // Canonical nickname casing from SellerPickupLocations (Shiprocket is case-sensitive).
+        product.SellerId = seller.Id;
+        product.ShiprocketPickupLocation = pickupResolve.CanonicalNickname;
 
         db.Products.Add(product);
         await db.SaveChangesAsync(cancellationToken);
@@ -199,8 +202,8 @@ public class SellerProductsController(
             });
         }
 
-        var pickupError = await ValidateSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
-        if (pickupError is not null) return pickupError;
+        var pickupResolve = await ResolveSellerPickupAsync(seller.Id, request.ShiprocketPickupLocation, cancellationToken);
+        if (pickupResolve.Error is not null) return pickupResolve.Error;
 
         if (!await db.Categories.AnyAsync(c => c.Id == request.Category && c.Id != "all", cancellationToken))
         {
@@ -226,8 +229,9 @@ public class SellerProductsController(
         }
 
         ProductMapper.ApplyUpsert(product, request);
-        // Ownership is immutable for seller products.
+        // Ownership is immutable for seller products; pickup casing matches registered nickname.
         product.SellerId = seller.Id;
+        product.ShiprocketPickupLocation = pickupResolve.CanonicalNickname;
         await db.SaveChangesAsync(cancellationToken);
 
         await auditLog.LogAsync(
@@ -332,9 +336,9 @@ public class SellerProductsController(
 
     /// <summary>
     /// Sellers must assign a pickup nickname they own (SellerPickupLocations).
-    /// Platform config defaults are not accepted unless saved as that seller's pickup.
+    /// Returns the canonical registered nickname casing for persistence.
     /// </summary>
-    private async Task<ActionResult?> ValidateSellerPickupAsync(
+    private async Task<(ActionResult? Error, string? CanonicalNickname)> ResolveSellerPickupAsync(
         Guid sellerUserId,
         string? shiprocketPickupLocation,
         CancellationToken cancellationToken)
@@ -342,30 +346,32 @@ public class SellerProductsController(
         var nickname = ProductMapper.NormalizePickupNickname(shiprocketPickupLocation);
         if (string.IsNullOrWhiteSpace(nickname))
         {
-            return BadRequest(new
+            return (BadRequest(new
             {
                 message = "Pickup location is required. Add a pickup address under Seller → Pickups first.",
-            });
+            }), null);
         }
 
         var nicknames = await pickupService.ListNicknamesAsync(sellerUserId, cancellationToken);
         if (nicknames.Count == 0)
         {
-            return BadRequest(new
+            return (BadRequest(new
             {
                 message = "You have no pickup locations. Add one under Seller → Pickups before saving a product.",
-            });
+            }), null);
         }
 
-        if (!nicknames.Any(n => string.Equals(n, nickname, StringComparison.OrdinalIgnoreCase)))
+        var canonical = nicknames.FirstOrDefault(n =>
+            string.Equals(n, nickname, StringComparison.OrdinalIgnoreCase));
+        if (canonical is null)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
+            return (StatusCode(StatusCodes.Status403Forbidden, new
             {
                 message = "Pickup location must be one of your saved pickup nicknames.",
-            });
+            }), null);
         }
 
-        return null;
+        return (null, canonical);
     }
 
     private async Task<string> GenerateUniqueSlugAsync(string baseSlug, string? excludeId, CancellationToken cancellationToken)

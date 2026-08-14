@@ -5,7 +5,16 @@ import { useSellerAuth } from '../context/SellerAuthContext'
 import { formatPrice } from '../utils/format'
 
 const PAGE_SIZE = 50
-const emptyResult = { items: [], totalCount: 0, totalPages: 0, page: 1, pageSize: PAGE_SIZE }
+const emptyResult = {
+  items: [],
+  totalCount: 0,
+  totalPages: 0,
+  page: 1,
+  pageSize: PAGE_SIZE,
+  ownedProductCount: 0,
+  registeredPickupCount: 0,
+  visibleProductCount: 0,
+}
 const money = (value) => formatPrice(value, { fractionDigits: 2 })
 
 function formatWhen(value) {
@@ -62,6 +71,9 @@ export default function SellerOrders() {
         totalPages: data.totalPages || 0,
         page: data.page || page,
         pageSize: data.pageSize || PAGE_SIZE,
+        ownedProductCount: data.ownedProductCount ?? 0,
+        registeredPickupCount: data.registeredPickupCount ?? 0,
+        visibleProductCount: data.visibleProductCount ?? 0,
       })
     } catch (err) {
       setError(err.message || 'Unable to load orders.')
@@ -160,7 +172,14 @@ export default function SellerOrders() {
             ) : !orders.length ? (
               <div className="seller-status" role="status">
                 <strong>No orders yet</strong>
-                <span>When customers buy your bags, they will show up here.</span>
+                <span>
+                  Orders show when customers buy your products, or platform products fulfilled from your
+                  pickup nicknames (e.g. wareHouse1). You have {result.ownedProductCount ?? 0} product
+                  {(result.ownedProductCount || 0) === 1 ? '' : 's'}, {result.registeredPickupCount ?? 0}{' '}
+                  pickup{(result.registeredPickupCount || 0) === 1 ? '' : 's'}, and{' '}
+                  {result.visibleProductCount ?? 0} visible catalog match
+                  {(result.visibleProductCount || 0) === 1 ? '' : 'es'}.
+                </span>
               </div>
             ) : (
               <div className="seller-orders-list" ref={menuRef}>

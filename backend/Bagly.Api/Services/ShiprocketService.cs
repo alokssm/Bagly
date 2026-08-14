@@ -470,7 +470,79 @@ public sealed class ShiprocketService(
 
         order.ShiprocketStatus = "Skipped";
         order.ShiprocketLastError = Truncate(reason, 480);
+
+        // Persist per-pickup stub rows even when the Shiprocket API never runs.
+        // Sellers match orders via shipment PickupLocation as well as Product.ShiprocketPickupLocation.
+        await EnsurePendingShipmentStubsAsync(order, "Skipped", reason, cancellationToken);
+
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates OrderShiprocketShipments rows for each product pickup group when missing.
+    /// Used when create is skipped so seller/admin visibility does not depend on a successful API call.
+    /// </summary>
+    private async Task EnsurePendingShipmentStubsAsync(
+        Order order,
+        string status,
+        string? lastError,
+        CancellationToken cancellationToken)
+    {
+        if (order.Items.Count == 0)
+            return;
+
+        var defaultPickup = ShiprocketOptions.IsPlaceholderPickup(_options.PickupLocation)
+            ? ""
+            : (_options.PickupLocation?.Trim() ?? "");
+
+        var productIds = order.Items
+            .Select(i => i.ProductId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var productPickups = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.ShiprocketPickupLocation })
+            .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+
+        var groups = order.Items
+            .GroupBy(item =>
+            {
+                productPickups.TryGetValue(item.ProductId, out var productPickup);
+                if (!string.IsNullOrWhiteSpace(productPickup))
+                    return productPickup.Trim();
+                return defaultPickup;
+            }, StringComparer.Ordinal)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .Select(g => g.Key)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var existing = order.ShiprocketShipments
+            .Select(s => s.PickupLocation)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var now = DateTime.UtcNow;
+        var error = string.IsNullOrWhiteSpace(lastError) ? null : Truncate(lastError, 480);
+        foreach (var pickup in groups)
+        {
+            if (existing.Contains(pickup))
+                continue;
+
+            var shipment = new OrderShiprocketShipment
+            {
+                OrderId = order.Id,
+                PickupLocation = pickup,
+                Status = status,
+                LastError = error,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            db.OrderShiprocketShipments.Add(shipment);
+            order.ShiprocketShipments.Add(shipment);
+            existing.Add(pickup);
+        }
     }
 
     private static bool IsIndiaCountry(string? country)

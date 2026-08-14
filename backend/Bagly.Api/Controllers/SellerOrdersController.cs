@@ -14,8 +14,12 @@ namespace Bagly.Api.Controllers;
 /// <summary>
 /// Approved sellers view orders that include their products, mark pickup shipments
 /// Ready to Ship (gates admin courier selection), and cancel before AWB.
-/// Visibility: Product.SellerId match, or order shipments whose PickupLocation matches
-/// a nickname in the seller's SellerPickupLocations (case-sensitive / Ordinal).
+/// Visibility (any of):
+/// 1) Product.SellerId == seller
+/// 2) OrderItems → Products.ShiprocketPickupLocation matches a seller SellerPickupLocations nickname
+///    (no OrderShiprocketShipments required — works before / without Shiprocket create)
+/// 3) OrderShiprocketShipments.PickupLocation matches a seller nickname
+/// Pickup nickname matching is OrdinalIgnoreCase (seller product validation already allows CI).
 /// </summary>
 [ApiController]
 [Authorize(Roles = "Seller")]
@@ -45,17 +49,38 @@ public class SellerOrdersController(
         var scope = await LoadSellerOrderScopeAsync(seller.Id, cancellationToken);
         if (scope.OwnedProductIds.Count == 0 && scope.RegisteredPickups.Count == 0)
         {
-            return Ok(new SellerOrdersListResult([], page, pageSize, 0, 0));
+            return Ok(new SellerOrdersListResult(
+                [], page, pageSize, 0, 0,
+                scope.OwnedProductIds.Count,
+                scope.RegisteredPickups.Count,
+                scope.VisibleProductIds.Count));
         }
 
+        // Plain lists for EF translation (avoid HashSet+comparer in expression trees).
+        var visibleProductIds = scope.VisibleProductIds.ToList();
+        var pickupLower = scope.RegisteredPickups
+            .Select(p => p.ToLowerInvariant())
+            .Distinct()
+            .ToList();
         var ownedSet = scope.OwnedProductIds.ToHashSet(StringComparer.Ordinal);
-        var pickupSet = scope.RegisteredPickups.ToHashSet(StringComparer.Ordinal);
-        var visibleProductSet = scope.VisibleProductIds.ToHashSet(StringComparer.Ordinal);
+        var visibleProductSet = visibleProductIds.ToHashSet(StringComparer.Ordinal);
 
+        // Path 1+2: line items whose products the seller owns or fulfills by pickup nickname.
+        // Path 3: shipment rows whose pickup matches (covers stubs created when Shiprocket skips).
+        var sellerId = seller.Id;
+        var hasPickups = pickupLower.Count > 0;
         var baseQuery = db.Orders.AsNoTracking()
             .Where(o =>
-                o.Items.Any(i => visibleProductSet.Contains(i.ProductId)) ||
-                (pickupSet.Count > 0 && o.ShiprocketShipments.Any(s => pickupSet.Contains(s.PickupLocation))));
+                o.Items.Any(i =>
+                    db.Products.Any(p =>
+                        p.Id == i.ProductId && (
+                            p.SellerId == sellerId ||
+                            (hasPickups
+                             && p.ShiprocketPickupLocation != null
+                             && p.ShiprocketPickupLocation != ""
+                             && pickupLower.Contains(p.ShiprocketPickupLocation.ToLower()))))) ||
+                (hasPickups && o.ShiprocketShipments.Any(s =>
+                    pickupLower.Contains(s.PickupLocation.ToLower()))));
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -74,10 +99,42 @@ public class SellerOrdersController(
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+        // Also include any line ProductIds on the page so we can attribute items matched only via join.
+        var allLineProductIds = orders
+            .SelectMany(o => o.Items.Select(i => i.ProductId))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var productIdsForPickupLookup = productIdsOnPage
+            .Concat(allLineProductIds)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
         var productPickups = await db.Products.AsNoTracking()
-            .Where(p => productIdsOnPage.Contains(p.Id))
-            .Select(p => new { p.Id, p.ShiprocketPickupLocation })
-            .ToDictionaryAsync(p => p.Id, p => p.ShiprocketPickupLocation, StringComparer.Ordinal, cancellationToken);
+            .Where(p => productIdsForPickupLookup.Contains(p.Id))
+            .Select(p => new { p.Id, p.SellerId, p.ShiprocketPickupLocation })
+            .ToListAsync(cancellationToken);
+
+        var productPickupMap = productPickups.ToDictionary(
+            p => p.Id,
+            p => p.ShiprocketPickupLocation,
+            StringComparer.Ordinal);
+
+        // Rebuild visible set from live product rows (covers CI pickup match on this page).
+        var pickupIgnore = scope.RegisteredPickups.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in productPickups)
+        {
+            if (p.SellerId == seller.Id)
+            {
+                visibleProductSet.Add(p.Id);
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(p.ShiprocketPickupLocation)
+                && pickupIgnore.Contains(p.ShiprocketPickupLocation.Trim()))
+            {
+                visibleProductSet.Add(p.Id);
+            }
+        }
 
         var defaultPickup = shiprocketOptions.Value.PickupLocation?.Trim() ?? "";
 
@@ -101,13 +158,13 @@ public class SellerOrdersController(
             var subtotal = sellerItems.Sum(i => i.LineTotal);
             var pickupNicknames = ResolveSellerPickupNicknames(
                 sellerItems.Select(i => i.ProductId).Where(id => ownedSet.Contains(id)),
-                productPickups,
+                productPickupMap,
                 scope.RegisteredPickups,
                 defaultPickup);
 
             var shipments = o.ShiprocketShipments
                 .Where(s => pickupNicknames.Contains(s.PickupLocation))
-                .OrderBy(s => s.PickupLocation, StringComparer.Ordinal)
+                .OrderBy(s => s.PickupLocation, StringComparer.OrdinalIgnoreCase)
                 .Select(MapShipment)
                 .ToList();
 
@@ -131,7 +188,11 @@ public class SellerOrdersController(
                 shipments);
         }).ToList();
 
-        return Ok(new SellerOrdersListResult(items, page, pageSize, totalCount, totalPages));
+        return Ok(new SellerOrdersListResult(
+            items, page, pageSize, totalCount, totalPages,
+            scope.OwnedProductIds.Count,
+            scope.RegisteredPickups.Count,
+            scope.VisibleProductIds.Count));
     }
 
     /// <summary>
@@ -359,12 +420,12 @@ public class SellerOrdersController(
             .Select(p => p.Id)
             .ToListAsync(cancellationToken);
 
+        // Successful pickups only — same source as seller product pickup validation.
         var registeredPickups = await db.SellerPickupLocations.AsNoTracking()
-            .Where(p => p.SellerUserId == sellerId)
+            .Where(p => p.SellerUserId == sellerId && p.ShiprocketSuccess)
             .Select(p => p.PickupLocation)
             .ToListAsync(cancellationToken);
 
-        // Exact nickname match (Shiprocket case-sensitive); ignore blank nicknames.
         var pickupList = registeredPickups
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())
@@ -374,9 +435,13 @@ public class SellerOrdersController(
         List<string> pickupMatchedProductIds = [];
         if (pickupList.Count > 0)
         {
+            // OrdinalIgnoreCase: seller product validation already accepts CI nicknames;
+            // seed wareHouse1 must still match seller pickups typed with different casing.
+            var pickupLower = pickupList.Select(p => p.ToLowerInvariant()).ToList();
             pickupMatchedProductIds = await db.Products.AsNoTracking()
                 .Where(p => p.ShiprocketPickupLocation != null
-                            && pickupList.Contains(p.ShiprocketPickupLocation))
+                            && p.ShiprocketPickupLocation != ""
+                            && pickupLower.Contains(p.ShiprocketPickupLocation.ToLower()))
                 .Select(p => p.Id)
                 .ToListAsync(cancellationToken);
         }
@@ -402,7 +467,7 @@ public class SellerOrdersController(
         if (hasVisibleItem)
             return null;
 
-        var pickupSet = scope.RegisteredPickups.ToHashSet(StringComparer.Ordinal);
+        var pickupSet = scope.RegisteredPickups.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var hasPickupShipment = pickupSet.Count > 0
             && order.ShiprocketShipments.Any(s => pickupSet.Contains(s.PickupLocation));
 
@@ -450,9 +515,9 @@ public class SellerOrdersController(
     }
 
     /// <summary>
-    /// Seller-controlled pickups: registered SellerPickupLocations nicknames (Ordinal),
+    /// Seller-controlled pickups: registered SellerPickupLocations nicknames,
     /// plus resolved pickups for seller-owned products (falls back to platform default).
-    /// Registered nicknames alone gate platform products fulfilled from seller warehouses.
+    /// Matching is OrdinalIgnoreCase so casing drift between product and pickup rows still works.
     /// </summary>
     private static HashSet<string> ResolveSellerPickupNicknames(
         IEnumerable<string> sellerOwnedProductIds,
@@ -460,7 +525,7 @@ public class SellerOrdersController(
         IEnumerable<string> registeredPickups,
         string defaultPickup)
     {
-        var set = new HashSet<string>(StringComparer.Ordinal);
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var nick in registeredPickups)
         {
             if (!string.IsNullOrWhiteSpace(nick))
@@ -593,4 +658,7 @@ public record SellerOrdersListResult(
     int Page,
     int PageSize,
     int TotalCount,
-    int TotalPages);
+    int TotalPages,
+    int OwnedProductCount = 0,
+    int RegisteredPickupCount = 0,
+    int VisibleProductCount = 0);
