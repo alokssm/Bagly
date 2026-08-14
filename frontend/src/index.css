@@ -3836,6 +3836,24 @@ a.order-item-row__name:hover {
   flex-wrap: wrap;
 }
 
+.admin-shipping-logs-search {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  max-width: 28rem;
+}
+
+.admin-shipping-logs-search input {
+  flex: 1 1 12rem;
+  min-height: 36px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  font: inherit;
+}
+
 .admin-shipping-log-request {
   max-width: 28rem;
 }

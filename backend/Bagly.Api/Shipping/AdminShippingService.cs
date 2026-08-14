@@ -28,6 +28,7 @@ public interface IAdminShippingService
     Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
         Guid? orderId,
         Guid? shipmentId,
+        string? orderNumber = null,
         int take = 50,
         CancellationToken cancellationToken = default);
 }
@@ -167,12 +168,29 @@ public sealed class AdminShippingService(
             awbCount);
     }
 
-    public Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
+    public async Task<IReadOnlyList<ShiprocketApiLogDto>> ListApiLogsAsync(
         Guid? orderId,
         Guid? shipmentId,
+        string? orderNumber = null,
         int take = 50,
-        CancellationToken cancellationToken = default) =>
-        apiLogs.ListAsync(orderId, shipmentId, take, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        if (orderId is null && !string.IsNullOrWhiteSpace(orderNumber))
+        {
+            var number = orderNumber.Trim();
+            orderId = await db.Orders.AsNoTracking()
+                .Where(o => o.OrderNumber == number)
+                .Select(o => (Guid?)o.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (orderId is null)
+            {
+                return Array.Empty<ShiprocketApiLogDto>();
+            }
+        }
+
+        return await apiLogs.ListAsync(orderId, shipmentId, take, cancellationToken);
+    }
 
     public async Task<ReadyToShipResponse> ReadyToShipAsync(
         Guid shipmentId,

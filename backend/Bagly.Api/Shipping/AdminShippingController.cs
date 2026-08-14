@@ -122,15 +122,19 @@ public class AdminShippingController(IAdminShippingService shipping, BaglyDbCont
         }
     }
 
-    /// <summary>Recent Shiprocket outbound API request logs (request body / query redacted of secrets).</summary>
+    /// <summary>
+    /// Shiprocket outbound API request logs (request body / query redacted of secrets).
+    /// Filter by orderId (Guid), orderNumber (e.g. BG-...), and/or shipmentId.
+    /// </summary>
     [HttpGet("logs")]
     public async Task<ActionResult<IReadOnlyList<ShiprocketApiLogDto>>> ListLogs(
         [FromQuery] Guid? orderId = null,
+        [FromQuery] string? orderNumber = null,
         [FromQuery] Guid? shipmentId = null,
         [FromQuery] int take = 50,
         CancellationToken cancellationToken = default)
     {
-        var logs = await shipping.ListApiLogsAsync(orderId, shipmentId, take, cancellationToken);
+        var logs = await shipping.ListApiLogsAsync(orderId, shipmentId, orderNumber, take, cancellationToken);
         return Ok(logs);
     }
 }

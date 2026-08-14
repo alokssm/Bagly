@@ -42,6 +42,22 @@ function courierRateBreakdown(courier) {
   return parts.length ? parts.join(' · ') : null
 }
 
+const ORDER_GUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function logsQueryParams(orderQuery, shipmentId) {
+  const params = { take: 40 }
+  if (shipmentId) {
+    params.shipmentId = shipmentId
+    return params
+  }
+  const q = (orderQuery || '').trim()
+  if (!q) return null
+  if (ORDER_GUID_RE.test(q)) params.orderId = q
+  else params.orderNumber = q
+  return params
+}
+
 export default function AdminShipping() {
   const [tab, setTab] = useState('new')
   const [result, setResult] = useState({
@@ -63,6 +79,9 @@ export default function AdminShipping() {
   const [logsError, setLogsError] = useState('')
   const [expandedLogId, setExpandedLogId] = useState(null)
   const [logsFilterShipmentId, setLogsFilterShipmentId] = useState('')
+  const [logsSearchInput, setLogsSearchInput] = useState('')
+  const [logsOrderQuery, setLogsOrderQuery] = useState('')
+  const [logsActive, setLogsActive] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -85,12 +104,19 @@ export default function AdminShipping() {
     }
   }, [tab])
 
-  const loadLogs = useCallback(async (shipmentId) => {
+  const loadLogs = useCallback(async (orderQuery, shipmentId) => {
+    const params = logsQueryParams(orderQuery, shipmentId)
+    if (!params) {
+      setApiLogs([])
+      setLogsError('')
+      setLogsActive(false)
+      return
+    }
+
+    setLogsActive(true)
     setLogsLoading(true)
     setLogsError('')
     try {
-      const params = { take: 40 }
-      if (shipmentId) params.shipmentId = shipmentId
       const data = await api.adminGetShippingApiLogs(params)
       setApiLogs(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -106,8 +132,41 @@ export default function AdminShipping() {
   }, [load])
 
   useEffect(() => {
-    loadLogs(logsFilterShipmentId)
-  }, [loadLogs, logsFilterShipmentId])
+    if (logsFilterShipmentId || logsOrderQuery) {
+      loadLogs(logsOrderQuery, logsFilterShipmentId)
+    } else {
+      setApiLogs([])
+      setLogsActive(false)
+      setLogsError('')
+    }
+  }, [loadLogs, logsFilterShipmentId, logsOrderQuery])
+
+  const searchLogs = (event) => {
+    event?.preventDefault?.()
+    const q = logsSearchInput.trim()
+    if (!q) {
+      setLogsOrderQuery('')
+      setLogsFilterShipmentId('')
+      setExpandedLogId(null)
+      setApiLogs([])
+      setLogsActive(false)
+      setLogsError('')
+      return
+    }
+    setLogsFilterShipmentId('')
+    setExpandedLogId(null)
+    setLogsOrderQuery(q)
+  }
+
+  const clearLogsSearch = () => {
+    setLogsSearchInput('')
+    setLogsOrderQuery('')
+    setLogsFilterShipmentId('')
+    setExpandedLogId(null)
+    setApiLogs([])
+    setLogsActive(false)
+    setLogsError('')
+  }
 
   const readyToShip = async (shipment) => {
     setBusyShipmentId(shipment.id)
@@ -132,7 +191,9 @@ export default function AdminShipping() {
         },
       }))
       await load()
-      await loadLogs(logsFilterShipmentId)
+      if (logsFilterShipmentId || logsOrderQuery) {
+        await loadLogs(logsOrderQuery, logsFilterShipmentId)
+      }
     } catch (err) {
       setActionError(err.message || 'Ready to Ship failed.')
     } finally {
@@ -154,7 +215,9 @@ export default function AdminShipping() {
         return next
       })
       await load()
-      await loadLogs(logsFilterShipmentId)
+      if (logsFilterShipmentId || logsOrderQuery) {
+        await loadLogs(logsOrderQuery, logsFilterShipmentId)
+      }
     } catch (err) {
       setActionError(err.message || 'Assign AWB failed.')
     } finally {
@@ -301,6 +364,8 @@ export default function AdminShipping() {
                         type="button"
                         className="btn btn-secondary btn-sm"
                         onClick={() => {
+                          setLogsSearchInput(order.orderNumber || order.id || '')
+                          setLogsOrderQuery('')
                           setLogsFilterShipmentId(shipment.id)
                           setExpandedLogId(null)
                         }}
@@ -388,39 +453,50 @@ export default function AdminShipping() {
           <div>
             <h2>Shiprocket API logs</h2>
             <p className="admin-muted">
-              Exact request bodies / query strings sent to Shiprocket (tokens and passwords redacted).
-              {logsFilterShipmentId ? ' Filtered to one shipment.' : ' Showing recent across all shipments.'}
+              Exact request bodies / query strings sent to Shiprocket (tokens and passwords redacted). Search by
+              Bagly order number or order Guid.
+              {logsFilterShipmentId ? ' Showing one shipment.' : null}
             </p>
           </div>
           <div className="admin-shipping-logs-actions">
-            {logsFilterShipmentId ? (
+            {logsActive ? (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={clearLogsSearch}>
+                Clear search
+              </button>
+            ) : null}
+            {logsActive ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setLogsFilterShipmentId('')
-                  setExpandedLogId(null)
-                }}
+                disabled={logsLoading}
+                onClick={() => loadLogs(logsOrderQuery, logsFilterShipmentId)}
               >
-                Clear filter
+                {logsLoading ? 'Loading…' : 'Refresh logs'}
               </button>
             ) : null}
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={logsLoading}
-              onClick={() => loadLogs(logsFilterShipmentId)}
-            >
-              {logsLoading ? 'Loading…' : 'Refresh logs'}
-            </button>
           </div>
         </div>
 
+        <form className="admin-shipping-logs-search" onSubmit={searchLogs}>
+          <input
+            type="search"
+            value={logsSearchInput}
+            onChange={(e) => setLogsSearchInput(e.target.value)}
+            placeholder="Search by order ID / order number"
+            aria-label="Search Shiprocket API logs by order ID or order number"
+          />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={logsLoading}>
+            Search
+          </button>
+        </form>
+
         {logsError ? <p className="admin-error">{logsError}</p> : null}
-        {logsLoading && !apiLogs.length ? (
+        {!logsActive ? (
+          <p className="admin-muted">Enter order ID to view logs</p>
+        ) : logsLoading && !apiLogs.length ? (
           <p className="admin-muted">Loading API logs…</p>
         ) : !apiLogs.length ? (
-          <p className="admin-muted">No Shiprocket API logs yet. Run Ready to Ship or Assign AWB to create one.</p>
+          <p className="admin-muted">No Shiprocket API logs found for this order.</p>
         ) : (
           <div className="admin-table-wrap admin-shipping-table-wrap">
             <table className="admin-table admin-shipping-table admin-shipping-logs-table">
