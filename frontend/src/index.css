@@ -1959,14 +1959,14 @@ a.order-item-row__name:hover {
 
 .order-track-timeline__truck {
   position: absolute;
-  top: -1.35rem;
+  top: -1.9rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.55rem;
-  height: 1rem;
+  width: 2.15rem;
+  height: 1.4rem;
   color: var(--forest);
   z-index: 2;
   pointer-events: none;
@@ -1975,7 +1975,7 @@ a.order-item-row__name:hover {
 
 .order-track-timeline__truck-svg {
   display: block;
-  width: 1.4rem;
+  width: 2rem;
   height: auto;
   color: var(--forest);
 }

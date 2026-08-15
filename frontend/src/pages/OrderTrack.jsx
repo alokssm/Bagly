@@ -50,8 +50,8 @@ function CarrierTruckIcon() {
     <svg
       className="order-track-timeline__truck-svg"
       viewBox="0 0 28 16"
-      width="22"
-      height="13"
+      width="31"
+      height="18"
       aria-hidden="true"
       focusable="false"
     >
