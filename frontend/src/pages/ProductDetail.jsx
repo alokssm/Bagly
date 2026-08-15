@@ -258,7 +258,7 @@ export default function ProductDetail() {
                     <circle cx="12" cy="12" r="10" />
                     <path d="M8 12.5l2.5 2.5L16 9.5" />
                   </svg>
-                  Added to cart
+                  <span>Added to cart</span>
                 </p>
               ) : null}
               <div className="pdp-cart-buttons">

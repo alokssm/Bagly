@@ -63,6 +63,15 @@ export default function ProductCard({ product }) {
       </div>
 
       <div className="product-actions">
+        {inCart && !soldOut ? (
+          <p className="added-to-cart product-card-in-cart" role="status">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 12.5l2.5 2.5L16 9.5" />
+            </svg>
+            <span>Added to cart</span>
+          </p>
+        ) : null}
         {soldOut ? (
           <button type="button" className="btn btn-primary btn-block" disabled>
             Sold out
@@ -78,16 +87,6 @@ export default function ProductCard({ product }) {
           </button>
         )}
       </div>
-
-      {inCart && !soldOut ? (
-        <p className="added-to-cart product-card-in-cart" role="status">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M8 12.5l2.5 2.5L16 9.5" />
-          </svg>
-          Added to cart
-        </p>
-      ) : null}
 
       {error ? <p className="product-card-error">{error}</p> : null}
     </article>
