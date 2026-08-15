@@ -275,21 +275,21 @@ export default function ProductDetail() {
               ) : null}
               <div className="pdp-cart-buttons">
                 {soldOut ? (
-                  <button type="button" className="btn btn-primary" disabled>
+                  <button type="button" className="btn btn-primary btn-add-cart" disabled>
                     Sold out
                   </button>
                 ) : (
                   <button
                     ref={addBtnRef}
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-primary btn-add-cart"
                     onClick={handleAdd}
                     disabled={busy}
                   >
                     {busy ? 'Adding…' : 'Add to cart'}
                   </button>
                 )}
-                <Link to="/cart" className="btn btn-secondary">
+                <Link to="/cart" className="btn btn-secondary btn-add-cart">
                   View cart
                 </Link>
               </div>

@@ -73,13 +73,13 @@ export default function ProductCard({ product }) {
           </p>
         ) : null}
         {soldOut ? (
-          <button type="button" className="btn btn-primary btn-block" disabled>
+          <button type="button" className="btn btn-primary btn-add-cart btn-block" disabled>
             Sold out
           </button>
         ) : (
           <button
             type="button"
-            className="btn btn-primary btn-block"
+            className="btn btn-primary btn-add-cart btn-block"
             onClick={handleAdd}
             disabled={adding}
           >
