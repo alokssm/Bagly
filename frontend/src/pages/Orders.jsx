@@ -22,9 +22,17 @@ function formatDate(value) {
   })
 }
 
+function orderCanTrack(order) {
+  if (order?.canTrack) return true
+  const shipments = order?.shipments
+  if (!Array.isArray(shipments)) return false
+  return shipments.some((s) => s.canTrack)
+}
+
 function OrderCard({ order }) {
   const [open, setOpen] = useState(false)
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
+  const canTrack = orderCanTrack(order)
 
   return (
     <div className="order-card">
@@ -114,8 +122,35 @@ function OrderCard({ order }) {
               <span>{formatPrice(order.total)}</span>
             </div>
           </div>
+
+          <div className="order-card__actions">
+            {canTrack ? (
+              <Link
+                to={`/orders/${encodeURIComponent(order.orderNumber)}/track`}
+                className="order-card__track-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Track status
+              </Link>
+            ) : (
+              <span className="order-card__track-unavailable" title="Available after AWB or pickup">
+                Tracking unavailable
+              </span>
+            )}
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="order-card__rail">
+          {canTrack ? (
+            <Link
+              to={`/orders/${encodeURIComponent(order.orderNumber)}/track`}
+              className="order-card__track-link"
+            >
+              Track status
+            </Link>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }

@@ -16,6 +16,7 @@ import ProductDetail from './pages/ProductDetail'
 import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import Orders from './pages/Orders'
+import OrderTrack from './pages/OrderTrack'
 import Profile from './pages/Profile'
 import Addresses from './pages/Addresses'
 import About from './pages/About'
@@ -79,6 +80,14 @@ export default function App() {
                     element={
                       <CustomerRoute>
                         <Orders />
+                      </CustomerRoute>
+                    }
+                  />
+                  <Route
+                    path="/orders/:orderNumber/track"
+                    element={
+                      <CustomerRoute>
+                        <OrderTrack />
                       </CustomerRoute>
                     }
                   />

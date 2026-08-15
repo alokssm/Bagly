@@ -1847,6 +1847,212 @@ a.order-item-row__name:hover {
   color: var(--ink);
 }
 
+.order-card__rail {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 1.25rem 0.95rem;
+}
+
+.order-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.order-card__track-link {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.order-card__track-link:hover {
+  color: var(--forest-deep);
+}
+
+.order-card__track-unavailable {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+/* Order tracking */
+.order-track {
+  padding-bottom: 4rem;
+  max-width: 720px;
+}
+
+.order-track-back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.order-track-back:hover {
+  color: var(--forest);
+}
+
+.order-track-lead {
+  margin-top: 0.45rem;
+  color: var(--ink-soft);
+  max-width: 36rem;
+}
+
+.order-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.order-track-shipment {
+  padding: 1.2rem 1.25rem 1.35rem;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--line);
+}
+
+.order-track-shipment__head {
+  margin-bottom: 1.1rem;
+}
+
+.order-track-shipment__head h2 {
+  font-size: 1.35rem;
+  color: var(--forest);
+  margin-bottom: 0.45rem;
+}
+
+.order-track-shipment__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.85rem;
+  align-items: center;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.order-track-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.order-track-timeline__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 0.75rem;
+  padding: 0 0 1rem;
+  color: var(--ink-soft);
+}
+
+.order-track-timeline__step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 14px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.order-track-timeline__dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 0.2rem;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  z-index: 1;
+}
+
+.order-track-timeline__step.is-done {
+  color: var(--ink);
+}
+
+.order-track-timeline__step.is-done .order-track-timeline__dot {
+  border-color: var(--forest);
+  background: var(--forest);
+}
+
+.order-track-timeline__step.is-current .order-track-timeline__dot {
+  border-color: var(--brass-deep);
+  background: var(--brass);
+  box-shadow: 0 0 0 3px rgba(176, 138, 85, 0.22);
+}
+
+.order-track-timeline__step.is-current .order-track-timeline__label {
+  font-weight: 600;
+  color: var(--forest-deep);
+}
+
+.order-track-timeline__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.order-track-timeline__label {
+  font-size: 0.95rem;
+}
+
+.order-track-timeline__when,
+.order-track-muted {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.order-track-history {
+  margin-top: 0.35rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.order-track-history h3 {
+  font-size: 1rem;
+  color: var(--forest);
+  margin-bottom: 0.55rem;
+}
+
+.order-track-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.order-track-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.88rem;
+}
+
+.order-track-external {
+  display: inline-flex;
+  margin-top: 1rem;
+}
+
+.order-track-empty {
+  padding: 1.5rem 1.25rem;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.order-track-empty p {
+  color: var(--ink-soft);
+}
+
 @media (max-width: 720px) {
   .order-card__summary {
     grid-template-columns: 1fr;
@@ -1860,6 +2066,10 @@ a.order-item-row__name:hover {
   .order-card__total {
     justify-content: space-between;
     justify-self: stretch;
+  }
+
+  .order-card__rail {
+    justify-content: flex-start;
   }
 }
 

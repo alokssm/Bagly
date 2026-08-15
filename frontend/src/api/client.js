@@ -402,6 +402,9 @@ export const api = {
   getMyOrder: (orderNumber) =>
     request(`/account/orders/${encodeURIComponent(orderNumber)}`, { auth: 'customer' }),
 
+  getMyOrderTrack: (orderNumber) =>
+    request(`/account/orders/${encodeURIComponent(orderNumber)}/track`, { auth: 'customer' }),
+
   getShippingAddresses: () => request('/account/addresses', { auth: 'customer' }),
 
   createShippingAddress: (payload) =>

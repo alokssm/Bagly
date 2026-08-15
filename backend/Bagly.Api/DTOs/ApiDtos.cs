@@ -377,6 +377,27 @@ public record CustomerOrderItemDto(
     string? Image
 );
 
+/// <summary>Append-only courier status event for storefront tracking (no admin/raw fields).</summary>
+public record CustomerShipmentTrackingEventDto(
+    string Status,
+    DateTime ChangedAtUtc
+);
+
+/// <summary>Customer-visible shipment row — AWB / status / optional label; no admin workflow fields.</summary>
+public record CustomerOrderShipmentDto(
+    Guid Id,
+    string? AwbCode,
+    string? TrackingStatus,
+    DateTime? TrackingStatusUpdatedAt,
+    string? CourierName,
+    string? LabelUrl,
+    /// <summary>True when AWB exists or pickup/tracking has started.</summary>
+    bool CanTrack,
+    /// <summary>Shiprocket public tracking URL when AWB is present; otherwise null.</summary>
+    string? PublicTrackingUrl,
+    IReadOnlyList<CustomerShipmentTrackingEventDto> StatusHistory
+);
+
 public record CustomerOrderDto(
     Guid Id,
     string OrderNumber,
@@ -387,7 +408,20 @@ public record CustomerOrderDto(
     decimal Shipping,
     decimal Total,
     DateTime CreatedAt,
-    IReadOnlyList<CustomerOrderItemDto> Items
+    IReadOnlyList<CustomerOrderItemDto> Items,
+    /// <summary>True when at least one shipment has AWB or tracking/pickup started.</summary>
+    bool CanTrack = false,
+    IReadOnlyList<CustomerOrderShipmentDto>? Shipments = null
+);
+
+/// <summary>Dedicated track payload for <c>GET /api/account/orders/{orderNumber}/track</c>.</summary>
+public record CustomerOrderTrackDto(
+    Guid OrderId,
+    string OrderNumber,
+    string Status,
+    DateTime CreatedAt,
+    bool CanTrack,
+    IReadOnlyList<CustomerOrderShipmentDto> Shipments
 );
 
 /// <summary>Lean row shape for the admin orders table — avoids shipping full line-item detail for every row.</summary>
