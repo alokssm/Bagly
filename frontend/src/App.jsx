@@ -111,57 +111,59 @@ export default function App() {
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
-                  <Route path="/business" element={<Business />} />
-                  <Route path="/business/login" element={<BusinessLogin />} />
-                  <Route
-                    path="/seller"
-                    element={
-                      <SellerRoute>
-                        <SellerDashboard />
-                      </SellerRoute>
-                    }
-                  />
-                  <Route
-                    path="/seller/products"
-                    element={
-                      <SellerRoute>
-                        <SellerProducts />
-                      </SellerRoute>
-                    }
-                  />
-                  <Route
-                    path="/seller/products/new"
-                    element={
-                      <SellerRoute>
-                        <SellerProductForm />
-                      </SellerRoute>
-                    }
-                  />
-                  <Route
-                    path="/seller/products/:id/edit"
-                    element={
-                      <SellerRoute>
-                        <SellerProductForm />
-                      </SellerRoute>
-                    }
-                  />
-                  <Route
-                    path="/seller/pickups"
-                    element={
-                      <SellerRoute>
-                        <SellerPickups />
-                      </SellerRoute>
-                    }
-                  />
-                  <Route
-                    path="/seller/orders"
-                    element={
-                      <SellerRoute>
-                        <SellerOrders />
-                      </SellerRoute>
-                    }
-                  />
                 </Route>
+
+                {/* Seller portal — independent of storefront shell (no cart/shopper nav) */}
+                <Route path="/business" element={<Business />} />
+                <Route path="/business/login" element={<BusinessLogin />} />
+                <Route
+                  path="/seller"
+                  element={
+                    <SellerRoute>
+                      <SellerDashboard />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="/seller/products"
+                  element={
+                    <SellerRoute>
+                      <SellerProducts />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="/seller/products/new"
+                  element={
+                    <SellerRoute>
+                      <SellerProductForm />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="/seller/products/:id/edit"
+                  element={
+                    <SellerRoute>
+                      <SellerProductForm />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="/seller/pickups"
+                  element={
+                    <SellerRoute>
+                      <SellerPickups />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="/seller/orders"
+                  element={
+                    <SellerRoute>
+                      <SellerOrders />
+                    </SellerRoute>
+                  }
+                />
 
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route

@@ -27,7 +27,7 @@ public class SellerAuthController(
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     [HttpPost("register")]
-    public async Task<ActionResult<SellerRegisterResponse>> Register(
+    public async Task<ActionResult<SellerAuthResponse>> Register(
         [FromBody] SellerRegisterRequest request,
         CancellationToken cancellationToken)
     {
@@ -71,6 +71,7 @@ public class SellerAuthController(
             Status = "Pending",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
         };
 
         db.SellerUsers.Add(seller);
@@ -87,13 +88,8 @@ public class SellerAuthController(
             requestPath: HttpContext.GetRequestPath(),
             cancellationToken: cancellationToken);
 
-        return Ok(new SellerRegisterResponse(
-            seller.Id,
-            seller.Email,
-            seller.Name,
-            seller.BusinessName,
-            seller.Status,
-            "Your seller account has been created. Sign in to complete your business details for approval."));
+        // Same pattern as customer register: return a session so the client can enter the seller hub.
+        return Ok(BuildAuthResponse(seller));
     }
 
     [HttpPost("login")]

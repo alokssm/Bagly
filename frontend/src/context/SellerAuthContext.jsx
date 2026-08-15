@@ -58,6 +58,14 @@ export function SellerAuthProvider({ children }) {
     return result
   }, [])
 
+  const register = useCallback(
+    async (name, businessName, email, phone, password, confirmPassword) =>
+      applySession(
+        await api.sellerRegister(name, businessName, email, phone, password, confirmPassword),
+      ),
+    [applySession],
+  )
+
   const login = useCallback(
     async (email, password) => applySession(await api.sellerLogin(email, password)),
     [applySession],
@@ -96,12 +104,13 @@ export function SellerAuthProvider({ children }) {
       token,
       isAuthenticated: Boolean(user),
       loading,
+      register,
       login,
       logout,
       refreshUser,
       updateProfile,
     }),
-    [user, token, loading, login, logout, refreshUser, updateProfile],
+    [user, token, loading, register, login, logout, refreshUser, updateProfile],
   )
 
   return <SellerAuthContext.Provider value={value}>{children}</SellerAuthContext.Provider>

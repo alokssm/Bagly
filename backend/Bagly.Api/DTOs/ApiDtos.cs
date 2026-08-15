@@ -55,14 +55,6 @@ public record SellerRegisterRequest(
     string Password,
     string ConfirmPassword);
 
-public record SellerRegisterResponse(
-    Guid Id,
-    string Email,
-    string Name,
-    string BusinessName,
-    string Status,
-    string Message);
-
 public record SellerLoginRequest(string Email, string Password);
 
 public record SellerAuthResponse(

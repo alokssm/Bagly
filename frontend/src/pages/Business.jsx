@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api } from '../api/client'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useSellerAuth } from '../context/SellerAuthContext'
 
 export default function Business() {
+  const { register, isAuthenticated, loading } = useSellerAuth()
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [email, setEmail] = useState('')
@@ -10,15 +12,15 @@ export default function Business() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [registeredEmail, setRegisteredEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  if (!loading && isAuthenticated) {
+    return <Navigate to="/seller" replace />
+  }
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    setSuccess('')
-    setRegisteredEmail('')
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
@@ -27,26 +29,15 @@ export default function Business() {
 
     setSubmitting(true)
     try {
-      const trimmedEmail = email.trim()
-      const result = await api.sellerRegister(
+      await register(
         name.trim(),
         businessName.trim(),
-        trimmedEmail,
+        email.trim(),
         phone.trim() || null,
         password,
         confirmPassword,
       )
-      setSuccess(
-        result?.message ||
-          'Your seller account has been created. You can sign in now.',
-      )
-      setRegisteredEmail(trimmedEmail)
-      setName('')
-      setBusinessName('')
-      setEmail('')
-      setPhone('')
-      setPassword('')
-      setConfirmPassword('')
+      navigate('/seller', { replace: true })
     } catch (err) {
       setError(err.message || 'Registration failed.')
     } finally {
@@ -60,26 +51,11 @@ export default function Business() {
         <p className="eyebrow">Sell on Bagly</p>
         <h1>Create a business account</h1>
         <p className="auth-copy">
-          Join Bagly as a seller. After you register, sign in to complete your business
-          details — product listing opens once an admin approves your account.
+          Join Bagly as a seller. After you register, you will complete your business details in the
+          seller hub — product listing opens once an admin approves your account.
         </p>
 
         {error ? <p className="admin-error">{error}</p> : null}
-        {success ? (
-          <div className="auth-success-block">
-            <p className="auth-success">{success}</p>
-            <Link
-              to="/business/login"
-              state={{
-                email: registeredEmail,
-                message: 'Account created — sign in with your email and password.',
-              }}
-              className="btn btn-brass btn-block"
-            >
-              Go to seller login
-            </Link>
-          </div>
-        ) : null}
 
         <div className="form-field">
           <label htmlFor="seller-name">Your name</label>
