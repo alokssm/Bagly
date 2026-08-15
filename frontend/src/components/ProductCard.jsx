@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatPrice } from '../utils/format'
 import { useCart } from '../context/CartContext'
@@ -7,7 +7,6 @@ import { CompactRating } from './ProductReviews'
 
 export default function ProductCard({ product }) {
   const { addItem, items } = useCart()
-  const addBtnRef = useRef(null)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
 
@@ -18,13 +17,16 @@ export default function ProductCard({ product }) {
     [items, product.id],
   )
 
-  const handleAdd = async () => {
+  const handleAdd = async (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const btn = event.currentTarget
     setAdding(true)
     setError('')
     try {
-      const sourceRect = addBtnRef.current?.getBoundingClientRect() ?? null
+      const sourceRect = btn.getBoundingClientRect()
       await addItem(product, { color: product.colors?.[0], quantity: 1, sourceRect })
-      pulseAddButton(addBtnRef.current)
+      pulseAddButton(btn)
     } catch (err) {
       setError(err.message || 'Unable to add item.')
     } finally {
@@ -34,28 +36,40 @@ export default function ProductCard({ product }) {
 
   return (
     <article className={`product-card ${soldOut ? 'is-sold' : ''}`}>
-      <Link to={productHref} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
-        <img src={product.image} alt={product.name} loading="lazy" />
-        {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
-        {soldOut ? (
-          <span className="sold-stamp" aria-label="Sold out">
-            Sold
-          </span>
+      <div className={`product-media-wrap ${soldOut ? 'is-sold' : ''}`}>
+        <Link to={productHref} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
+          <img src={product.image} alt={product.name} loading="lazy" />
+          {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
+          {soldOut ? (
+            <span className="sold-stamp" aria-label="Sold out">
+              Sold
+            </span>
+          ) : null}
+        </Link>
+        {!soldOut ? (
+          <button
+            type="button"
+            className="product-quick-add"
+            onClick={handleAdd}
+            disabled={adding}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </button>
         ) : null}
-      </Link>
+      </div>
 
       <div className="product-meta">
         <span className="product-category">{product.category}</span>
         <Link to={productHref}>
           <h3>{product.name}</h3>
         </Link>
-        <CompactRating rating={product.rating} reviews={product.reviews} />
         <div className="product-price-row">
           <span className="price">{formatPrice(product.price)}</span>
           {product.compareAt ? (
             <span className="price-compare">{formatPrice(product.compareAt)}</span>
           ) : null}
         </div>
+        <CompactRating rating={product.rating} reviews={product.reviews} />
       </div>
 
       {inCart && !soldOut ? (
@@ -67,26 +81,26 @@ export default function ProductCard({ product }) {
           Added to cart
         </p>
       ) : null}
-      <div className="product-actions">
-        <Link to={productHref} className="btn btn-secondary">
-          View
-        </Link>
-        {soldOut ? (
-          <button type="button" className="btn btn-primary" disabled>
+
+      {soldOut ? (
+        <div className="product-actions">
+          <button type="button" className="btn btn-primary btn-block" disabled>
             Sold out
           </button>
-        ) : (
+        </div>
+      ) : (
+        <div className="product-actions product-actions--touch">
           <button
-            ref={addBtnRef}
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-block"
             onClick={handleAdd}
             disabled={adding}
           >
             {adding ? 'Adding…' : 'Add to cart'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
       {error ? <p className="product-card-error">{error}</p> : null}
     </article>
   )

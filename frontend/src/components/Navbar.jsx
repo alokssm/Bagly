@@ -123,12 +123,16 @@ export default function Navbar() {
             </Link>
             <button
               type="button"
-              className="menu-toggle"
-              aria-label="Toggle menu"
+              className={`menu-toggle${open ? ' is-open' : ''}`}
+              aria-label={open ? 'Close menu' : 'Open menu'}
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
             >
-              {open ? '✕' : '☰'}
+              <span className="menu-toggle-bars" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
             </button>
           </div>
         </div>

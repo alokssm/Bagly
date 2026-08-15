@@ -122,8 +122,11 @@ export default function Shop() {
       <div className="container">
         <div className="page-hero">
           <span className="eyebrow">Shop</span>
-          <h1>The Bagly collection</h1>
-          <p>Filter by style and find the bag that fits your day — from soft totes to structured travel.</p>
+          <h1>School bags for every day</h1>
+          <p>
+            Durable backpacks for Boys, Girls, and Kids — filter by collection and find the pack that fits the
+            school run.
+          </p>
           <ProductSearchBar
             id="shop-product-search"
             value={searchInput}

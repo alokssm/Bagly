@@ -9,23 +9,26 @@ export default function Footer() {
             <div className="footer-brand">
               Bag<span>ly</span>
             </div>
-            <p>Curated bags for everyday carry, travel, and work — designed to last seasons, not weeks.</p>
+            <p>
+              School bags built for Boys, Girls, and Kids — comfortable, durable packs for the daily walk to
+              class and everything after.
+            </p>
           </div>
 
           <div>
             <h4>Shop</h4>
             <ul>
               <li>
-                <Link to="/shop">All bags</Link>
+                <Link to="/shop?category=school-bags">All school bags</Link>
               </li>
               <li>
-                <Link to="/shop?category=tote">Totes</Link>
+                <Link to="/shop?category=school-bags&subCategory=boys">Boys</Link>
               </li>
               <li>
-                <Link to="/shop?category=backpack">Backpacks</Link>
+                <Link to="/shop?category=school-bags&subCategory=girls">Girls</Link>
               </li>
               <li>
-                <Link to="/shop?category=travel">Travel</Link>
+                <Link to="/shop?category=school-bags&subCategory=kids">Kids</Link>
               </li>
             </ul>
           </div>
