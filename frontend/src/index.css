@@ -1935,7 +1935,7 @@ a.order-item-row__name:hover {
 .order-track-timeline {
   list-style: none;
   margin: 0;
-  padding: 0.35rem 0.15rem 0.15rem;
+  padding: 1.55rem 0.15rem 0.15rem;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -1955,6 +1955,53 @@ a.order-item-row__name:hover {
   padding: 0 0.4rem 0.25rem;
   text-align: center;
   color: var(--ink-soft);
+}
+
+.order-track-timeline__truck {
+  position: absolute;
+  top: -1.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1rem;
+  color: var(--forest);
+  z-index: 2;
+  pointer-events: none;
+  animation: order-track-truck-nudge 2.4s ease-in-out infinite;
+}
+
+.order-track-timeline__truck-svg {
+  display: block;
+  width: 1.4rem;
+  height: auto;
+  color: var(--forest);
+}
+
+.order-track-timeline__step.is-current .order-track-timeline__truck {
+  color: var(--brass-deep);
+}
+
+.order-track-timeline__step.is-current .order-track-timeline__truck-svg {
+  color: var(--brass-deep);
+}
+
+@keyframes order-track-truck-nudge {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  50% {
+    transform: translateX(calc(-50% + 3px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-track-timeline__truck {
+    animation: none;
+  }
 }
 
 .order-track-timeline__step:not(:last-child)::before {
