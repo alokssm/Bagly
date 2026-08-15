@@ -133,7 +133,7 @@ function OrderCard({ order }) {
                 Track status
               </Link>
             ) : (
-              <span className="order-card__track-unavailable" title="Available after AWB or pickup">
+              <span className="order-card__track-unavailable" title="Available after shipping starts">
                 Tracking unavailable
               </span>
             )}

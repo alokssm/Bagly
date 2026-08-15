@@ -66,8 +66,6 @@ function ShipmentTrackCard({ shipment, index, total }) {
       <div className="order-track-shipment__head">
         <h2>{title}</h2>
         <div className="order-track-shipment__meta">
-          {shipment.awbCode ? <span>AWB {shipment.awbCode}</span> : null}
-          {shipment.courierName ? <span>{shipment.courierName}</span> : null}
           {shipment.trackingStatus ? (
             <span className="order-status order-status--shipped">
               {formatTrackingStatus(shipment.trackingStatus)}
@@ -99,20 +97,6 @@ function ShipmentTrackCard({ shipment, index, total }) {
           )
         })}
       </ol>
-
-      {history.length > 0 ? (
-        <div className="order-track-history">
-          <h3>Updates</h3>
-          <ul>
-            {[...history].reverse().map((event, idx) => (
-              <li key={`${event.status}-${event.changedAtUtc}-${idx}`}>
-                <span>{formatTrackingStatus(event.status)}</span>
-                <span className="order-track-muted">{formatWhen(event.changedAtUtc)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -175,8 +159,8 @@ export default function OrderTrack() {
           <h1>{data?.orderNumber || orderNumber}</h1>
           <p className="order-track-lead">
             {data?.canTrack
-              ? 'Live courier status for this order.'
-              : 'Tracking will appear once pickup or an AWB is available.'}
+              ? 'Live shipping status for this order.'
+              : 'Tracking will appear once shipping has started.'}
           </p>
         </div>
 
