@@ -11,9 +11,8 @@ const CART_BUMP_MS = 400
 
 const links = [
   { to: '/', label: 'Home', end: true },
-  { to: '/shop', label: 'Shop' },
-  { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/shop?category=school-bags', label: 'School Bags', category: 'school-bags' },
+  { to: '/shop?category=stationery', label: 'Stationery', category: 'stationery' },
 ]
 
 export default function Navbar() {
@@ -108,6 +107,14 @@ export default function Navbar() {
   }
 
   const firstName = user?.name?.split(' ')[0] || 'there'
+  const activeCategory = params.get('category')
+
+  const linkClassName = (link) => ({ isActive }) => {
+    if (link.category) {
+      return location.pathname === '/shop' && activeCategory === link.category ? 'active' : undefined
+    }
+    return isActive ? 'active' : undefined
+  }
 
   return (
     <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
@@ -130,7 +137,7 @@ export default function Navbar() {
 
           <nav className="nav-links" aria-label="Primary">
             {links.map((link) => (
-              <NavLink key={link.to} to={link.to} end={link.end}>
+              <NavLink key={link.to} to={link.to} end={link.end} className={linkClassName(link)}>
                 {link.label}
               </NavLink>
             ))}
@@ -204,7 +211,13 @@ export default function Navbar() {
 
         <nav className={`mobile-nav ${open ? 'open' : ''}`} aria-label="Mobile">
           {links.map((link) => (
-            <NavLink key={link.to} to={link.to} end={link.end} onClick={() => setOpen(false)}>
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.end}
+              className={linkClassName(link)}
+              onClick={() => setOpen(false)}
+            >
               {link.label}
             </NavLink>
           ))}
