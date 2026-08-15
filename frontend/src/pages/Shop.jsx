@@ -118,7 +118,7 @@ export default function Shop() {
   }
 
   return (
-    <section className="section" style={{ paddingTop: 0 }}>
+    <section className="section shop-page">
       <div className="container">
         <div className="page-hero">
           <span className="eyebrow">Shop</span>

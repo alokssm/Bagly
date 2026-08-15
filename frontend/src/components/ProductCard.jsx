@@ -36,40 +36,47 @@ export default function ProductCard({ product }) {
 
   return (
     <article className={`product-card ${soldOut ? 'is-sold' : ''}`}>
-      <div className={`product-media-wrap ${soldOut ? 'is-sold' : ''}`}>
-        <Link to={productHref} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
-          <img src={product.image} alt={product.name} loading="lazy" />
-          {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
-          {soldOut ? (
-            <span className="sold-stamp" aria-label="Sold out">
-              Sold
-            </span>
-          ) : null}
-        </Link>
-        {!soldOut ? (
-          <button
-            type="button"
-            className="product-quick-add"
-            onClick={handleAdd}
-            disabled={adding}
-          >
-            {adding ? 'Adding…' : 'Add to cart'}
-          </button>
+      <Link to={productHref} className={`product-media ${soldOut ? 'is-sold' : ''}`}>
+        <img src={product.image} alt={product.name} loading="lazy" />
+        {product.badge && !soldOut ? <span className="product-badge">{product.badge}</span> : null}
+        {soldOut ? (
+          <span className="sold-stamp" aria-label="Sold out">
+            Sold
+          </span>
         ) : null}
-      </div>
+      </Link>
 
       <div className="product-meta">
         <span className="product-category">{product.category}</span>
         <Link to={productHref}>
           <h3>{product.name}</h3>
         </Link>
-        <div className="product-price-row">
-          <span className="price">{formatPrice(product.price)}</span>
-          {product.compareAt ? (
-            <span className="price-compare">{formatPrice(product.compareAt)}</span>
-          ) : null}
+        <div className="product-meta-row">
+          <div className="product-price-row">
+            <span className="price">{formatPrice(product.price)}</span>
+            {product.compareAt ? (
+              <span className="price-compare">{formatPrice(product.compareAt)}</span>
+            ) : null}
+          </div>
+          <CompactRating rating={product.rating} reviews={product.reviews} />
         </div>
-        <CompactRating rating={product.rating} reviews={product.reviews} />
+      </div>
+
+      <div className="product-actions">
+        {soldOut ? (
+          <button type="button" className="btn btn-primary btn-block" disabled>
+            Sold out
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary btn-block"
+            onClick={handleAdd}
+            disabled={adding}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </button>
+        )}
       </div>
 
       {inCart && !soldOut ? (
@@ -81,25 +88,6 @@ export default function ProductCard({ product }) {
           Added to cart
         </p>
       ) : null}
-
-      {soldOut ? (
-        <div className="product-actions">
-          <button type="button" className="btn btn-primary btn-block" disabled>
-            Sold out
-          </button>
-        </div>
-      ) : (
-        <div className="product-actions product-actions--touch">
-          <button
-            type="button"
-            className="btn btn-primary btn-block"
-            onClick={handleAdd}
-            disabled={adding}
-          >
-            {adding ? 'Adding…' : 'Add to cart'}
-          </button>
-        </div>
-      )}
 
       {error ? <p className="product-card-error">{error}</p> : null}
     </article>
