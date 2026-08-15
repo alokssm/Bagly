@@ -493,20 +493,6 @@ export const api = {
   },
 
   adminShiprocketConnection: () => request('/admin/shiprocket/connection', { auth: true }),
-  adminGetShiprocketPickupLocations: () =>
-    request('/admin/shiprocket/pickup-locations', { auth: true }),
-  adminPatchProductPickupLocation: (id, shiprocketPickupLocation) =>
-    request(`/admin/products/${encodeURIComponent(id)}/pickup-location`, {
-      method: 'PATCH',
-      body: { shiprocketPickupLocation },
-      auth: true,
-    }),
-  adminPatchProductShipping: (id, body) =>
-    request(`/admin/products/${encodeURIComponent(id)}/shipping`, {
-      method: 'PATCH',
-      body,
-      auth: true,
-    }),
   adminRetryShiprocket: (id) =>
     request(`/admin/orders/${encodeURIComponent(id)}/shiprocket/retry`, { method: 'POST', auth: true }),
 
