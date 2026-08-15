@@ -89,9 +89,9 @@ function ShipmentTrackCard({ shipment, index, total }) {
               <span className="order-track-timeline__dot" aria-hidden="true" />
               <div className="order-track-timeline__body">
                 <span className="order-track-timeline__label">{formatTrackingStatus(step)}</span>
-                {hist?.changedAtUtc ? (
-                  <span className="order-track-timeline__when">{formatWhen(hist.changedAtUtc)}</span>
-                ) : null}
+                <span className="order-track-timeline__when">
+                  {hist?.changedAtUtc ? formatWhen(hist.changedAtUtc) : '—'}
+                </span>
               </div>
             </li>
           )

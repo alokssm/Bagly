@@ -1881,7 +1881,7 @@ a.order-item-row__name:hover {
 /* Order tracking */
 .order-track {
   padding-bottom: 4rem;
-  max-width: 720px;
+  max-width: 960px;
 }
 
 .order-track-back {
@@ -1935,39 +1935,51 @@ a.order-item-row__name:hover {
 .order-track-timeline {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 0.35rem;
+  padding: 0.35rem 0.15rem 0.15rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .order-track-timeline__step {
   position: relative;
-  display: grid;
-  grid-template-columns: 16px 1fr;
-  gap: 0.75rem;
-  padding: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1 0 7.5rem;
+  min-width: 7.5rem;
+  padding: 0 0.4rem 0.25rem;
+  text-align: center;
   color: var(--ink-soft);
 }
 
 .order-track-timeline__step:not(:last-child)::before {
   content: '';
   position: absolute;
-  left: 7px;
-  top: 14px;
-  bottom: 0;
-  width: 1px;
+  top: 7px;
+  left: calc(50% + 8px);
+  right: calc(-50% + 8px);
+  height: 2px;
   background: var(--line);
+  z-index: 0;
+}
+
+.order-track-timeline__step.is-done:not(.is-current):not(:last-child)::before {
+  background: var(--forest);
 }
 
 .order-track-timeline__dot {
   width: 14px;
   height: 14px;
-  margin-top: 0.2rem;
   border-radius: 50%;
   border: 2px solid var(--line);
   background: var(--surface);
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .order-track-timeline__step.is-done {
@@ -1993,17 +2005,26 @@ a.order-item-row__name:hover {
 .order-track-timeline__body {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+  width: 100%;
 }
 
 .order-track-timeline__label {
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+  line-height: 1.25;
 }
 
 .order-track-timeline__when,
 .order-track-muted {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
   color: var(--ink-soft);
+}
+
+.order-track-timeline__when {
+  max-width: 7rem;
 }
 
 .order-track-history {
