@@ -113,17 +113,6 @@ function ShipmentTrackCard({ shipment, index, total }) {
           </ul>
         </div>
       ) : null}
-
-      {shipment.publicTrackingUrl ? (
-        <a
-          className="btn btn-secondary order-track-external"
-          href={shipment.publicTrackingUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Track on Shiprocket
-        </a>
-      ) : null}
     </div>
   )
 }

@@ -2034,11 +2034,6 @@ a.order-item-row__name:hover {
   font-size: 0.88rem;
 }
 
-.order-track-external {
-  display: inline-flex;
-  margin-top: 1rem;
-}
-
 .order-track-empty {
   padding: 1.5rem 1.25rem;
   background: rgba(255, 255, 255, 0.65);
