@@ -302,12 +302,14 @@ export const api = {
       auth: 'customer',
     }),
 
-  getProducts: ({ category, subCategory, sort, q } = {}) => {
+  getProducts: ({ category, subCategory, sort, q, page, pageSize } = {}) => {
     const query = new URLSearchParams()
     if (category && category !== 'all') query.set('category', category)
     if (subCategory && subCategory !== 'all') query.set('subCategory', subCategory)
     if (sort && sort !== 'featured') query.set('sort', sort)
     if (q && String(q).trim()) query.set('q', String(q).trim())
+    if (page != null) query.set('page', String(page))
+    if (pageSize != null) query.set('pageSize', String(pageSize))
     const qs = query.toString()
     return request(`/products${qs ? `?${qs}` : ''}`)
   },

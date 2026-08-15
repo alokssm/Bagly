@@ -103,7 +103,8 @@ export default function Home() {
     setLoading(true)
     setError('')
     try {
-      const products = await api.getProducts({ category: 'school-bags' })
+      const data = await api.getProducts({ category: 'school-bags', page: 1, pageSize: 50 })
+      const products = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []
       const featured = products.filter((p) => p.badge).slice(0, 3)
       const rest = products.filter((p) => !p.badge).slice(0, 3)
       setShowcase([...featured, ...rest].slice(0, 6))

@@ -1,6 +1,7 @@
 using Bagly.Api.Data;
 using Bagly.Api.DTOs;
 using Bagly.Api.Mapping;
+using Bagly.Api.Models.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -11,27 +12,28 @@ namespace Bagly.Api.Controllers;
 [Route("api/[controller]")]
 public class ProductsController(BaglyDbContext db) : ControllerBase
 {
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts(
+    public async Task<ActionResult<PagedResult<ProductDto>>> GetProducts(
         [FromQuery] string? category,
         [FromQuery] string? subCategory,
         [FromQuery] string? sort,
         [FromQuery] string? q,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var products = await LoadActiveProductsAsync(category, subCategory, q, cancellationToken);
+        (page, pageSize) = NormalizePaging(page, pageSize);
 
-        var mapped = products.Select(ProductMapper.ToDto).ToList();
+        var (items, totalCount) = await LoadActiveProductsPageAsync(
+            category, subCategory, q, sort, page, pageSize, cancellationToken);
 
-        mapped = sort?.ToLowerInvariant() switch
-        {
-            "price-asc" => mapped.OrderBy(p => p.Price).ToList(),
-            "price-desc" => mapped.OrderByDescending(p => p.Price).ToList(),
-            "name" => mapped.OrderBy(p => p.Name).ToList(),
-            _ => mapped,
-        };
+        var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
+        var mapped = items.Select(ProductMapper.ToDto).ToList();
 
-        return Ok(mapped);
+        return Ok(new PagedResult<ProductDto>(mapped, page, pageSize, totalCount, totalPages));
     }
 
     /// <summary>Looks up by <c>Id</c> first (legacy/bookmarked links keep working), then falls back
@@ -57,13 +59,16 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
         return Ok(ProductMapper.ToDto(product));
     }
 
-    private async Task<List<Models.Product>> LoadActiveProductsAsync(
+    private async Task<(List<Models.Product> Items, int TotalCount)> LoadActiveProductsPageAsync(
         string? category,
         string? subCategory,
         string? q,
+        string? sort,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken)
     {
-        Task<List<Models.Product>> Query()
+        async Task<(List<Models.Product> Items, int TotalCount)> Query()
         {
             var query = db.Products.AsNoTracking().Where(p => p.IsActive);
 
@@ -90,10 +95,33 @@ public class ProductsController(BaglyDbContext db) : ControllerBase
                     (p.Slug != null && p.Slug.ToLower().Contains(term)));
             }
 
-            return query.ToListAsync(cancellationToken);
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            query = sort?.ToLowerInvariant() switch
+            {
+                "price-asc" => query.OrderBy(p => p.Price).ThenBy(p => p.Id),
+                "price-desc" => query.OrderByDescending(p => p.Price).ThenBy(p => p.Id),
+                "name" => query.OrderBy(p => p.Name).ThenBy(p => p.Id),
+                _ => query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id),
+            };
+
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return (items, totalCount);
         }
 
         return await RunWithSchemaSelfHealAsync(Query, cancellationToken);
+    }
+
+    private static (int Page, int PageSize) NormalizePaging(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = DefaultPageSize;
+        if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+        return (page, pageSize);
     }
 
     /// <summary>Runs a Products query and, if it fails because a column the current code expects
