@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
-import ProductSearchBar from '../components/ProductSearchBar'
 import LoadingState from '../components/LoadingState'
 import ApiErrorState from '../components/ApiErrorState'
 import { api } from '../api/client'
@@ -16,8 +15,6 @@ export default function Shop() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [searchInput, setSearchInput] = useState(qParam)
-  const lastPushedQ = useRef(qParam)
 
   const topLevelCategories = categories.filter((cat) => !cat.parentId)
   const subCategories = categories.filter((cat) => cat.parentId === activeCategory)
@@ -41,32 +38,6 @@ export default function Shop() {
       cancelled = true
     }
   }, [])
-
-  // Sync input when `q` changes from outside this page (Home search, back/forward).
-  useEffect(() => {
-    if (qParam === lastPushedQ.current) return
-    lastPushedQ.current = qParam
-    setSearchInput(qParam)
-  }, [qParam])
-
-  // Debounced live filter: keep the address bar shareable via `?q=`.
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      const trimmed = searchInput.trim()
-      if (trimmed === lastPushedQ.current) return
-      lastPushedQ.current = trimmed
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          if (trimmed) next.set('q', trimmed)
-          else next.delete('q')
-          return next
-        },
-        { replace: true },
-      )
-    }, 300)
-    return () => clearTimeout(handle)
-  }, [searchInput, setParams])
 
   const loadProducts = useCallback(async () => {
     setLoading(true)
@@ -106,17 +77,6 @@ export default function Shop() {
     setParams(next)
   }
 
-  const handleSearchSubmit = (term) => {
-    const trimmed = term.trim()
-    if (trimmed === lastPushedQ.current) return
-    lastPushedQ.current = trimmed
-    setSearchInput(trimmed)
-    const next = new URLSearchParams(params)
-    if (trimmed) next.set('q', trimmed)
-    else next.delete('q')
-    setParams(next, { replace: true })
-  }
-
   return (
     <section className="section shop-page">
       <div className="container">
@@ -127,14 +87,6 @@ export default function Shop() {
             Durable backpacks for Boys, Girls, and Kids — filter by collection and find the pack that fits the
             school run.
           </p>
-          <ProductSearchBar
-            id="shop-product-search"
-            value={searchInput}
-            onChange={setSearchInput}
-            onSubmit={handleSearchSubmit}
-            placeholder="Search by name or style…"
-            className="product-search--shop"
-          />
         </div>
 
         <div className="filters" role="tablist" aria-label="Categories">

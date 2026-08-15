@@ -14,7 +14,9 @@
   --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'Outfit', system-ui, sans-serif;
   --shadow-soft: 0 24px 60px rgba(18, 40, 30, 0.12);
-  --nav-h: 72px;
+  --nav-row-h: 72px;
+  --nav-search-h: 52px;
+  --nav-h: calc(var(--nav-row-h) + var(--nav-search-h));
   color: var(--ink);
   background: var(--surface);
   font-family: var(--font-body);
@@ -210,7 +212,8 @@ p {
   position: sticky;
   top: 0;
   z-index: 50;
-  height: var(--nav-h);
+  height: auto;
+  min-height: var(--nav-h);
   backdrop-filter: blur(12px) saturate(1.15);
   background: rgba(247, 249, 247, 0.88);
   border-bottom: 1px solid transparent;
@@ -226,8 +229,16 @@ p {
   box-shadow: 0 1px 0 rgba(18, 40, 30, 0.04);
 }
 
+.nav-search-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: var(--nav-search-h);
+  padding: 0.45rem 0 0.15rem;
+}
+
 .nav-inner {
-  height: 100%;
+  height: var(--nav-row-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1124,13 +1135,9 @@ p {
   max-width: 38rem;
 }
 
-.product-search--home {
-  margin: 0 0 1.75rem;
-}
-
-.product-search--shop {
-  margin-top: 1.25rem;
-  max-width: 32rem;
+.product-search--header {
+  max-width: 28rem;
+  margin: 0 auto;
 }
 
 .product-search-label {
@@ -3167,10 +3174,21 @@ a.order-item-row__name:hover {
 
   .navbar {
     height: auto;
+    min-height: 0;
+  }
+
+  .nav-search-row {
+    min-height: 0;
+    padding: 0.55rem 0 0.2rem;
   }
 
   .nav-inner {
-    padding-block: 0.85rem;
+    height: auto;
+    padding-block: 0.75rem;
+  }
+
+  .product-search--header {
+    max-width: none;
   }
 }
 

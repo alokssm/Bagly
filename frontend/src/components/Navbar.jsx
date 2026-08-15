@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
 import { CART_ADD_EVENT } from '../constants/events'
 import { handleCartAddAnimation } from '../utils/cartAnim'
 import CustomerMenu from './CustomerMenu'
+import ProductSearchBar from './ProductSearchBar'
 
 const CART_BUMP_MS = 400
 
@@ -19,6 +20,11 @@ export default function Navbar() {
   const { itemCount } = useCart()
   const { user, isAuthenticated, logout } = useCustomerAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [params, setParams] = useSearchParams()
+  const qParam = (params.get('q') || '').trim()
+  const [searchInput, setSearchInput] = useState(qParam)
+  const lastPushedQ = useRef(qParam)
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const [cartBump, setCartBump] = useState(false)
@@ -53,11 +59,70 @@ export default function Navbar() {
     }
   }, [])
 
+  // On Shop, keep the header search aligned with `?q=` (filters, back/forward).
+  useEffect(() => {
+    if (location.pathname !== '/shop') return
+    if (qParam === lastPushedQ.current) return
+    lastPushedQ.current = qParam
+    setSearchInput(qParam)
+  }, [qParam, location.pathname])
+
+  // Live filter while already on Shop — preserve category/subCategory query params.
+  useEffect(() => {
+    if (location.pathname !== '/shop') return undefined
+    const handle = window.setTimeout(() => {
+      const trimmed = searchInput.trim()
+      if (trimmed === lastPushedQ.current) return
+      lastPushedQ.current = trimmed
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (trimmed) next.set('q', trimmed)
+          else next.delete('q')
+          return next
+        },
+        { replace: true },
+      )
+    }, 300)
+    return () => window.clearTimeout(handle)
+  }, [searchInput, location.pathname, setParams])
+
+  const applyShopQuery = (term, { replace = false } = {}) => {
+    const trimmed = term.trim()
+    lastPushedQ.current = trimmed
+    setSearchInput(trimmed)
+
+    if (location.pathname === '/shop') {
+      const next = new URLSearchParams(params)
+      if (trimmed) next.set('q', trimmed)
+      else next.delete('q')
+      setParams(next, { replace })
+      return
+    }
+
+    navigate(trimmed ? `/shop?q=${encodeURIComponent(trimmed)}` : '/shop')
+  }
+
+  const handleSearchSubmit = (term) => {
+    applyShopQuery(term)
+  }
+
   const firstName = user?.name?.split(' ')[0] || 'there'
 
   return (
     <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="container">
+        <div className="nav-search-row">
+          <ProductSearchBar
+            id="header-product-search"
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={handleSearchSubmit}
+            placeholder="Search bags…"
+            className="product-search--header"
+          />
+        </div>
+
         <div className="nav-inner">
           <Link to="/" className="brand" onClick={() => setOpen(false)}>
             Bag<span>ly</span>
