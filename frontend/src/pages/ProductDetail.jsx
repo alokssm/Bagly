@@ -134,11 +134,15 @@ export default function ProductDetail() {
   }
 
   return (
-    <section className="section" style={{ paddingTop: '2rem' }}>
+    <section className="section pdp-page">
       <div className="container">
-        <p style={{ marginBottom: '1.5rem', color: 'var(--ink-soft)' }}>
-          <Link to="/shop">Shop</Link> / {product.name}
-        </p>
+        <nav className="pdp-breadcrumb" aria-label="Breadcrumb">
+          <Link to="/shop">Shop</Link>
+          <span className="pdp-breadcrumb-sep" aria-hidden="true">
+            /
+          </span>
+          <span className="pdp-breadcrumb-current">{product.name}</span>
+        </nav>
 
         <div className="pdp">
           <div className="pdp-gallery">
@@ -189,8 +193,8 @@ export default function ProductDetail() {
             <div className="pdp-rating">
               {product.reviews > 0 ? (
                 <>
-                  <span>★ {Number(product.rating).toFixed(1)}</span>
-                  <span>·</span>
+                  <span className="pdp-rating-star">★ {Number(product.rating).toFixed(1)}</span>
+                  <span aria-hidden="true">·</span>
                   <span>
                     {product.reviews} {product.reviews === 1 ? 'review' : 'reviews'}
                   </span>
@@ -198,8 +202,12 @@ export default function ProductDetail() {
               ) : (
                 <span>No reviews yet</span>
               )}
-              <span>·</span>
-              <span>{product.material}</span>
+              {product.material ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{product.material}</span>
+                </>
+              ) : null}
             </div>
 
             <div className="pdp-price">
@@ -212,19 +220,23 @@ export default function ProductDetail() {
 
             <p className="pdp-desc">{product.description}</p>
 
-            <span className="option-label">Color — {color}</span>
-            <div className="color-options">
-              {(product.colors || []).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`color-chip ${color === c ? 'active' : ''}`}
-                  onClick={() => setColor(c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+            {(product.colors || []).length > 0 ? (
+              <>
+                <span className="option-label">Color — {color}</span>
+                <div className="color-options">
+                  {(product.colors || []).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`color-chip ${color === c ? 'active' : ''}`}
+                      onClick={() => setColor(c)}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
 
             <div className="qty-row">
               <div>
@@ -283,11 +295,13 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <ul className="feature-list">
-              {(product.features || []).map((feature) => (
-                <li key={feature}>{feature}</li>
-              ))}
-            </ul>
+            {(product.features || []).length > 0 ? (
+              <ul className="feature-list">
+                {(product.features || []).map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
 
