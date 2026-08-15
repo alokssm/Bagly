@@ -145,7 +145,7 @@ export default function Cart() {
               </div>
             </div>
             <div className="cart-summary__actions">
-              <Link to="/checkout" className="btn btn-brass btn-block">
+              <Link to="/checkout" className="btn btn-brass btn-commerce btn-block">
                 Checkout
               </Link>
               <Link to="/shop" className="btn btn-ghost btn-block cart-summary__keep-shopping">

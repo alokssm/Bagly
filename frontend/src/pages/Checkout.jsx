@@ -91,6 +91,10 @@ export default function Checkout() {
   }, [confirmingOrder])
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [step])
+
+  useEffect(() => {
     if (!error) return
     window.scrollTo({ top: 0, behavior: 'smooth' })
     errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -273,7 +277,6 @@ export default function Checkout() {
   const backToAddress = () => {
     setError('')
     setStep('address')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const saveAddressIfRequested = async () => {
@@ -303,7 +306,6 @@ export default function Checkout() {
         }
       }
       setStep('payment')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -703,11 +705,11 @@ export default function Checkout() {
             </div>
             <button
               type="submit"
-              className="btn btn-brass btn-block cart-summary__submit"
+              className="btn btn-brass btn-commerce btn-block cart-summary__submit"
               disabled={submitting || (step === 'payment' && !paymentMethod)}
             >
               {step === 'address'
-                ? 'Proceed to Pay'
+                ? 'Proceed to pay'
                 : submitting
                   ? paymentMethod === 'RAZORPAY'
                     ? 'Opening Razorpay…'

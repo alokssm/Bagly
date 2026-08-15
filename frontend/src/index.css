@@ -173,8 +173,9 @@ p {
   width: 100%;
 }
 
-/* Compact commerce CTA — product cards & PDP add-to-cart */
-.btn-add-cart {
+/* Compact commerce CTA — product cards, PDP, cart & checkout */
+.btn-add-cart,
+.btn-commerce {
   min-height: 36px;
   padding: 0.4rem 1rem;
   font-size: 0.8125rem;
@@ -184,17 +185,24 @@ p {
   box-shadow: none;
 }
 
-.btn-add-cart:hover:not(:disabled) {
+.btn-add-cart:hover:not(:disabled),
+.btn-commerce:hover:not(:disabled) {
   box-shadow: 0 4px 12px rgba(18, 40, 30, 0.16);
 }
 
-.btn-add-cart:focus-visible {
+.btn-add-cart:focus-visible,
+.btn-commerce:focus-visible {
   outline: 2px solid var(--brass);
   outline-offset: 2px;
 }
 
-.btn-add-cart.btn-secondary:hover:not(:disabled) {
+.btn-add-cart.btn-secondary:hover:not(:disabled),
+.btn-commerce.btn-secondary:hover:not(:disabled) {
   box-shadow: none;
+}
+
+.btn-commerce.btn-brass:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(18, 40, 30, 0.18);
 }
 
 .section {
@@ -2211,13 +2219,15 @@ p {
 .cart-summary__keep-shopping {
   color: rgba(238, 243, 239, 0.78) !important;
   font-weight: 500;
-  font-size: 0.9rem;
-  min-height: 40px;
+  font-size: 0.8125rem;
+  min-height: 36px;
+  padding: 0.4rem 1rem;
 }
 
 .cart-summary__keep-shopping:hover {
   color: #fff !important;
   background: rgba(238, 243, 239, 0.06);
+  box-shadow: none;
 }
 
 .cart-summary__submit {
