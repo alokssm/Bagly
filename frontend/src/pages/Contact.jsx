@@ -48,19 +48,18 @@ export default function Contact() {
   }
 
   return (
-    <section className="section" style={{ paddingTop: 0 }}>
+    <section className="section contact-page">
       <div className="container">
-        <div className="page-hero">
+        <div className="page-hero contact-page__hero">
           <span className="eyebrow">Contact</span>
-          <h1>We'd love to hear from you</h1>
+          <h1>We&apos;d love to hear from you</h1>
           <p>
-            Questions about an order, a bulk/corporate inquiry, or just want to say hello?
-            Send us a note and our team will get back to you shortly.
+            Order questions, bulk inquiries, or a quick hello — send a note and we&apos;ll reply shortly.
           </p>
         </div>
 
-        <div className="checkout-layout">
-          <div className="form-card">
+        <div className="contact-layout">
+          <div className="form-card contact-page__form">
             <h2>Send a message</h2>
 
             {success ? (
@@ -80,7 +79,7 @@ export default function Contact() {
                   />
                 ) : null}
 
-                <div className="form-grid">
+                <div className="form-grid contact-page__grid">
                   <div className="form-field">
                     <label htmlFor="firstName">First name</label>
                     <input
@@ -151,6 +150,7 @@ export default function Contact() {
                       name="message"
                       required
                       maxLength={4000}
+                      rows={4}
                       value={form.message}
                       onChange={onChange}
                       disabled={submitting}
@@ -169,8 +169,8 @@ export default function Contact() {
           <aside className="cart-summary contact-info">
             <h2>Get in touch</h2>
             <p>
-              Our team typically responds within 1–2 business days. For order-specific questions,
-              include your order number so we can help faster.
+              We typically respond within 1–2 business days. Include your order number for
+              order-specific questions.
             </p>
             <div className="contact-info__item">
               <strong>Email</strong>
