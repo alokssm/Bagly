@@ -188,30 +188,33 @@ export default function Checkout() {
 
   if (placed) {
     return (
-      <section className="section">
-        <div className="container" style={{ maxWidth: 640 }}>
+      <section className="section section--commerce">
+        <div className="container checkout-success">
           <div className="success-banner">
+            <span className="eyebrow">Order placed</span>
             <h2>Order confirmed</h2>
             <p>
               Thanks{placed.firstName ? `, ${placed.firstName}` : ''}. Order{' '}
               <strong>{placed.orderNumber}</strong> is confirmed
               {placed.email ? ` and a confirmation email will go to ${placed.email}` : ''}.
             </p>
-            <p style={{ marginTop: '0.5rem' }}>
+            <p className="success-banner__total">
               Total charged:{' '}
-              {formatPrice(
-                placed.paymentProvider === 'Razorpay' && placed.amountInr != null
-                  ? placed.amountInr
-                  : placed.total,
-              )}
+              <strong>
+                {formatPrice(
+                  placed.paymentProvider === 'Razorpay' && placed.amountInr != null
+                    ? placed.amountInr
+                    : placed.total,
+                )}
+              </strong>
             </p>
             {placed.razorpayPaymentId ? (
-              <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
+              <p className="success-banner__meta">
                 Razorpay payment ID: {placed.razorpayPaymentId}
               </p>
             ) : null}
             {placed.paymentProvider === 'COD' ? (
-              <p style={{ marginTop: '0.35rem', opacity: 0.8 }}>
+              <p className="success-banner__meta">
                 Please keep {formatPrice(placed.total)} ready in cash for delivery.
               </p>
             ) : null}
@@ -392,14 +395,27 @@ export default function Checkout() {
   }
 
   return (
-    <section className="section" style={{ paddingTop: 0 }}>
+    <section className="section section--commerce">
       <div className="container">
-        <div className="page-hero">
+        <div className="page-hero page-hero--commerce">
           <span className="eyebrow">Checkout</span>
           <h1>Complete your order</h1>
-          <p>
-            {step === 'address' ? 'Step 1 of 2 — Shipping address' : 'Step 2 of 2 — Payment method'}
-          </p>
+          <ol className="checkout-steps" aria-label="Checkout progress">
+            <li
+              className={step === 'address' ? 'is-active' : 'is-complete'}
+              aria-current={step === 'address' ? 'step' : undefined}
+            >
+              <span className="checkout-steps__index">1</span>
+              <span className="checkout-steps__label">Shipping</span>
+            </li>
+            <li
+              className={step === 'payment' ? 'is-active' : undefined}
+              aria-current={step === 'payment' ? 'step' : undefined}
+            >
+              <span className="checkout-steps__index">2</span>
+              <span className="checkout-steps__label">Payment</span>
+            </li>
+          </ol>
         </div>
 
         <form
@@ -658,30 +674,36 @@ export default function Checkout() {
             <div className="order-lines">
               {items.map((item) => (
                 <div className="order-line" key={`${item.id}-${item.color}`}>
-                  <span>
-                    {item.name} × {item.quantity}
-                    <br />
-                    <small style={{ opacity: 0.75 }}>{item.color}</small>
-                  </span>
-                  <span>{formatPrice(item.price * item.quantity)}</span>
+                  <div className="order-line__info">
+                    <span className="order-line__name">
+                      {item.name}
+                      <span className="order-line__qty"> × {item.quantity}</span>
+                    </span>
+                    <span className="order-line__meta">{item.color}</span>
+                  </div>
+                  <span className="order-line__price">{formatPrice(item.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
-            <div className="summary-row">
-              <span>Subtotal</span>
-              <span>{formatPrice(subtotal)}</span>
-            </div>
-            <div className="summary-row">
-              <span>Shipping</span>
-              <span>{shipping === 0 ? 'Free' : formatPrice(shipping)}</span>
-            </div>
-            <div className="summary-row total">
-              <span>Total</span>
-              <span>{formatPrice(total)}</span>
+            <div className="summary-rows">
+              <div className="summary-row">
+                <span>Subtotal</span>
+                <span className="summary-row__value">{formatPrice(subtotal)}</span>
+              </div>
+              <div className="summary-row">
+                <span>Shipping</span>
+                <span className="summary-row__value">
+                  {shipping === 0 ? 'Free' : formatPrice(shipping)}
+                </span>
+              </div>
+              <div className="summary-row total">
+                <span>Total</span>
+                <span className="summary-row__value">{formatPrice(total)}</span>
+              </div>
             </div>
             <button
               type="submit"
-              className="btn btn-brass btn-block"
+              className="btn btn-brass btn-block cart-summary__submit"
               disabled={submitting || (step === 'payment' && !paymentMethod)}
             >
               {step === 'address'

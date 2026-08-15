@@ -55,12 +55,17 @@ export default function Cart() {
     )
   }
 
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+
   return (
-    <section className="section" style={{ paddingTop: 0 }}>
+    <section className="section section--commerce">
       <div className="container">
-        <div className="page-hero">
+        <div className="page-hero page-hero--commerce">
           <span className="eyebrow">Cart</span>
           <h1>Your selection</h1>
+          <p>
+            {itemCount} {itemCount === 1 ? 'item' : 'items'} ready for checkout
+          </p>
         </div>
 
         {error ? (
@@ -71,14 +76,18 @@ export default function Cart() {
           <div className="cart-list">
             {items.map((item) => (
               <div className="cart-item" key={`${item.id}-${item.color}`}>
-                <img src={item.image} alt={item.name} />
-                <div>
-                  <h3>
-                    <Link to={`/product/${item.id}`}>{item.name}</Link>
-                  </h3>
-                  <p className="cart-item-meta">Color: {item.color}</p>
+                <Link to={`/product/${item.id}`} className="cart-item__media">
+                  <img src={item.image} alt={item.name} />
+                </Link>
+                <div className="cart-item__body">
+                  <div className="cart-item__header">
+                    <h3>
+                      <Link to={`/product/${item.id}`}>{item.name}</Link>
+                    </h3>
+                    <p className="cart-item-meta">{item.color}</p>
+                  </div>
                   <div className="cart-item-actions">
-                    <div className="qty-control">
+                    <div className="qty-control qty-control--compact">
                       <button
                         type="button"
                         disabled={busy}
@@ -107,8 +116,11 @@ export default function Cart() {
                     </button>
                   </div>
                 </div>
-                <div className="cart-item-price price">
-                  {formatPrice(item.price * item.quantity)}
+                <div className="cart-item-price">
+                  <span className="cart-item-price__line">{formatPrice(item.price * item.quantity)}</span>
+                  {item.quantity > 1 ? (
+                    <span className="cart-item-price__unit">{formatPrice(item.price)} each</span>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -116,24 +128,30 @@ export default function Cart() {
 
           <aside className="cart-summary">
             <h2>Order summary</h2>
-            <div className="summary-row">
-              <span>Subtotal</span>
-              <span>{formatPrice(subtotal)}</span>
+            <div className="summary-rows">
+              <div className="summary-row">
+                <span>Subtotal</span>
+                <span className="summary-row__value">{formatPrice(subtotal)}</span>
+              </div>
+              <div className="summary-row">
+                <span>Shipping</span>
+                <span className="summary-row__value">
+                  {shipping === 0 ? 'Free' : formatPrice(shipping)}
+                </span>
+              </div>
+              <div className="summary-row total">
+                <span>Total</span>
+                <span className="summary-row__value">{formatPrice(total)}</span>
+              </div>
             </div>
-            <div className="summary-row">
-              <span>Shipping</span>
-              <span>{shipping === 0 ? 'Free' : formatPrice(shipping)}</span>
+            <div className="cart-summary__actions">
+              <Link to="/checkout" className="btn btn-brass btn-block">
+                Checkout
+              </Link>
+              <Link to="/shop" className="btn btn-ghost btn-block cart-summary__keep-shopping">
+                Keep shopping
+              </Link>
             </div>
-            <div className="summary-row total">
-              <span>Total</span>
-              <span>{formatPrice(total)}</span>
-            </div>
-            <Link to="/checkout" className="btn btn-brass btn-block">
-              Checkout
-            </Link>
-            <Link to="/shop" className="btn btn-ghost btn-block" style={{ color: '#eef3ef' }}>
-              Keep shopping
-            </Link>
           </aside>
         </div>
       </div>
