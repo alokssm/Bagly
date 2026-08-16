@@ -29,7 +29,7 @@ public class SellerOrdersController(
     IOptions<ShiprocketOptions> shiprocketOptions,
     IAuditLogService auditLog) : ControllerBase
 {
-    private const int DefaultPageSize = 50;
+    private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
     private const int MaxReportRows = 5000;
 

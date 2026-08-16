@@ -4,13 +4,8 @@ import SellerHubNav from '../components/SellerHubNav'
 import { useSellerAuth } from '../context/SellerAuthContext'
 import { formatPrice } from '../utils/format'
 
-const PAGE_SIZE = 50
-const emptyResult = {
-  items: [],
-  totalCount: 0,
-  totalPages: 0,
-  page: 1,
-  pageSize: PAGE_SIZE,
+const PAGE_SIZE = 20
+const emptyMeta = {
   ownedProductCount: 0,
   registeredPickupCount: 0,
   visibleProductCount: 0,
@@ -79,44 +74,125 @@ function lineTotalOf(item) {
 export default function SellerOrders() {
   const { user, logout } = useSellerAuth()
   const approved = (user?.status || '').toLowerCase() === 'approved'
+  // Filter state — reset list when these change (UI may be added later).
+  const [filters] = useState({ status: '', from: '', to: '' })
+  const [orders, setOrders] = useState([])
   const [page, setPage] = useState(1)
-  const [result, setResult] = useState(emptyResult)
+  const [hasMore, setHasMore] = useState(false)
+  const [meta, setMeta] = useState(emptyMeta)
   const [loading, setLoading] = useState(approved)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [busyKey, setBusyKey] = useState('')
   const [openMenuId, setOpenMenuId] = useState('')
   const menuRef = useRef(null)
+  const loadMoreRef = useRef(null)
+  const loadingMoreRef = useRef(false)
 
-  const load = useCallback(async () => {
+  const listParams = useCallback(
+    (pageNum) => ({
+      page: pageNum,
+      pageSize: PAGE_SIZE,
+      status: filters.status || undefined,
+      from: filters.from || undefined,
+      to: filters.to || undefined,
+    }),
+    [filters.status, filters.from, filters.to],
+  )
+
+  const applyListResult = useCallback((data, { append }) => {
+    const items = Array.isArray(data?.items) ? data.items : []
+    const totalPages = Number(data?.totalPages) || 0
+    const currentPage = Number(data?.page) || 1
+    setMeta({
+      ownedProductCount: data?.ownedProductCount ?? 0,
+      registeredPickupCount: data?.registeredPickupCount ?? 0,
+      visibleProductCount: data?.visibleProductCount ?? 0,
+    })
+    if (append) {
+      setOrders((prev) => {
+        const seen = new Set(prev.map((o) => o.id))
+        const appended = items.filter((o) => !seen.has(o.id))
+        return appended.length ? [...prev, ...appended] : prev
+      })
+    } else {
+      setOrders(items)
+    }
+    setPage(currentPage)
+    setHasMore(currentPage < totalPages)
+  }, [])
+
+  // Reset to first page when filters change.
+  useEffect(() => {
     if (!approved) {
       setLoading(false)
-      return
+      setOrders([])
+      setHasMore(false)
+      setMeta(emptyMeta)
+      return undefined
     }
-    setLoading(true)
-    setError('')
+
+    let cancelled = false
+
+    async function loadFirstPage() {
+      setLoading(true)
+      setError('')
+      setOrders([])
+      setPage(1)
+      setHasMore(false)
+      try {
+        const data = await api.sellerGetOrders(listParams(1))
+        if (cancelled) return
+        applyListResult(data, { append: false })
+      } catch (err) {
+        if (cancelled) return
+        setOrders([])
+        setHasMore(false)
+        setMeta(emptyMeta)
+        setError(err.message || 'Unable to load orders.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadFirstPage()
+    return () => {
+      cancelled = true
+    }
+  }, [approved, listParams, applyListResult])
+
+  const loadMore = useCallback(async () => {
+    if (!approved || loading || loadingMoreRef.current || !hasMore || error) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    const nextPage = page + 1
     try {
-      const data = await api.sellerGetOrders({ page, pageSize: PAGE_SIZE })
-      setResult({
-        items: data.items || [],
-        totalCount: data.totalCount || 0,
-        totalPages: data.totalPages || 0,
-        page: data.page || page,
-        pageSize: data.pageSize || PAGE_SIZE,
-        ownedProductCount: data.ownedProductCount ?? 0,
-        registeredPickupCount: data.registeredPickupCount ?? 0,
-        visibleProductCount: data.visibleProductCount ?? 0,
-      })
+      const data = await api.sellerGetOrders(listParams(nextPage))
+      applyListResult(data, { append: true })
     } catch (err) {
-      setError(err.message || 'Unable to load orders.')
-      setResult(emptyResult)
+      setError(err.message || 'Unable to load more orders.')
+      setHasMore(false)
     } finally {
-      setLoading(false)
+      loadingMoreRef.current = false
+      setLoadingMore(false)
     }
-  }, [approved, page])
+  }, [approved, loading, hasMore, error, page, listParams, applyListResult])
 
   useEffect(() => {
-    load()
-  }, [load])
+    const node = loadMoreRef.current
+    if (!node || loading || !hasMore) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMore()
+        }
+      },
+      { root: null, rootMargin: '240px 0px', threshold: 0 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [loading, hasMore, loadMore, orders.length])
 
   useEffect(() => {
     const onDocClick = (event) => {
@@ -127,13 +203,28 @@ export default function SellerOrders() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
+  const reloadFirstPage = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await api.sellerGetOrders(listParams(1))
+      applyListResult(data, { append: false })
+    } catch (err) {
+      setError(err.message || 'Unable to load orders.')
+      setOrders([])
+      setHasMore(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const markReady = async (order, shipment) => {
     const key = `${order.id}:${shipment.id}:ready`
     setBusyKey(key)
     setError('')
     try {
       await api.sellerMarkShipmentReadyToShip(order.id, shipment.id)
-      await load()
+      await reloadFirstPage()
     } catch (err) {
       setError(err.message || 'Could not mark ready to ship.')
     } finally {
@@ -155,17 +246,13 @@ export default function SellerOrders() {
     setError('')
     try {
       await api.sellerCancelOrder(order.id)
-      await load()
+      await reloadFirstPage()
     } catch (err) {
       setError(err.message || 'Could not cancel order.')
     } finally {
       setBusyKey('')
     }
   }
-
-  const { items: orders, totalCount, totalPages } = result
-  const from = totalCount === 0 ? 0 : (result.page - 1) * result.pageSize + 1
-  const to = Math.min(result.page * result.pageSize, totalCount)
 
   return (
     <div className="seller-page">
@@ -205,14 +292,15 @@ export default function SellerOrders() {
                 <strong>No orders yet</strong>
                 <span>
                   Orders show when customers buy your products, or platform products fulfilled from your
-                  pickup nicknames (e.g. wareHouse1). You have {result.ownedProductCount ?? 0} product
-                  {(result.ownedProductCount || 0) === 1 ? '' : 's'}, {result.registeredPickupCount ?? 0}{' '}
-                  pickup{(result.registeredPickupCount || 0) === 1 ? '' : 's'}, and{' '}
-                  {result.visibleProductCount ?? 0} visible catalog match
-                  {(result.visibleProductCount || 0) === 1 ? '' : 'es'}.
+                  pickup nicknames (e.g. wareHouse1). You have {meta.ownedProductCount ?? 0} product
+                  {(meta.ownedProductCount || 0) === 1 ? '' : 's'}, {meta.registeredPickupCount ?? 0}{' '}
+                  pickup{(meta.registeredPickupCount || 0) === 1 ? '' : 's'}, and{' '}
+                  {meta.visibleProductCount ?? 0} visible catalog match
+                  {(meta.visibleProductCount || 0) === 1 ? '' : 'es'}.
                 </span>
               </div>
             ) : (
+              <>
               <div className="seller-orders-list" ref={menuRef}>
                 {orders.map((order) => {
                   const cancelled =
@@ -416,33 +504,19 @@ export default function SellerOrders() {
                   )
                 })}
               </div>
-            )}
-
-            {totalPages > 1 ? (
-              <div className="seller-toolbar">
-                <span className="seller-lead">
-                  {from}–{to} of {totalCount}
-                </span>
-                <div className="seller-form-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={page <= 1 || loading}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={page >= totalPages || loading}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
+              <div
+                ref={loadMoreRef}
+                className="seller-orders-load-more"
+                aria-hidden={!hasMore && !loadingMore}
+              >
+                {loadingMore ? (
+                  <p className="seller-lead" role="status">
+                    Loading…
+                  </p>
+                ) : null}
               </div>
-            ) : null}
+              </>
+            )}
           </>
         )}
       </div>
