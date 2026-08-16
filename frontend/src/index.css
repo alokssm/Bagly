@@ -4290,6 +4290,12 @@ a.order-item-row__name:hover {
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+.admin-page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
 .admin-page-head h1 {
   font-size: var(--admin-fs-title, clamp(1.35rem, 2.4vw, 1.7rem));
   line-height: 1.15;
@@ -4997,6 +5003,71 @@ a.order-item-row__name:hover {
   border-radius: var(--radius);
   padding: 0.5rem;
   box-shadow: var(--shadow-soft);
+  overflow: auto;
+}
+
+.seller-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.seller-table th,
+.seller-table td {
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  line-height: 1.35;
+}
+
+.seller-table th {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: rgba(27, 61, 47, 0.04);
+  white-space: nowrap;
+}
+
+.seller-table .nowrap {
+  white-space: nowrap;
+}
+
+.seller-report-items {
+  max-width: 18rem;
+}
+
+.seller-report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.seller-report-filters label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.seller-report-filters input,
+.seller-report-filters select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  font: inherit;
+  background: #fff;
+  min-width: 9.5rem;
+}
+
+.seller-report-filters .seller-form-actions {
+  padding-top: 0;
 }
 
 .seller-head {

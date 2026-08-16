@@ -1,5 +1,6 @@
 using Bagly.Api.Data;
 using Bagly.Api.DTOs;
+using Bagly.Api.Models;
 using Bagly.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,7 @@ public class AdminOrdersController(
 {
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 50;
+    private const int MaxExportRows = 5000;
 
     [HttpGet]
     public async Task<ActionResult<AdminOrdersPagedResult>> GetOrders(
@@ -30,28 +32,7 @@ public class AdminOrdersController(
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > MaxPageSize) pageSize = DefaultPageSize;
 
-        var query = db.Orders.AsNoTracking().AsQueryable();
-
-        if (from is DateOnly fromDate)
-        {
-            query = query.Where(o => o.CreatedAt >= IstTime.ToUtc(fromDate));
-        }
-
-        if (to is DateOnly toDate)
-        {
-            var toExclusiveUtc = IstTime.ToUtc(toDate.AddDays(1));
-            query = query.Where(o => o.CreatedAt < toExclusiveUtc);
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Trim();
-            query = query.Where(o =>
-                o.OrderNumber.Contains(term) ||
-                o.Email.Contains(term) ||
-                o.FirstName.Contains(term) ||
-                o.LastName.Contains(term));
-        }
+        var query = BuildOrdersQuery(from, to, search);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -85,6 +66,71 @@ public class AdminOrdersController(
             .CountAsync(o => o.CreatedAt >= todayStartUtc && o.CreatedAt < todayEndUtc, cancellationToken);
 
         return Ok(new AdminOrdersPagedResult(items, totalCount, page, pageSize, totalPages, todayCount));
+    }
+
+    /// <summary>
+    /// All orders matching the same filters as the list (capped) for Excel/PDF export on the admin UI.
+    /// </summary>
+    [HttpGet("export")]
+    public async Task<ActionResult<AdminOrdersExportResult>> ExportOrders(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = BuildOrdersQuery(from, to, search);
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Take(MaxExportRows)
+            .Select(o => new AdminOrderListItemDto(
+                o.Id,
+                o.OrderNumber,
+                (o.FirstName + " " + o.LastName).Trim(),
+                o.Email,
+                o.Status,
+                o.PaymentStatus,
+                o.PaymentProvider,
+                o.Currency ?? "INR",
+                o.Total,
+                o.Items.Count,
+                o.CreatedAt,
+                o.Phone,
+                o.ShiprocketOrderId,
+                o.ShiprocketStatus,
+                o.ShiprocketLastError,
+                o.ShiprocketShipments.Count,
+                o.ShiprocketShipments.Count(s => s.ShiprocketOrderId != null && s.ShiprocketOrderId != "")))
+            .ToListAsync(cancellationToken);
+
+        return Ok(new AdminOrdersExportResult(items, totalCount, items.Count >= MaxExportRows && totalCount > MaxExportRows));
+    }
+
+    private IQueryable<Order> BuildOrdersQuery(DateOnly? from, DateOnly? to, string? search)
+    {
+        var query = db.Orders.AsNoTracking().AsQueryable();
+
+        if (from is DateOnly fromDate)
+            query = query.Where(o => o.CreatedAt >= IstTime.ToUtc(fromDate));
+
+        if (to is DateOnly toDate)
+        {
+            var toExclusiveUtc = IstTime.ToUtc(toDate.AddDays(1));
+            query = query.Where(o => o.CreatedAt < toExclusiveUtc);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(o =>
+                o.OrderNumber.Contains(term) ||
+                o.Email.Contains(term) ||
+                o.FirstName.Contains(term) ||
+                o.LastName.Contains(term));
+        }
+
+        return query;
     }
 
     /// <summary>Full order detail (incl. line items) for the "expand" row action on the admin orders table.</summary>

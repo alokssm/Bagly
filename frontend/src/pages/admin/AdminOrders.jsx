@@ -1,6 +1,11 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { formatPrice } from '../../utils/format'
+import {
+  adminOrdersToExportRows,
+  exportRowsToExcel,
+  exportRowsToPdf,
+} from '../../utils/orderExport'
 
 const PAGE_SIZE = 50
 const emptyResult = { items: [], totalCount: 0, totalPages: 0, page: 1, pageSize: PAGE_SIZE, todayCount: 0 }
@@ -40,6 +45,7 @@ export default function AdminOrders() {
   const [shiprocketProbe, setShiprocketProbe] = useState(null)
   const [shiprocketProbeLoading, setShiprocketProbeLoading] = useState(false)
   const [retryingId, setRetryingId] = useState('')
+  const [exporting, setExporting] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -134,6 +140,51 @@ export default function AdminOrders() {
     }
   }
 
+  const runExport = async (kind) => {
+    setExporting(kind)
+    setError('')
+    try {
+      const data = await api.adminExportOrders({
+        from: applied.from || undefined,
+        to: applied.to || undefined,
+        search: applied.search || undefined,
+      })
+      const items = data.items || []
+      if (!items.length) {
+        setError('No orders to export for the current filters.')
+        return
+      }
+      const { headers, rows } = adminOrdersToExportRows(items)
+      const parts = []
+      if (applied.from) parts.push(`From ${applied.from}`)
+      if (applied.to) parts.push(`to ${applied.to}`)
+      if (applied.search) parts.push(`Search: ${applied.search}`)
+      parts.push(`${items.length} order${items.length === 1 ? '' : 's'}`)
+      if (data.truncated) parts.push('(truncated at 5000)')
+      const subtitle = parts.join(' · ')
+      if (kind === 'excel') {
+        exportRowsToExcel({
+          filenameBase: 'bagly-admin-orders',
+          headers,
+          rows,
+          sheetName: 'Orders',
+        })
+      } else {
+        exportRowsToPdf({
+          filenameBase: 'bagly-admin-orders',
+          title: 'Bagly Admin Orders',
+          subtitle,
+          headers,
+          rows,
+        })
+      }
+    } catch (err) {
+      setError(err.message || `Unable to export ${kind === 'excel' ? 'Excel' : 'PDF'}.`)
+    } finally {
+      setExporting('')
+    }
+  }
+
   const { items: orders, totalCount, totalPages, todayCount } = result
   const from = totalCount === 0 ? 0 : (result.page - 1) * result.pageSize + 1
   const to = Math.min(result.page * result.pageSize, totalCount)
@@ -148,14 +199,32 @@ export default function AdminOrders() {
             50 orders per page. "Today" is measured in India Standard Time (Asia/Kolkata, UTC+5:30).
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={probeShiprocket}
-          disabled={shiprocketProbeLoading}
-        >
-          {shiprocketProbeLoading ? 'Checking Shiprocket…' : 'Test Shiprocket'}
-        </button>
+        <div className="admin-page-head-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={!!exporting || loading || totalCount === 0}
+            onClick={() => runExport('excel')}
+          >
+            {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={!!exporting || loading || totalCount === 0}
+            onClick={() => runExport('pdf')}
+          >
+            {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={probeShiprocket}
+            disabled={shiprocketProbeLoading}
+          >
+            {shiprocketProbeLoading ? 'Checking Shiprocket…' : 'Test Shiprocket'}
+          </button>
+        </div>
       </div>
 
       {error ? <p className="admin-error">{error}</p> : null}

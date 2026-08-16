@@ -446,6 +446,12 @@ public record AdminOrdersPagedResult(
     int TotalPages,
     int TodayCount);
 
+/// <summary>Response for <c>GET /api/admin/orders/export</c> — filtered rows for client-side Excel/PDF.</summary>
+public record AdminOrdersExportResult(
+    IReadOnlyList<AdminOrderListItemDto> Items,
+    int TotalCount,
+    bool Truncated);
+
 public record OrderStatusCountDto(string Status, int Count);
 
 public record TopProductSoldDto(string ProductId, string ProductName, int QuantitySold, decimal Revenue);

@@ -31,20 +31,54 @@ public class SellerOrdersController(
 {
     private const int DefaultPageSize = 50;
     private const int MaxPageSize = 100;
+    private const int MaxReportRows = 5000;
 
     [HttpGet]
     public async Task<ActionResult<SellerOrdersListResult>> List(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        [FromQuery] string? status = null,
         CancellationToken cancellationToken = default)
+    {
+        (page, pageSize) = NormalizePaging(page, pageSize);
+        return await ListCoreAsync(page, pageSize, from, to, status, cancellationToken);
+    }
+
+    /// <summary>
+    /// Date-filtered order report for the seller hub (up to <see cref="MaxReportRows"/> rows).
+    /// Defaults to last 30 IST days when from/to omitted.
+    /// </summary>
+    [HttpGet("report")]
+    public async Task<ActionResult<SellerOrdersListResult>> Report(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var todayIst = IstTime.TodayIst();
+        to ??= todayIst;
+        from ??= todayIst.AddDays(-29);
+        if (from > to)
+            return BadRequest(new { message = "From date must be on or before To date." });
+
+        return await ListCoreAsync(1, MaxReportRows, from, to, status, cancellationToken);
+    }
+
+    private async Task<ActionResult<SellerOrdersListResult>> ListCoreAsync(
+        int page,
+        int pageSize,
+        DateOnly? from,
+        DateOnly? to,
+        string? status,
+        CancellationToken cancellationToken)
     {
         var seller = await LoadCurrentSellerAsync(cancellationToken);
         if (seller is null) return Unauthorized(new { message = "Seller session is invalid." });
 
         var approvalError = RequireApproved(seller);
         if (approvalError is not null) return approvalError;
-
-        (page, pageSize) = NormalizePaging(page, pageSize);
 
         var scope = await LoadSellerOrderScopeAsync(seller.Id, cancellationToken);
         if (scope.OwnedProductIds.Count == 0 && scope.RegisteredPickups.Count == 0)
@@ -81,6 +115,21 @@ public class SellerOrdersController(
                              && pickupLower.Contains(p.ShiprocketPickupLocation.ToLower()))))) ||
                 (hasPickups && o.ShiprocketShipments.Any(s =>
                     pickupLower.Contains(s.PickupLocation.ToLower()))));
+
+        if (from is DateOnly fromDate)
+            baseQuery = baseQuery.Where(o => o.CreatedAt >= IstTime.ToUtc(fromDate));
+
+        if (to is DateOnly toDate)
+        {
+            var toExclusiveUtc = IstTime.ToUtc(toDate.AddDays(1));
+            baseQuery = baseQuery.Where(o => o.CreatedAt < toExclusiveUtc);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var statusTerm = status.Trim();
+            baseQuery = baseQuery.Where(o => o.Status == statusTerm);
+        }
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);

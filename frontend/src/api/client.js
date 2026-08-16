@@ -268,6 +268,14 @@ export const api = {
     const query = qs.toString()
     return request(`/seller/orders${query ? `?${query}` : ''}`, { auth: 'seller' })
   },
+  sellerGetOrdersReport: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/seller/orders/report${query ? `?${query}` : ''}`, { auth: 'seller' })
+  },
   sellerMarkShipmentReadyToShip: (orderId, shipmentId) =>
     request(`/seller/orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/ready-to-ship`, {
       method: 'POST',
@@ -548,6 +556,15 @@ export const api = {
     })
     const query = qs.toString()
     return request(`/admin/orders${query ? `?${query}` : ''}`, { auth: true })
+  },
+
+  adminExportOrders: (params = {}) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
+    })
+    const query = qs.toString()
+    return request(`/admin/orders/export${query ? `?${query}` : ''}`, { auth: true })
   },
 
   adminGetOrder: (id) => request(`/admin/orders/${encodeURIComponent(id)}`, { auth: true }),

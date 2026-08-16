@@ -8,6 +8,7 @@ export default function SellerHubNav() {
       </NavLink>
       <NavLink to="/seller/products">Products</NavLink>
       <NavLink to="/seller/orders">Orders</NavLink>
+      <NavLink to="/seller/reports">Reports</NavLink>
       <NavLink to="/seller/pickups">Pickups</NavLink>
     </nav>
   )
