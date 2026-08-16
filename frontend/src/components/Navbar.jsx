@@ -128,21 +128,6 @@ export default function Navbar() {
             placeholder="Search bags…"
             className="product-search--header"
           />
-        </div>
-
-        <div className="nav-inner">
-          <Link to="/" className="brand" onClick={() => setOpen(false)}>
-            Bag<span>ly</span>
-          </Link>
-
-          <nav className="nav-links" aria-label="Primary">
-            {links.map((link) => (
-              <NavLink key={link.to} to={link.to} end={link.end} className={linkClassName(link)}>
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-
           <div className="nav-actions">
             {isAuthenticated ? (
               <div className="customer-nav">
@@ -221,20 +206,35 @@ export default function Navbar() {
               </span>
               <span className="cart-count">{itemCount}</span>
             </Link>
-            <button
-              type="button"
-              className={`menu-toggle${open ? ' is-open' : ''}`}
-              aria-label={open ? 'Close menu' : 'Open menu'}
-              aria-expanded={open}
-              onClick={() => setOpen((v) => !v)}
-            >
-              <span className="menu-toggle-bars" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-            </button>
           </div>
+        </div>
+
+        <div className="nav-inner">
+          <Link to="/" className="brand" onClick={() => setOpen(false)}>
+            Bag<span>ly</span>
+          </Link>
+
+          <nav className="nav-links" aria-label="Primary">
+            {links.map((link) => (
+              <NavLink key={link.to} to={link.to} end={link.end} className={linkClassName(link)}>
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <button
+            type="button"
+            className={`menu-toggle${open ? ' is-open' : ''}`}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="menu-toggle-bars" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
         </div>
 
         <nav className={`mobile-nav ${open ? 'open' : ''}`} aria-label="Mobile">
