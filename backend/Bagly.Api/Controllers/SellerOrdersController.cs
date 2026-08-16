@@ -31,6 +31,7 @@ public class SellerOrdersController(
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
+    private const int ReportPageSize = 50;
     private const int MaxReportRows = 5000;
 
     [HttpGet]
@@ -47,21 +48,37 @@ public class SellerOrdersController(
     }
 
     /// <summary>
-    /// Date-filtered order report for the seller hub (up to <see cref="MaxReportRows"/> rows).
-    /// Defaults to last 30 IST days when from/to omitted.
+    /// Date-filtered order report for the seller hub. Requires <paramref name="from"/> and
+    /// <paramref name="to"/>; page size defaults to and caps at <see cref="ReportPageSize"/>.
     /// </summary>
     [HttpGet("report")]
     public async Task<ActionResult<SellerOrdersListResult>> Report(
         [FromQuery] DateOnly? from = null,
         [FromQuery] DateOnly? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = ReportPageSize,
         [FromQuery] string? status = null,
         CancellationToken cancellationToken = default)
     {
-        var todayIst = IstTime.TodayIst();
-        to ??= todayIst;
-        from ??= todayIst.AddDays(-29);
-        if (from > to)
-            return BadRequest(new { message = "From date must be on or before To date." });
+        var dateError = RequireReportDateRange(from, to);
+        if (dateError is not null) return dateError;
+
+        (page, pageSize) = NormalizeReportPaging(page, pageSize);
+        return await ListCoreAsync(page, pageSize, from, to, status, cancellationToken);
+    }
+
+    /// <summary>
+    /// All orders matching the report filters (capped) for Excel/PDF export — not page-limited.
+    /// </summary>
+    [HttpGet("report/export")]
+    public async Task<ActionResult<SellerOrdersListResult>> ReportExport(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dateError = RequireReportDateRange(from, to);
+        if (dateError is not null) return dateError;
 
         return await ListCoreAsync(1, MaxReportRows, from, to, status, cancellationToken);
     }
@@ -654,11 +671,28 @@ public class SellerOrdersController(
             .FirstOrDefaultAsync(u => u.Id == sellerId && u.IsActive, cancellationToken);
     }
 
+    private ActionResult<SellerOrdersListResult>? RequireReportDateRange(DateOnly? from, DateOnly? to)
+    {
+        if (from is null || to is null)
+            return BadRequest(new { message = "From and To dates are required." });
+        if (from > to)
+            return BadRequest(new { message = "From date must be on or before To date." });
+        return null;
+    }
+
     private static (int Page, int PageSize) NormalizePaging(int page, int pageSize)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = DefaultPageSize;
         if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+        return (page, pageSize);
+    }
+
+    private static (int Page, int PageSize) NormalizeReportPaging(int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = ReportPageSize;
+        if (pageSize > ReportPageSize) pageSize = ReportPageSize;
         return (page, pageSize);
     }
 

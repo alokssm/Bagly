@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import SellerHubNav from '../components/SellerHubNav'
 import { useSellerAuth } from '../context/SellerAuthContext'
@@ -9,19 +9,8 @@ import {
   sellerOrdersToExportRows,
 } from '../utils/orderExport'
 
+const PAGE_SIZE = 50
 const money = (value) => formatPrice(value, { fractionDigits: 2 })
-
-function toInputDate(d) {
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-function defaultDateRange() {
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - 29)
-  return { from: toInputDate(from), to: toInputDate(to) }
-}
 
 function formatWhen(value) {
   if (!value) return '—'
@@ -52,24 +41,20 @@ function itemsSummary(order) {
 export default function SellerReports() {
   const { user, logout } = useSellerAuth()
   const approved = (user?.status || '').toLowerCase() === 'approved'
-  const defaults = useMemo(() => defaultDateRange(), [])
-  const [filters, setFilters] = useState({ ...defaults, status: '' })
-  const [applied, setApplied] = useState({ ...defaults, status: '' })
+  const [filters, setFilters] = useState({ from: '', to: '', status: '' })
+  const [applied, setApplied] = useState(null)
+  const [page, setPage] = useState(1)
   const [orders, setOrders] = useState([])
   const [totalCount, setTotalCount] = useState(0)
-  const [loading, setLoading] = useState(approved)
+  const [totalPages, setTotalPages] = useState(0)
+  const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState('')
   const [error, setError] = useState('')
 
+  const hasApplied = Boolean(applied?.from && applied?.to)
+
   const load = useCallback(async () => {
-    if (!approved) {
-      setLoading(false)
-      return
-    }
-    if (!applied.from || !applied.to) {
-      setError('From and To dates are required.')
-      setOrders([])
-      setTotalCount(0)
+    if (!approved || !hasApplied) {
       setLoading(false)
       return
     }
@@ -80,17 +65,21 @@ export default function SellerReports() {
         from: applied.from,
         to: applied.to,
         status: applied.status || undefined,
+        page,
+        pageSize: PAGE_SIZE,
       })
       setOrders(data.items || [])
       setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 0)
     } catch (err) {
       setError(err.message || 'Unable to load report.')
       setOrders([])
       setTotalCount(0)
+      setTotalPages(0)
     } finally {
       setLoading(false)
     }
-  }, [approved, applied])
+  }, [approved, applied, hasApplied, page])
 
   useEffect(() => {
     load()
@@ -106,18 +95,30 @@ export default function SellerReports() {
       setError('From date must be on or before To date.')
       return
     }
+    setError('')
+    setPage(1)
     setApplied({ ...filters })
   }
 
   const runExport = async (kind) => {
-    if (!orders.length) return
+    if (!hasApplied) return
     setExporting(kind)
     setError('')
     try {
-      const { headers, rows } = sellerOrdersToExportRows(orders)
+      const data = await api.sellerExportOrdersReport({
+        from: applied.from,
+        to: applied.to,
+        status: applied.status || undefined,
+      })
+      const exportOrders = data.items || []
+      if (!exportOrders.length) {
+        setError('No orders to export for the current filters.')
+        return
+      }
+      const { headers, rows } = sellerOrdersToExportRows(exportOrders)
       const subtitle = `From ${applied.from} to ${applied.to}${
         applied.status ? ` · Status: ${applied.status}` : ''
-      } · ${orders.length} order${orders.length === 1 ? '' : 's'}`
+      } · ${exportOrders.length} order${exportOrders.length === 1 ? '' : 's'}`
       if (kind === 'excel') {
         exportRowsToExcel({
           filenameBase: 'bagly-seller-orders',
@@ -140,6 +141,15 @@ export default function SellerReports() {
       setExporting('')
     }
   }
+
+  const rangeFrom = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const rangeTo = Math.min(page * PAGE_SIZE, totalCount)
+
+  let statusMessage = 'Choose a From and To date, then Apply to load orders.'
+  if (loading) statusMessage = 'Loading report…'
+  else if (hasApplied && totalCount === 0) statusMessage = 'No orders in this range.'
+  else if (hasApplied)
+    statusMessage = `Showing ${rangeFrom}–${rangeTo} of ${totalCount} order${totalCount === 1 ? '' : 's'}`
 
   return (
     <div className="seller-page">
@@ -204,7 +214,7 @@ export default function SellerReports() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  disabled={!orders.length || !!exporting || loading}
+                  disabled={!hasApplied || !!exporting || loading}
                   onClick={() => runExport('excel')}
                 >
                   {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
@@ -212,7 +222,7 @@ export default function SellerReports() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  disabled={!orders.length || !!exporting || loading}
+                  disabled={!hasApplied || !!exporting || loading}
                   onClick={() => runExport('pdf')}
                 >
                   {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
@@ -226,13 +236,7 @@ export default function SellerReports() {
               </p>
             ) : null}
 
-            <p className="seller-lead">
-              {loading
-                ? 'Loading report…'
-                : totalCount === 0
-                  ? 'No orders in this range.'
-                  : `${orders.length} of ${totalCount} order${totalCount === 1 ? '' : 's'} shown`}
-            </p>
+            <p className="seller-lead">{statusMessage}</p>
 
             {!loading && orders.length > 0 ? (
               <div className="seller-table-wrap">
@@ -272,6 +276,35 @@ export default function SellerReports() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            ) : null}
+
+            {hasApplied && totalPages > 1 ? (
+              <div className="admin-pagination">
+                <p className="admin-muted">
+                  Showing {rangeFrom}–{rangeTo} of {totalCount}
+                </p>
+                <div className="admin-pagination-controls">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={page >= totalPages || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             ) : null}
           </>
