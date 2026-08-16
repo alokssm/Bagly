@@ -150,11 +150,21 @@ export default function Navbar() {
               </div>
             ) : (
               <div className="customer-nav">
-                <Link to="/login" className="btn-ghost">
-                  Sign in
-                </Link>
-                <Link to="/register" className="btn btn-brass btn-sm">
-                  Create Account
+                <Link to="/login" className="profile-btn" aria-label="Sign in">
+                  <span className="profile-icon" aria-hidden="true">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="8" r="3.25" />
+                      <path d="M5.5 19.5c1.6-3.2 4-4.75 6.5-4.75s4.9 1.55 6.5 4.75" />
+                    </svg>
+                  </span>
                 </Link>
               </div>
             )}
@@ -162,8 +172,26 @@ export default function Navbar() {
               {isAuthenticated ? (
                 <CustomerMenu name={firstName} onLogout={handleLogout} variant="mobile" />
               ) : (
-                <Link to="/login" className="nav-mobile-action-link" onClick={() => setOpen(false)}>
-                  Sign in
+                <Link
+                  to="/login"
+                  className="profile-btn"
+                  aria-label="Sign in"
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="profile-icon" aria-hidden="true">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="8" r="3.25" />
+                      <path d="M5.5 19.5c1.6-3.2 4-4.75 6.5-4.75s4.9 1.55 6.5 4.75" />
+                    </svg>
+                  </span>
                 </Link>
               )}
             </div>
@@ -221,11 +249,6 @@ export default function Navbar() {
               {link.label}
             </NavLink>
           ))}
-          {!isAuthenticated ? (
-            <NavLink to="/register" onClick={() => setOpen(false)}>
-              Create Account
-            </NavLink>
-          ) : null}
         </nav>
       </div>
     </header>

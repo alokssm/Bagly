@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-/** Single "Hello, {name}" dropdown consolidating Profile / Orders / Addresses / Sign out. */
+function ProfileIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M5.5 19.5c1.6-3.2 4-4.75 6.5-4.75s4.9 1.55 6.5 4.75" />
+    </svg>
+  )
+}
+
+/** Profile icon dropdown consolidating Profile / Orders / Addresses / Sign out. */
 export default function CustomerMenu({ name, onLogout, variant = 'desktop' }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
@@ -32,20 +50,20 @@ export default function CustomerMenu({ name, onLogout, variant = 'desktop' }) {
   }, [open])
 
   const close = () => setOpen(false)
-  const displayName = name ? name.charAt(0).toUpperCase() + name.slice(1) : name
+  const displayName = name ? name.charAt(0).toUpperCase() + name.slice(1) : 'Account'
 
   return (
     <div className={`customer-menu customer-menu--${variant}`} ref={containerRef}>
       <button
         type="button"
-        className="customer-menu__trigger"
+        className="customer-menu__trigger profile-btn"
         onClick={() => setOpen((v) => !v)}
+        aria-label={`Account menu for ${displayName}`}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        Hello, {displayName}
-        <span className={`customer-menu__chevron ${open ? 'open' : ''}`} aria-hidden="true">
-          ▾
+        <span className="profile-icon">
+          <ProfileIcon />
         </span>
       </button>
 
