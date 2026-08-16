@@ -262,30 +262,30 @@ p {
 }
 
 .nav-search-row {
-  display: flex;
+  /* Equal side tracks keep search midpoint on the page center */
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 52%) 1fr;
   align-items: center;
-  gap: 0.85rem;
+  column-gap: 0.85rem;
   min-height: var(--nav-search-h);
   padding: 0.45rem 0 0.15rem;
 }
 
 .nav-search-row .brand {
-  flex-shrink: 0;
+  justify-self: start;
   line-height: 1;
   display: inline-flex;
   align-items: center;
 }
 
 .nav-search-row .product-search--header {
-  flex: 0 1 52%;
-  width: 52%;
-  max-width: 52%;
+  width: 100%;
+  max-width: none;
   margin: 0;
 }
 
 .nav-search-row .nav-actions {
-  flex-shrink: 0;
-  margin-left: auto;
+  justify-self: end;
   align-self: center;
 }
 
@@ -1189,7 +1189,7 @@ p {
 }
 
 .product-search--header {
-  /* Width comes from .nav-search-row grid (minmax(0,1fr)), not a rem cap */
+  /* Width comes from .nav-search-row center track (minmax(0, 52%)) */
   max-width: none;
   margin: 0;
 }
@@ -3846,9 +3846,11 @@ a.order-item-row__name:hover {
     min-height: 0;
     padding: 0.55rem 0 0.2rem;
     gap: 0.5rem;
+    column-gap: 0.5rem;
   }
 
   .nav-search-row .brand {
+    flex-shrink: 0;
     font-size: 1.55rem;
   }
 
@@ -3861,7 +3863,7 @@ a.order-item-row__name:hover {
 
   .nav-search-row .nav-actions {
     flex-shrink: 0;
-    margin-left: 0;
+    justify-self: unset;
   }
 
   .nav-inner {
