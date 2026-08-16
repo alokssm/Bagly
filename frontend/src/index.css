@@ -273,8 +273,9 @@ p {
 
 .nav-search-row .product-search--header {
   grid-column: 1;
-  width: 100%;
-  max-width: none;
+  width: 45%;
+  max-width: 45%;
+  justify-self: center;
   margin: 0;
 }
 
