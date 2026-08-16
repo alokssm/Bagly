@@ -120,6 +120,9 @@ export default function Navbar() {
     <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="container">
         <div className="nav-search-row">
+          <Link to="/" className="brand" onClick={() => setOpen(false)}>
+            Bag<span>ly</span>
+          </Link>
           <ProductSearchBar
             id="header-product-search"
             value={searchInput}
@@ -210,10 +213,6 @@ export default function Navbar() {
         </div>
 
         <div className="nav-inner">
-          <Link to="/" className="brand" onClick={() => setOpen(false)}>
-            Bag<span>ly</span>
-          </Link>
-
           <nav className="nav-links" aria-label="Primary">
             {links.map((link) => (
               <NavLink key={link.to} to={link.to} end={link.end} className={linkClassName(link)}>
