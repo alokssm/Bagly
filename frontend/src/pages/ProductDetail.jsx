@@ -71,11 +71,39 @@ export default function ProductDetail() {
     [items, product],
   )
 
+  const lightboxImages = useMemo(() => {
+    if (gallery.length > 0) return gallery
+    return product?.image ? [product.image] : []
+  }, [gallery, product])
+
+  const canBrowseLightbox = lightboxImages.length > 1
+
+  const goLightboxImage = useCallback(
+    (direction) => {
+      if (!canBrowseLightbox) return
+      setActiveImage((current) => {
+        const total = lightboxImages.length
+        return (current + direction + total) % total
+      })
+    },
+    [canBrowseLightbox, lightboxImages.length],
+  )
+
   useEffect(() => {
     if (!lightboxOpen) return
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setLightboxOpen(false)
+      if (event.key === 'Escape') {
+        setLightboxOpen(false)
+        return
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        goLightboxImage(-1)
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        goLightboxImage(1)
+      }
     }
 
     document.body.style.overflow = 'hidden'
@@ -84,7 +112,7 @@ export default function ProductDetail() {
       document.body.style.overflow = ''
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [lightboxOpen])
+  }, [lightboxOpen, goLightboxImage])
 
   if (loading) {
     return (
@@ -337,8 +365,39 @@ export default function ProductDetail() {
           >
             ×
           </button>
+          {canBrowseLightbox ? (
+            <>
+              <button
+                type="button"
+                className="image-lightbox-nav image-lightbox-prev"
+                onClick={() => goLightboxImage(-1)}
+                aria-label="Previous image"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="image-lightbox-nav image-lightbox-next"
+                onClick={() => goLightboxImage(1)}
+                aria-label="Next image"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </>
+          ) : null}
           <div className="image-lightbox-panel">
-            <img src={mainImageSrc} alt={product.name} />
+            <img
+              src={mainImageSrc}
+              alt={
+                canBrowseLightbox
+                  ? `${product.name} — image ${activeImage + 1} of ${lightboxImages.length}`
+                  : product.name
+              }
+            />
           </div>
         </div>
       ) : null}
