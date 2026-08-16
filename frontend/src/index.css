@@ -272,8 +272,8 @@ p {
 
 .nav-search-row .product-search--header {
   grid-column: 2;
-  width: min(34rem, 100%);
-  max-width: min(34rem, 100%);
+  width: min(68rem, 100%);
+  max-width: min(68rem, 100%);
   margin: 0;
 }
 
@@ -1182,7 +1182,7 @@ p {
 }
 
 .product-search--header {
-  max-width: 34rem;
+  max-width: 68rem;
   margin: 0 auto;
 }
 
