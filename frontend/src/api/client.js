@@ -282,7 +282,8 @@ export const api = {
       if (value !== undefined && value !== null && value !== '') qs.set(key, String(value))
     })
     const query = qs.toString()
-    return request(`/seller/orders/report/export${query ? `?${query}` : ''}`, { auth: 'seller' })
+    // Prefer /export (mirrors admin). Legacy /report/export still works on newer APIs.
+    return request(`/seller/orders/export${query ? `?${query}` : ''}`, { auth: 'seller' })
   },
   sellerMarkShipmentReadyToShip: (orderId, shipmentId) =>
     request(`/seller/orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/ready-to-ship`, {

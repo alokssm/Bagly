@@ -100,17 +100,56 @@ export default function SellerReports() {
     setApplied({ ...filters })
   }
 
+  const loadExportOrders = async () => {
+    const base = {
+      from: applied.from,
+      to: applied.to,
+      status: applied.status || undefined,
+    }
+
+    // Dedicated export endpoint (all matching rows, capped server-side).
+    try {
+      const data = await api.sellerExportOrdersReport(base)
+      const items = data?.items || data?.Items || []
+      if (items.length) return items
+      // Empty success — nothing to export for this filter.
+      if (data && (Array.isArray(data.items) || Array.isArray(data.Items))) return []
+    } catch (err) {
+      // Older API builds may lack /export (404). Fall back to paging /report.
+      if (err?.status && err.status !== 404) throw err
+    }
+
+    // Fallback: page through the report list until all rows are collected.
+    const all = []
+    let pageNum = 1
+    let totalPages = 1
+    do {
+      const data = await api.sellerGetOrdersReport({
+        ...base,
+        page: pageNum,
+        pageSize: PAGE_SIZE,
+      })
+      const items = data?.items || data?.Items || []
+      all.push(...items)
+      const reportedPages = Number(data?.totalPages)
+      if (Number.isFinite(reportedPages) && reportedPages > 0) {
+        totalPages = reportedPages
+      } else {
+        // Legacy /report returned the full set in one response (no pagination).
+        break
+      }
+      pageNum += 1
+    } while (pageNum <= totalPages && pageNum <= 100)
+
+    return all
+  }
+
   const runExport = async (kind) => {
     if (!hasApplied) return
     setExporting(kind)
     setError('')
     try {
-      const data = await api.sellerExportOrdersReport({
-        from: applied.from,
-        to: applied.to,
-        status: applied.status || undefined,
-      })
-      const exportOrders = data.items || []
+      const exportOrders = await loadExportOrders()
       if (!exportOrders.length) {
         setError('No orders to export for the current filters.')
         return

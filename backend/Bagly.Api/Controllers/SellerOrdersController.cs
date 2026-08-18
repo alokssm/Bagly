@@ -69,7 +69,9 @@ public class SellerOrdersController(
 
     /// <summary>
     /// All orders matching the report filters (capped) for Excel/PDF export — not page-limited.
+    /// Prefer <c>GET …/export</c> (same shape as admin). <c>report/export</c> kept as an alias.
     /// </summary>
+    [HttpGet("export")]
     [HttpGet("report/export")]
     public async Task<ActionResult<SellerOrdersListResult>> ReportExport(
         [FromQuery] DateOnly? from = null,

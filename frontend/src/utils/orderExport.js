@@ -10,8 +10,11 @@ function downloadBlob(blob, filename) {
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  // Delay revoke — some browsers cancel the download if the blob URL is revoked immediately.
+  window.setTimeout(() => {
+    a.remove()
+    URL.revokeObjectURL(url)
+  }, 1500)
 }
 
 function stamp() {
@@ -32,9 +35,11 @@ export function exportRowsToExcel({ filenameBase, headers, rows, sheetName = 'Or
   const sheet = XLSX.utils.aoa_to_sheet(data)
   const book = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(book, sheet, sheetName)
-  const buffer = XLSX.write(book, { bookType: 'xlsx', type: 'array' })
+  // SheetJS 0.18+ returns ArrayBuffer for type:'array' — wrap for reliable Blob downloads.
+  const raw = XLSX.write(book, { bookType: 'xlsx', type: 'array' })
+  const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw
   downloadBlob(
-    new Blob([buffer], {
+    new Blob([bytes], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
     `${filenameBase}-${stamp()}.xlsx`,
